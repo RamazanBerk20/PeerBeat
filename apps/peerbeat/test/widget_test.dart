@@ -9,8 +9,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData(
-          colorScheme:
-              ColorScheme.fromSeed(seedColor: const Color(0xFF2BD9C6)),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2BD9C6)),
           useMaterial3: true,
         ),
         home: const Scaffold(body: Center(child: Text('PeerBeat'))),

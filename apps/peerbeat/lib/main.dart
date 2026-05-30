@@ -44,10 +44,14 @@ class PeerBeatApp extends StatelessWidget {
     return MaterialApp(
       title: 'PeerBeat',
       debugShowCheckedModeBanner: false,
-      theme:
-          ThemeData(colorScheme: scheme(Brightness.light), useMaterial3: true),
-      darkTheme:
-          ThemeData(colorScheme: scheme(Brightness.dark), useMaterial3: true),
+      theme: ThemeData(
+        colorScheme: scheme(Brightness.light),
+        useMaterial3: true,
+      ),
+      darkTheme: ThemeData(
+        colorScheme: scheme(Brightness.dark),
+        useMaterial3: true,
+      ),
       themeMode: ThemeMode.dark,
       home: const LibraryScreen(),
     );
@@ -129,8 +133,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _scan() async {
-    final controller =
-        TextEditingController(text: Platform.environment['HOME'] ?? '');
+    final controller = TextEditingController(
+      text: Platform.environment['HOME'] ?? '',
+    );
     final path = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -146,11 +151,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('Scan')),
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Scan'),
+          ),
         ],
       ),
     );
@@ -161,16 +168,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
       final report = await libraryScan(path: path.trim());
       await _refresh();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          'Scanned: ${report.added} added, ${report.updated} updated, '
-          '${report.skipped} unchanged, ${report.errors} errors',
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Scanned: ${report.added} added, ${report.updated} updated, '
+            '${report.skipped} unchanged, ${report.errors} errors',
+          ),
         ),
-      ));
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Scan failed: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -192,8 +202,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Center(
-              child: Text('$_count tracks',
-                  style: TextStyle(color: cs.onSurfaceVariant)),
+              child: Text(
+                '$_count tracks',
+                style: TextStyle(color: cs.onSurfaceVariant),
+              ),
             ),
           ),
           IconButton(
@@ -256,7 +268,11 @@ String _fmt(int ms) {
 }
 
 class _TrackTile extends StatelessWidget {
-  const _TrackTile({required this.track, required this.onTap, this.selected = false});
+  const _TrackTile({
+    required this.track,
+    required this.onTap,
+    this.selected = false,
+  });
   final TrackRow track;
   final VoidCallback onTap;
   final bool selected;
@@ -273,8 +289,10 @@ class _TrackTile extends StatelessWidget {
       selectedTileColor: cs.primaryContainer.withValues(alpha: 0.3),
       leading: CircleAvatar(
         backgroundColor: selected ? cs.primary : null,
-        child: Icon(selected ? Icons.equalizer : Icons.music_note,
-            color: selected ? cs.onPrimary : null),
+        child: Icon(
+          selected ? Icons.equalizer : Icons.music_note,
+          color: selected ? cs.onPrimary : null,
+        ),
       ),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: subtitle.isEmpty
@@ -342,15 +360,20 @@ class _MiniPlayer extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(track.title,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         Text(
                           '${track.artist.isEmpty ? 'Unknown' : track.artist}'
                           '   ${_fmt(posMs)} / ${_fmt(durMs)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              color: cs.onSurfaceVariant, fontSize: 12),
+                            color: cs.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -379,8 +402,11 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.library_music_outlined,
-              size: 64, color: Theme.of(context).colorScheme.primary),
+          Icon(
+            Icons.library_music_outlined,
+            size: 64,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(height: 12),
           const Text('Your library is empty'),
           const SizedBox(height: 8),

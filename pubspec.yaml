@@ -23,12 +23,12 @@ melos:
       exec: flutter analyze --fatal-infos
 
     format:
-      description: Format all Dart code.
-      run: dart format .
+      description: Format our Dart code (excludes generated bindings + cargokit).
+      run: git ls-files '*.dart' | grep -vE 'lib/src/rust/|rust_builder/' | xargs dart format
 
     format-check:
-      description: Verify Dart formatting (CI).
-      run: dart format --output=none --set-exit-if-changed .
+      description: Verify Dart formatting (CI; excludes generated + cargokit).
+      run: git ls-files '*.dart' | grep -vE 'lib/src/rust/|rust_builder/' | xargs dart format --output=none --set-exit-if-changed
 
     test:
       description: Run tests in every package that has a test/ dir.
