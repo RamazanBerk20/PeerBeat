@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide RepeatMode;
 
 import '../playback/player.dart';
 import 'library_home.dart' show fmtDuration;
@@ -108,6 +108,17 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         ),
                       ),
                       IconButton(
+                        tooltip: 'Shuffle',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => player.setShuffle(!player.shuffle),
+                        icon: Icon(
+                          Icons.shuffle,
+                          color: player.shuffle ? cs.primary : null,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Previous',
+                        visualDensity: VisualDensity.compact,
                         onPressed: player.hasPrevious ? player.previous : null,
                         icon: const Icon(Icons.skip_previous),
                       ),
@@ -118,8 +129,35 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         ),
                       ),
                       IconButton(
+                        tooltip: 'Next',
+                        visualDensity: VisualDensity.compact,
                         onPressed: player.hasNext ? player.next : null,
                         icon: const Icon(Icons.skip_next),
+                      ),
+                      IconButton(
+                        tooltip: switch (player.repeat) {
+                          RepeatMode.off => 'Repeat off',
+                          RepeatMode.all => 'Repeat all',
+                          RepeatMode.one => 'Repeat one',
+                        },
+                        visualDensity: VisualDensity.compact,
+                        onPressed: player.cycleRepeat,
+                        icon: Icon(
+                          player.repeat == RepeatMode.one
+                              ? Icons.repeat_one
+                              : Icons.repeat,
+                          color: player.repeat == RepeatMode.off
+                              ? null
+                              : cs.primary,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: player.muted ? 'Unmute' : 'Mute',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: player.toggleMute,
+                        icon: Icon(
+                          player.muted ? Icons.volume_off : Icons.volume_up,
+                        ),
                       ),
                     ],
                   ),
