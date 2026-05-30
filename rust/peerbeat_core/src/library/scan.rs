@@ -175,7 +175,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert!(dur >= 1900 && dur <= 2100, "duration_ms was {dur}");
+        assert!((1900..=2100).contains(&dur), "duration_ms was {dur}");
 
         // searchable by filename-derived title
         let hits = search_tracks(db.conn(), "track", 10).unwrap();
