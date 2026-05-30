@@ -343,16 +343,27 @@ class TrackListView extends StatelessWidget {
   }
 }
 
-/// Generic async loader → TrackListView.
-class _TracksFuture extends StatelessWidget {
+/// Generic async loader → TrackListView. Stateful so the future is created once
+/// (not on every rebuild) — change the widget `key` to force a reload.
+class _TracksFuture extends StatefulWidget {
   const _TracksFuture(this.load, {super.key});
   final Future<List<TrackRow>> Function() load;
 
   @override
+  State<_TracksFuture> createState() => _TracksFutureState();
+}
+
+class _TracksFutureState extends State<_TracksFuture> {
+  late final Future<List<TrackRow>> _future = widget.load();
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<TrackRow>>(
-      future: load(),
+      future: _future,
       builder: (context, snap) {
+        if (snap.hasError) {
+          return Center(child: Text('Failed to load: ${snap.error}'));
+        }
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -611,7 +622,26 @@ Future<void> _handlePlaylistAction(
       }
       break;
     case 'delete':
-      await playlistDelete(playlistId: playlist.id);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Delete playlist?'),
+          content: Text('Delete "${playlist.name}" permanently?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await playlistDelete(playlistId: playlist.id);
+      }
       break;
   }
 }
@@ -660,30 +690,34 @@ Future<String?> _playlistNameDialog(
   String initial = '',
 }) async {
   final controller = TextEditingController(text: initial);
-  final name = await showDialog<String>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'Name'),
-        onSubmitted: (v) => Navigator.pop(ctx, v),
+  try {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Name'),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Save'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, controller.text),
-          child: const Text('Save'),
-        ),
-      ],
-    ),
-  );
-  final clean = name?.trim();
-  return clean == null || clean.isEmpty ? null : clean;
+    );
+    final clean = name?.trim();
+    return clean == null || clean.isEmpty ? null : clean;
+  } finally {
+    controller.dispose();
+  }
 }
 
 // ── Albums / Artists / Genres ───────────────────────────────────────────────

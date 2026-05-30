@@ -27,6 +27,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # Bundled so the Linux GTK runner can set the window/taskbar icon from a file
+    # (theme-name icons aren't available when running from the bundle).
+    - assets/icon/app_icon.png
 
 # Generated with: dart run flutter_launcher_icons   (from apps/peerbeat)
 # Source image is the single project icon at repo-root assets/icon/PeerBeat.png.

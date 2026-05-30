@@ -41,6 +41,7 @@ abstract class AudioEngine {
 /// Desktop: wraps the synchronous FRB audio API, polling it into streams.
 class RustDesktopEngine implements AudioEngine {
   RustDesktopEngine() {
+    _sweepStreamCache(); // best-effort: clear the previous session's stream cache
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (_) => _poll());
   }
 
@@ -68,23 +69,56 @@ class RustDesktopEngine implements AudioEngine {
 
   @override
   Future<void> playUrl(String url, {Duration? duration}) async {
-    // rodio plays from a file; download the LAN stream to a temp file first.
-    // (True Range streaming is a later slice.)
+    // rodio plays from a file; cache the LAN stream to disk (reused on replay,
+    // swept on startup). True HTTP Range streaming is a later slice.
     try {
-      final tmp = File(
-        '${Directory.systemTemp.path}/peerbeat_${url.hashCode}.audio',
-      );
-      final client = HttpClient();
-      final resp = await (await client.getUrl(Uri.parse(url))).close();
-      await resp.pipe(tmp.openWrite());
-      client.close();
-      rust.audioPlayPath(path: tmp.path);
+      final dir = await _streamCacheDir();
+      final file = File('${dir.path}/${url.hashCode}.audio');
+      if (!await file.exists() || await file.length() == 0) {
+        final part = File('${file.path}.part');
+        final client = HttpClient();
+        try {
+          final resp = await (await client.getUrl(Uri.parse(url))).close();
+          if (resp.statusCode != 200) {
+            throw Exception('HTTP ${resp.statusCode}');
+          }
+          await resp.pipe(part.openWrite());
+          await part.rename(file.path); // atomic publish
+        } finally {
+          client.close();
+        }
+      }
+      rust.audioPlayPath(path: file.path);
       _duration = duration ?? Duration(milliseconds: rust.audioDurationMs());
       _setPlaying(true);
     } catch (e) {
       _setPlaying(false);
       throw Exception('LAN stream playback failed: $e');
     }
+  }
+
+  static Directory? _cacheDir;
+  static Future<Directory> _streamCacheDir() async {
+    final dir = _cacheDir ??= Directory(
+      '${Directory.systemTemp.path}/peerbeat_stream_cache',
+    );
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  static Future<void> _sweepStreamCache() async {
+    try {
+      final dir = Directory(
+        '${Directory.systemTemp.path}/peerbeat_stream_cache',
+      );
+      if (await dir.exists()) {
+        await for (final e in dir.list()) {
+          try {
+            await e.delete(recursive: true);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
   }
 
   @override

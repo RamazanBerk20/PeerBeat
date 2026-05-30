@@ -99,24 +99,30 @@ class _NetworkPanelState extends State<NetworkPanel> {
       final resp = await (await client.getUrl(
         Uri.parse('$base/v1/tracks'),
       )).close();
+      if (resp.statusCode != 200) {
+        throw Exception('HTTP ${resp.statusCode}');
+      }
       final body = await resp.transform(utf8.decoder).join();
-      final list = (jsonDecode(body) as List).cast<Map<String, dynamic>>();
-      final tracks = list
-          .map(
-            (m) => TrackRow(
-              id: (m['id'] as num).toInt(),
-              title: (m['title'] ?? '') as String,
-              artist: (m['artist'] ?? '') as String,
-              album: (m['album'] ?? '') as String,
+      final decoded = jsonDecode(body);
+      if (decoded is! List) {
+        throw Exception('unexpected response from host');
+      }
+      final tracks = <TrackRow>[
+        for (final raw in decoded)
+          if (raw is Map<String, dynamic>)
+            TrackRow(
+              id: (raw['id'] as num?)?.toInt() ?? 0,
+              title: (raw['title'] as String?) ?? '',
+              artist: (raw['artist'] as String?) ?? '',
+              album: (raw['album'] as String?) ?? '',
               albumId: null,
-              durationMs: (m['duration_ms'] as num? ?? 0).toInt(),
+              durationMs: (raw['duration_ms'] as num?)?.toInt() ?? 0,
               year: null,
               rating: 0,
               playedCount: 0,
-              path: '$base/v1/stream/${m['id']}',
+              path: '$base/v1/stream/${raw['id']}',
             ),
-          )
-          .toList();
+      ];
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../audio/audio_engine.dart';
@@ -8,22 +10,25 @@ import '../src/rust/db/tracks.dart';
 /// the navigator so the mini-player persists across screens.
 class PlayerController extends ChangeNotifier {
   PlayerController() {
-    _engine.positionStream.listen((p) {
+    _posSub = _engine.positionStream.listen((p) {
       _position = p;
       _maybeAdvance();
       notifyListeners();
     });
-    _engine.playingStream.listen((p) {
+    _playSub = _engine.playingStream.listen((p) {
       _playing = p;
       notifyListeners();
     });
   }
 
   final AudioEngine _engine = AudioEngine.forPlatform();
+  late final StreamSubscription<Duration> _posSub;
+  late final StreamSubscription<bool> _playSub;
 
   List<TrackRow> _queue = [];
   int _index = -1;
   bool _playing = false;
+  bool _userPaused = false; // distinguishes a user pause from a track ending
   Duration _position = Duration.zero;
   String? _lastError;
 
@@ -67,6 +72,7 @@ class PlayerController extends ChangeNotifier {
     _index = i;
     _position = Duration.zero;
     _playing = true;
+    _userPaused = false;
     _lastError = null;
     notifyListeners();
     final p = current!.path;
@@ -89,19 +95,21 @@ class PlayerController extends ChangeNotifier {
   }
 
   /// Previous restarts the current track if >3 s in, else goes to the prior track.
-  void previous() {
+  Future<void> previous() async {
     if (_position.inSeconds > 3) {
-      seek(Duration.zero);
+      await seek(Duration.zero);
     } else if (hasPrevious) {
-      _playAt(_index - 1);
+      await _playAt(_index - 1);
     }
   }
 
   void toggle() {
     if (current == null) return;
     if (_playing) {
+      _userPaused = true;
       _engine.pause();
     } else {
+      _userPaused = false;
       _engine.resume();
     }
   }
@@ -121,24 +129,30 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  // Auto-advance: when the engine reports stopped at (or past) the end.
+  // Auto-advance to the next track when the current one ends. Guards against a
+  // user pause near the end and against re-entrancy while advancing.
   bool _advancing = false;
-  void _maybeAdvance() {
+  Future<void> _maybeAdvance() async {
     final d = duration;
-    if (_advancing || current == null || d == Duration.zero) return;
-    if (!_playing && _position >= d - const Duration(milliseconds: 600)) {
+    if (_advancing || _userPaused || current == null || d == Duration.zero) {
+      return;
+    }
+    final ended =
+        !_playing && _position >= d - const Duration(milliseconds: 400);
+    if (ended && hasNext) {
       _advancing = true;
-      if (hasNext) {
-        next();
-      }
-      Future<void>.delayed(const Duration(milliseconds: 500), () {
+      try {
+        await next();
+      } finally {
         _advancing = false;
-      });
+      }
     }
   }
 
   @override
   void dispose() {
+    _posSub.cancel();
+    _playSub.cancel();
     _engine.dispose();
     super.dispose();
   }

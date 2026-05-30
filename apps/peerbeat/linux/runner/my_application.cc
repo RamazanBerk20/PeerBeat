@@ -14,6 +14,25 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+// Load the bundled app icon (data/flutter_assets/assets/icon/app_icon.png next
+// to the executable). Setting the icon from a file works even when no "peerbeat"
+// icon is installed in the system icon theme (e.g. running from the bundle).
+static GdkPixbuf* my_application_load_icon() {
+  g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe == nullptr) {
+    return nullptr;
+  }
+  g_autofree gchar* dir = g_path_get_dirname(exe);
+  g_autofree gchar* path = g_build_filename(
+      dir, "data", "flutter_assets", "assets", "icon", "app_icon.png", nullptr);
+  g_autoptr(GError) error = nullptr;
+  GdkPixbuf* pixbuf = gdk_pixbuf_new_from_file(path, &error);
+  if (pixbuf == nullptr && error != nullptr) {
+    g_warning("Failed to load app icon '%s': %s", path, error->message);
+  }
+  return pixbuf;
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -24,7 +43,13 @@ static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
-  gtk_window_set_icon_name(window, "peerbeat");
+  g_autoptr(GdkPixbuf) app_icon = my_application_load_icon();
+  if (app_icon != nullptr) {
+    gtk_window_set_icon(window, app_icon);
+    gtk_window_set_default_icon(app_icon);
+  } else {
+    gtk_window_set_icon_name(window, "peerbeat");  // installed-theme fallback
+  }
 
   // Use a header bar when running in GNOME as this is the common style used
   // by applications and is the setup most users will be using (e.g. Ubuntu
@@ -45,6 +70,15 @@ static void my_application_activate(GApplication* application) {
 #endif
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
+    // Show the app icon in the title bar (visible even on Wayland, where the
+    // window/taskbar icon is otherwise driven by the installed .desktop file).
+    if (app_icon != nullptr) {
+      g_autoptr(GdkPixbuf) small =
+          gdk_pixbuf_scale_simple(app_icon, 22, 22, GDK_INTERP_BILINEAR);
+      GtkWidget* icon_image = gtk_image_new_from_pixbuf(small);
+      gtk_widget_show(icon_image);
+      gtk_header_bar_pack_start(header_bar, icon_image);
+    }
     gtk_widget_show(GTK_WIDGET(header_bar));
     gtk_header_bar_set_title(header_bar, "PeerBeat");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
