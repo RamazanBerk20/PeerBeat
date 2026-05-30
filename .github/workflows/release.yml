@@ -89,6 +89,8 @@ jobs:
       - run: flutter config --enable-windows-desktop
       - run: flutter build windows --release
         working-directory: apps/peerbeat
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
       - name: Build installer (Inno Setup)
         run: iscc packaging\windows\peerbeat.iss
       - uses: actions/upload-artifact@v4

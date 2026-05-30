@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
-import 'src/rust/api/audio.dart';
+import 'audio/audio_engine.dart';
 import 'src/rust/api/library.dart';
 import 'src/rust/db/tracks.dart';
 import 'src/rust/frb_generated.dart';
@@ -11,25 +12,9 @@ import 'src/rust/frb_generated.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await RustLib.init();
-  await libraryOpen(dbPath: _dbPath());
+  final dir = await getApplicationSupportDirectory();
+  await libraryOpen(dbPath: '${dir.path}${Platform.pathSeparator}library.db');
   runApp(const PeerBeatApp());
-}
-
-/// Resolve the per-platform library database path (desktop). Android uses
-/// path_provider once that integration lands.
-String _dbPath() {
-  final env = Platform.environment;
-  late String base;
-  if (Platform.isLinux) {
-    base = env['XDG_DATA_HOME'] ?? '${env['HOME']}/.local/share';
-  } else if (Platform.isWindows) {
-    base = env['APPDATA'] ?? '${env['USERPROFILE']}\\AppData\\Roaming';
-  } else {
-    base = env['HOME'] ?? '.';
-  }
-  final dir = Directory('$base${Platform.pathSeparator}PeerBeat')
-    ..createSync(recursive: true);
-  return '${dir.path}${Platform.pathSeparator}library.db';
 }
 
 class PeerBeatApp extends StatelessWidget {
@@ -66,6 +51,8 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  final AudioEngine _engine = AudioEngine.forPlatform();
+
   List<TrackRow> _tracks = [];
   int _count = 0;
   String _query = '';
@@ -76,28 +63,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
   bool _playing = false;
   int _posMs = 0;
   int _durMs = 0;
-  Timer? _ticker;
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<bool>? _playSub;
 
   @override
   void initState() {
     super.initState();
     _refresh();
-    _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => _tick());
+    _posSub = _engine.positionStream.listen((p) {
+      if (mounted) setState(() => _posMs = p.inMilliseconds);
+    });
+    _playSub = _engine.playingStream.listen((p) {
+      if (mounted) setState(() => _playing = p);
+    });
   }
 
   @override
   void dispose() {
-    _ticker?.cancel();
+    _posSub?.cancel();
+    _playSub?.cancel();
+    _engine.dispose();
     super.dispose();
-  }
-
-  void _tick() {
-    if (_current == null) return;
-    setState(() {
-      _posMs = audioPositionMs();
-      _durMs = audioDurationMs();
-      _playing = audioIsPlaying();
-    });
   }
 
   Future<void> _refresh() async {
@@ -113,7 +99,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   void _play(TrackRow t) {
-    audioPlayPath(path: t.path);
+    _engine.playPath(t.path, duration: Duration(milliseconds: t.durationMs));
     setState(() {
       _current = t;
       _playing = true;
@@ -125,11 +111,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void _togglePlay() {
     if (_current == null) return;
     if (_playing) {
-      audioPause();
+      _engine.pause();
     } else {
-      audioResume();
+      _engine.resume();
     }
-    setState(() => _playing = !_playing);
   }
 
   Future<void> _scan() async {
@@ -254,7 +239,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               durMs: _durMs == 0 ? _current!.durationMs : _durMs,
               onToggle: _togglePlay,
               onSeek: (ms) {
-                audioSeekMs(ms: ms);
+                _engine.seek(Duration(milliseconds: ms));
                 setState(() => _posMs = ms);
               },
             ),
