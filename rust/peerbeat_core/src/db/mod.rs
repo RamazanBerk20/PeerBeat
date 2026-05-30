@@ -7,6 +7,7 @@
 //!
 //! See `docs/data-model.md` for the full table set and indexing strategy.
 
+pub mod browse;
 mod schema;
 pub mod tracks;
 

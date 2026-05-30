@@ -12,6 +12,7 @@ import 'api/simple.dart';
 import 'api/system.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'db/browse.dart';
 import 'db/tracks.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
@@ -28,6 +29,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AlbumRow dco_decode_album_row(dynamic raw);
+
+  @protected
+  ArtistRow dco_decode_artist_row(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -37,13 +44,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  GenreRow dco_decode_genre_row(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
+  List<AlbumRow> dco_decode_list_album_row(dynamic raw);
+
+  @protected
+  List<ArtistRow> dco_decode_list_artist_row(dynamic raw);
+
+  @protected
+  List<GenreRow> dco_decode_list_genre_row(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
   List<TrackRow> dco_decode_list_track_row(dynamic raw);
+
+  @protected
+  List<YearRow> dco_decode_list_year_row(dynamic raw);
 
   @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
@@ -64,7 +86,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  YearRow dco_decode_year_row(dynamic raw);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  AlbumRow sse_decode_album_row(SseDeserializer deserializer);
+
+  @protected
+  ArtistRow sse_decode_artist_row(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -76,13 +107,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  GenreRow sse_decode_genre_row(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
+  List<AlbumRow> sse_decode_list_album_row(SseDeserializer deserializer);
+
+  @protected
+  List<ArtistRow> sse_decode_list_artist_row(SseDeserializer deserializer);
+
+  @protected
+  List<GenreRow> sse_decode_list_genre_row(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
   List<TrackRow> sse_decode_list_track_row(SseDeserializer deserializer);
+
+  @protected
+  List<YearRow> sse_decode_list_year_row(SseDeserializer deserializer);
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
@@ -103,10 +149,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  YearRow sse_decode_year_row(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_album_row(AlbumRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_artist_row(ArtistRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
@@ -121,7 +176,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_genre_row(GenreRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_album_row(List<AlbumRow> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_artist_row(
+    List<ArtistRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_genre_row(List<GenreRow> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -131,6 +201,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_track_row(List<TrackRow> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_year_row(List<YearRow> self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_i_64(
@@ -152,6 +225,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_year_row(YearRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);

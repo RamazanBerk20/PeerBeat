@@ -3,6 +3,7 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
+import '../db/browse.dart';
 import '../db/tracks.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -34,6 +35,38 @@ Future<List<TrackRow>> librarySearch({
   query: query,
   limit: limit,
 );
+
+Future<List<AlbumRow>> libraryBrowseAlbums({
+  required PlatformInt64 limit,
+  required PlatformInt64 offset,
+}) => RustLib.instance.api.crateApiLibraryLibraryBrowseAlbums(
+  limit: limit,
+  offset: offset,
+);
+
+Future<List<ArtistRow>> libraryBrowseArtists() =>
+    RustLib.instance.api.crateApiLibraryLibraryBrowseArtists();
+
+Future<List<GenreRow>> libraryBrowseGenres() =>
+    RustLib.instance.api.crateApiLibraryLibraryBrowseGenres();
+
+Future<List<YearRow>> libraryBrowseYears() =>
+    RustLib.instance.api.crateApiLibraryLibraryBrowseYears();
+
+Future<List<TrackRow>> libraryAlbumTracks({required PlatformInt64 albumId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryAlbumTracks(albumId: albumId);
+
+Future<List<TrackRow>> libraryArtistTracks({required PlatformInt64 artistId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryArtistTracks(artistId: artistId);
+
+Future<List<TrackRow>> libraryGenreTracks({required PlatformInt64 genreId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryGenreTracks(genreId: genreId);
+
+Future<List<TrackRow>> libraryTracksByYear({required PlatformInt64 year}) =>
+    RustLib.instance.api.crateApiLibraryLibraryTracksByYear(year: year);
+
+Future<List<TrackRow>> libraryRecentlyAdded({required PlatformInt64 limit}) =>
+    RustLib.instance.api.crateApiLibraryLibraryRecentlyAdded(limit: limit);
 
 /// Total track count.
 Future<PlatformInt64> libraryTrackCount() =>

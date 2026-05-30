@@ -29,9 +29,9 @@ android {
         namespace 'com.flutter_rust_bridge.peerbeat_core'
     }
 
-    // Bumping the plugin compileSdkVersion requires all clients of this plugin
-    // to bump the version in their app.
-    compileSdkVersion 33
+    // Must be >= the app's deps (just_audio/path_provider pull exifinterface
+    // 1.4.1 which requires compileSdk 34+). Matches the app's compileSdk.
+    compileSdkVersion 36
 
     // Use the NDK version
     // declared in /android/app/build.gradle file of the Flutter project.

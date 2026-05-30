@@ -3,6 +3,7 @@
 //! Holds the process-wide [`Db`] behind a mutex. M1 surface; transport/audio
 //! and network APIs are added in later milestones.
 
+use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
 use crate::db::tracks::{self, TrackRow};
 use crate::db::Db;
 use crate::library;
@@ -63,6 +64,44 @@ pub fn library_browse_songs(limit: i64, offset: i64) -> Result<Vec<TrackRow>, St
 /// Fuzzy search across title/artist/album/genre.
 pub fn library_search(query: String, limit: i64) -> Result<Vec<TrackRow>, String> {
     with_db(|db| tracks::search_tracks(db.conn(), &query, limit))
+}
+
+// ── Browse views ───────────────────────────────────────────────────────────
+
+pub fn library_browse_albums(limit: i64, offset: i64) -> Result<Vec<AlbumRow>, String> {
+    with_db(|db| browse::browse_albums(db.conn(), limit, offset))
+}
+
+pub fn library_browse_artists() -> Result<Vec<ArtistRow>, String> {
+    with_db(|db| browse::browse_artists(db.conn()))
+}
+
+pub fn library_browse_genres() -> Result<Vec<GenreRow>, String> {
+    with_db(|db| browse::browse_genres(db.conn()))
+}
+
+pub fn library_browse_years() -> Result<Vec<YearRow>, String> {
+    with_db(|db| browse::browse_years(db.conn()))
+}
+
+pub fn library_album_tracks(album_id: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| browse::album_tracks(db.conn(), album_id))
+}
+
+pub fn library_artist_tracks(artist_id: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| browse::artist_tracks(db.conn(), artist_id))
+}
+
+pub fn library_genre_tracks(genre_id: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| browse::genre_tracks(db.conn(), genre_id))
+}
+
+pub fn library_tracks_by_year(year: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| browse::tracks_by_year(db.conn(), year))
+}
+
+pub fn library_recently_added(limit: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| browse::recently_added(db.conn(), limit))
 }
 
 /// Total track count.

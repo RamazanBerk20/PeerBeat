@@ -45,7 +45,7 @@ pub struct TrackRow {
     pub path: String,
 }
 
-const SELECT_ROW: &str = "
+pub(crate) const SELECT_ROW: &str = "
 SELECT t.id, t.title,
   COALESCE((SELECT group_concat(a.name, ', ')
             FROM track_artists ta JOIN artists a ON a.id = ta.artist_id
@@ -54,7 +54,7 @@ SELECT t.id, t.title,
   t.album_id, t.duration_ms, t.year, t.rating, t.played_count, t.path
 FROM ";
 
-fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackRow> {
+pub(crate) fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackRow> {
     Ok(TrackRow {
         id: r.get(0)?,
         title: r.get(1)?,
