@@ -17,6 +17,7 @@ class TrackRow {
   final PlatformInt64? year;
   final PlatformInt64 rating;
   final PlatformInt64 playedCount;
+  final String path;
 
   const TrackRow({
     required this.id,
@@ -28,6 +29,7 @@ class TrackRow {
     this.year,
     required this.rating,
     required this.playedCount,
+    required this.path,
   });
 
   @override
@@ -40,7 +42,8 @@ class TrackRow {
       durationMs.hashCode ^
       year.hashCode ^
       rating.hashCode ^
-      playedCount.hashCode;
+      playedCount.hashCode ^
+      path.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -55,5 +58,6 @@ class TrackRow {
           durationMs == other.durationMs &&
           year == other.year &&
           rating == other.rating &&
-          playedCount == other.playedCount;
+          playedCount == other.playedCount &&
+          path == other.path;
 }

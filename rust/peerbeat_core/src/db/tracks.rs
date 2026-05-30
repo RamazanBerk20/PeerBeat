@@ -42,6 +42,7 @@ pub struct TrackRow {
     pub year: Option<i64>,
     pub rating: i64,
     pub played_count: i64,
+    pub path: String,
 }
 
 const SELECT_ROW: &str = "
@@ -50,7 +51,7 @@ SELECT t.id, t.title,
             FROM track_artists ta JOIN artists a ON a.id = ta.artist_id
             WHERE ta.track_id = t.id AND ta.role = 'main'), '') AS artist,
   COALESCE(al.title, '') AS album,
-  t.album_id, t.duration_ms, t.year, t.rating, t.played_count
+  t.album_id, t.duration_ms, t.year, t.rating, t.played_count, t.path
 FROM ";
 
 fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackRow> {
@@ -64,6 +65,7 @@ fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackRow> {
         year: r.get(6)?,
         rating: r.get(7)?,
         played_count: r.get(8)?,
+        path: r.get(9)?,
     })
 }
 

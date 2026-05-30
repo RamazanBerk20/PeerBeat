@@ -1,0 +1,59 @@
+//! FRB audio transport API (desktop). Holds the engine in a process-wide
+//! `OnceLock`, created lazily on first use. Calls are `sync` (they only push a
+//! command or read an atomic) so the UI gets immediate, low-latency control.
+
+use crate::audio::AudioEngine;
+use std::sync::OnceLock;
+
+static ENGINE: OnceLock<AudioEngine> = OnceLock::new();
+
+fn engine() -> &'static AudioEngine {
+    ENGINE.get_or_init(AudioEngine::new)
+}
+
+/// Load `path` and start playing it (replacing anything current).
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_play_path(path: String) {
+    engine().load(path);
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_pause() {
+    engine().pause();
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_resume() {
+    engine().resume();
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_stop() {
+    engine().stop();
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_seek_ms(ms: i64) {
+    engine().seek(ms.max(0) as u64);
+}
+
+/// Volume 0.0–2.0 (1.0 = unity).
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_set_volume(volume: f64) {
+    engine().set_volume(volume as f32);
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_position_ms() -> i64 {
+    engine().position_ms() as i64
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_duration_ms() -> i64 {
+    engine().duration_ms() as i64
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_is_playing() -> bool {
+    engine().is_playing()
+}

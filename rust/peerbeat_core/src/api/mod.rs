@@ -5,10 +5,10 @@
 //! serialisable signatures. Keep this layer thin: validation + translation, no
 //! business logic.
 
+pub mod audio;
 pub mod library;
 pub mod simple;
 pub mod system;
 
 // Added per milestone as subsystems land:
-// pub mod audio;     // M1 — desktop transport + DSP control
 // pub mod network;   // M2 — host/peer, sharing, party mode

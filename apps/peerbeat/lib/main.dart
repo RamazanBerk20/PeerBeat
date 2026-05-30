@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'src/rust/api/audio.dart';
 import 'src/rust/api/library.dart';
 import 'src/rust/db/tracks.dart';
 import 'src/rust/frb_generated.dart';
@@ -65,10 +67,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
   String _query = '';
   bool _busy = false;
 
+  // playback
+  TrackRow? _current;
+  bool _playing = false;
+  int _posMs = 0;
+  int _durMs = 0;
+  Timer? _ticker;
+
   @override
   void initState() {
     super.initState();
     _refresh();
+    _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => _tick());
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  void _tick() {
+    if (_current == null) return;
+    setState(() {
+      _posMs = audioPositionMs();
+      _durMs = audioDurationMs();
+      _playing = audioIsPlaying();
+    });
   }
 
   Future<void> _refresh() async {
@@ -83,10 +108,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
     });
   }
 
+  void _play(TrackRow t) {
+    audioPlayPath(path: t.path);
+    setState(() {
+      _current = t;
+      _playing = true;
+      _posMs = 0;
+      _durMs = t.durationMs;
+    });
+  }
+
+  void _togglePlay() {
+    if (_current == null) return;
+    if (_playing) {
+      audioPause();
+    } else {
+      audioResume();
+    }
+    setState(() => _playing = !_playing);
+  }
+
   Future<void> _scan() async {
-    final controller = TextEditingController(
-      text: Platform.environment['HOME'] ?? '',
-    );
+    final controller =
+        TextEditingController(text: Platform.environment['HOME'] ?? '');
     final path = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -102,13 +146,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('Scan'),
-          ),
+              onPressed: () => Navigator.pop(ctx, controller.text),
+              child: const Text('Scan')),
         ],
       ),
     );
@@ -119,14 +161,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
       final report = await libraryScan(path: path.trim());
       await _refresh();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Scanned: ${report.added} added, ${report.updated} updated, '
-            '${report.skipped} unchanged, ${report.errors} errors',
-          ),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          'Scanned: ${report.added} added, ${report.updated} updated, '
+          '${report.skipped} unchanged, ${report.errors} errors',
         ),
-      );
+      ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -181,37 +221,150 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ? _EmptyState(onScan: _busy ? null : _scan)
                 : ListView.builder(
                     itemCount: _tracks.length,
-                    itemBuilder: (_, i) => _TrackTile(track: _tracks[i]),
+                    itemBuilder: (_, i) {
+                      final t = _tracks[i];
+                      return _TrackTile(
+                        track: t,
+                        selected: _current?.id == t.id,
+                        onTap: () => _play(t),
+                      );
+                    },
                   ),
           ),
         ],
       ),
+      bottomNavigationBar: _current == null
+          ? null
+          : _MiniPlayer(
+              track: _current!,
+              playing: _playing,
+              posMs: _posMs,
+              durMs: _durMs == 0 ? _current!.durationMs : _durMs,
+              onToggle: _togglePlay,
+              onSeek: (ms) {
+                audioSeekMs(ms: ms);
+                setState(() => _posMs = ms);
+              },
+            ),
     );
   }
 }
 
-class _TrackTile extends StatelessWidget {
-  const _TrackTile({required this.track});
-  final TrackRow track;
+String _fmt(int ms) {
+  final s = (ms / 1000).round();
+  return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+}
 
-  String _fmt(int ms) {
-    final s = (ms / 1000).round();
-    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
-  }
+class _TrackTile extends StatelessWidget {
+  const _TrackTile({required this.track, required this.onTap, this.selected = false});
+  final TrackRow track;
+  final VoidCallback onTap;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final subtitle = [
       if (track.artist.isNotEmpty) track.artist,
       if (track.album.isNotEmpty) track.album,
     ].join(' • ');
     return ListTile(
-      leading: const CircleAvatar(child: Icon(Icons.music_note)),
+      selected: selected,
+      selectedTileColor: cs.primaryContainer.withValues(alpha: 0.3),
+      leading: CircleAvatar(
+        backgroundColor: selected ? cs.primary : null,
+        child: Icon(selected ? Icons.equalizer : Icons.music_note,
+            color: selected ? cs.onPrimary : null),
+      ),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: subtitle.isEmpty
           ? null
           : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Text(_fmt(track.durationMs)),
+      onTap: onTap,
+    );
+  }
+}
+
+class _MiniPlayer extends StatelessWidget {
+  const _MiniPlayer({
+    required this.track,
+    required this.playing,
+    required this.posMs,
+    required this.durMs,
+    required this.onToggle,
+    required this.onSeek,
+  });
+
+  final TrackRow track;
+  final bool playing;
+  final int posMs;
+  final int durMs;
+  final VoidCallback onToggle;
+  final ValueChanged<int> onSeek;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final max = durMs <= 0 ? 1.0 : durMs.toDouble();
+    final value = posMs.clamp(0, durMs <= 0 ? 1 : durMs).toDouble();
+    return Material(
+      color: cs.surfaceContainerHigh,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 2,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              ),
+              child: Slider(
+                min: 0,
+                max: max,
+                value: value > max ? max : value,
+                onChanged: (v) => onSeek(v.toInt()),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: cs.primaryContainer,
+                    child: Icon(Icons.music_note, color: cs.onPrimaryContainer),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(track.title,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(
+                          '${track.artist.isEmpty ? 'Unknown' : track.artist}'
+                          '   ${_fmt(posMs)} / ${_fmt(durMs)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: cs.onSurfaceVariant, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton.filled(
+                    onPressed: onToggle,
+                    icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

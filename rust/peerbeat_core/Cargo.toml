@@ -23,6 +23,7 @@ serde_json = "1.0.150"
 lofty = "0.24.0"
 walkdir = "2.5.0"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+rodio = { version = "=0.19.0", default-features = false, features = ["symphonia-all"] }
 
 # Heavier subsystem deps (tokio, rusqlite, lofty, symphonia, cpal, rustls,
 # mdns-sd, ...) are added milestone-by-milestone as each module is implemented,

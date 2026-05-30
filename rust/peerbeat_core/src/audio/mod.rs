@@ -14,8 +14,10 @@
 //! Implemented in **M1** (transport + gapless/crossfade + speed) and extended in
 //! **M2** (EQ, ReplayGain, output-device selection, stereo widening).
 
-// Submodules land in M1:
-// mod engine;       // cpal stream + command queue + position stream
+mod engine;
+pub use engine::AudioEngine;
+
+// M2 replaces the rodio engine with a custom symphonia→cpal pipeline:
 // mod decoder;      // symphonia source + dual-decoder crossfade mixer
 // mod dsp;          // biquad EQ, replaygain, widener, time-stretch
 // mod devices;      // output-device enumeration + selection
