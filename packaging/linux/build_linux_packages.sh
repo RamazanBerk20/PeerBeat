@@ -43,30 +43,35 @@ Description: Local-first music player with LAN peer-to-peer sharing
 EOF
 dpkg-deb --build --root-owner-group "$ROOT" "$DIST/${APP}_${VERSION}_${ARCH}.deb"
 
-# ── AppImage ──────────────────────────────────────────────────────────────────
-echo "==> Building AppImage"
-if ! command -v linuxdeploy >/dev/null 2>&1; then
-  curl -fsSL -o "$DIST/linuxdeploy" \
-    https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-  chmod +x "$DIST/linuxdeploy"
-  LINUXDEPLOY="$DIST/linuxdeploy"
-else
-  LINUXDEPLOY="$(command -v linuxdeploy)"
-fi
-APPDIR="$DIST/AppDir"; rm -rf "$APPDIR"; mkdir -p "$APPDIR/usr/bin"
-cp -r "$BUNDLE/." "$APPDIR/usr/bin/"
-"$LINUXDEPLOY" --appdir "$APPDIR" \
-  --executable "$APPDIR/usr/bin/$APP" \
-  --desktop-file packaging/linux/peerbeat.desktop \
-  --icon-file "$ICON_SRC" --icon-filename peerbeat \
-  --output appimage
-mv ./*.AppImage "$DIST/PeerBeat-${VERSION}-x86_64.AppImage" 2>/dev/null || true
-
 # ── Plain tarball (consumed by the peerbeat-bin AUR package) ─────────────────
 echo "==> Building tarball"
 TARDIR="$DIST/tar/$APP"; rm -rf "$TARDIR"; mkdir -p "$TARDIR"
 cp -r "$BUNDLE/." "$TARDIR/"
 tar -C "$DIST/tar" -czf "$DIST/PeerBeat-${VERSION}-linux-x86_64.tar.gz" "$APP"
+
+# ── AppImage (best-effort; FUSE may be unavailable on CI runners) ────────────
+echo "==> Building AppImage"
+build_appimage() {
+  export APPIMAGE_EXTRACT_AND_RUN=1
+  local LINUXDEPLOY
+  if ! command -v linuxdeploy >/dev/null 2>&1; then
+    curl -fsSL -o "$DIST/linuxdeploy" \
+      https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+    chmod +x "$DIST/linuxdeploy"
+    LINUXDEPLOY="$DIST/linuxdeploy"
+  else
+    LINUXDEPLOY="$(command -v linuxdeploy)"
+  fi
+  local APPDIR="$DIST/AppDir"; rm -rf "$APPDIR"; mkdir -p "$APPDIR/usr/bin"
+  cp -r "$BUNDLE/." "$APPDIR/usr/bin/"
+  "$LINUXDEPLOY" --appdir "$APPDIR" \
+    --executable "$APPDIR/usr/bin/$APP" \
+    --desktop-file packaging/linux/peerbeat.desktop \
+    --icon-file "$ICON_SRC" --icon-filename peerbeat \
+    --output appimage
+  mv ./*.AppImage "$DIST/PeerBeat-${VERSION}-x86_64.AppImage"
+}
+build_appimage || echo "WARNING: AppImage build failed (deb + tarball still produced)"
 
 echo "==> Done. Artifacts in $DIST/:"
 ls -1 "$DIST"/*.deb "$DIST"/*.AppImage "$DIST"/*.tar.gz 2>/dev/null || true

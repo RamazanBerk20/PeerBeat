@@ -101,16 +101,21 @@ jobs:
   # ── Collect + publish to the Releases page ─────────────────────────────────
   publish:
     needs: [android, linux, windows]
+    # Publish whatever artifacts succeeded, even if one platform's packaging failed.
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { path: artifacts }
+        with:
+          path: artifacts
+          merge-multiple: true
       - name: Create / update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
+          fail_on_unmatched_files: false
           files: artifacts/**/*
 
   # AUR (peerbeat / peerbeat-bin) is published from a maintainer machine after a
