@@ -17,6 +17,9 @@ crate-type = ["cdylib", "staticlib", "lib"]
 flutter_rust_bridge = "=2.12.0"
 anyhow = "1"
 thiserror = "2"
+rusqlite = { version = "0.40.0", features = ["bundled"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
 
 # Heavier subsystem deps (tokio, rusqlite, lofty, symphonia, cpal, rustls,
 # mdns-sd, ...) are added milestone-by-milestone as each module is implemented,
