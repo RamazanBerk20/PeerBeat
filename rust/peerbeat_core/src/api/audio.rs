@@ -13,8 +13,8 @@ fn engine() -> &'static AudioEngine {
 
 /// Load `path` and start playing it (replacing anything current).
 #[flutter_rust_bridge::frb(sync)]
-pub fn audio_play_path(path: String) {
-    engine().load(path);
+pub fn audio_play_path(path: String) -> Result<(), String> {
+    engine().load(path)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -33,8 +33,8 @@ pub fn audio_stop() {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn audio_seek_ms(ms: i64) {
-    engine().seek(ms.max(0) as u64);
+pub fn audio_seek_ms(ms: i64) -> Result<(), String> {
+    engine().seek(ms.max(0) as u64)
 }
 
 /// Volume 0.0–2.0 (1.0 = unity).
@@ -56,4 +56,9 @@ pub fn audio_duration_ms() -> i64 {
 #[flutter_rust_bridge::frb(sync)]
 pub fn audio_is_playing() -> bool {
     engine().is_playing()
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_last_error() -> Option<String> {
+    engine().last_error()
 }

@@ -27,6 +27,8 @@ abstract class AudioEngine {
   /// Volume in 0.0–1.0 (1.0 = unity).
   Future<void> setVolume(double volume);
 
+  String? get lastError;
+
   Stream<Duration> get positionStream;
   Stream<bool> get playingStream;
   Duration get position;
@@ -79,8 +81,9 @@ class RustDesktopEngine implements AudioEngine {
       rust.audioPlayPath(path: tmp.path);
       _duration = duration ?? Duration(milliseconds: rust.audioDurationMs());
       _setPlaying(true);
-    } catch (_) {
+    } catch (e) {
       _setPlaying(false);
+      throw Exception('LAN stream playback failed: $e');
     }
   }
 
@@ -127,6 +130,8 @@ class RustDesktopEngine implements AudioEngine {
       : _duration;
   @override
   bool get playing => _lastPlaying;
+  @override
+  String? get lastError => rust.audioLastError();
 
   @override
   Future<void> dispose() async {
@@ -162,6 +167,9 @@ class ExoPlayerEngine implements AudioEngine {
   Future<void> seek(Duration position) => _player.seek(position);
   @override
   Future<void> setVolume(double volume) => _player.setVolume(volume);
+
+  @override
+  String? get lastError => null;
 
   @override
   Stream<Duration> get positionStream => _player.positionStream;

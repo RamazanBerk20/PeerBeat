@@ -5,8 +5,16 @@ import 'library_home.dart' show fmtDuration;
 
 /// Persistent transport bar bound to the [player] singleton. Hidden when nothing
 /// is loaded.
-class MiniPlayer extends StatelessWidget {
+class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
+
+  @override
+  State<MiniPlayer> createState() => _MiniPlayerState();
+}
+
+class _MiniPlayerState extends State<MiniPlayer> {
+  static const _endSeekEpsilon = Duration(milliseconds: 250);
+  double? _dragMs;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +26,9 @@ class MiniPlayer extends StatelessWidget {
         final cs = Theme.of(context).colorScheme;
         final durMs = player.duration.inMilliseconds;
         final maxMs = durMs <= 0 ? 1 : durMs;
-        final posMs = player.position.inMilliseconds.clamp(0, maxMs);
+        final posMs = (_dragMs ?? player.position.inMilliseconds.toDouble())
+            .clamp(0, maxMs.toDouble())
+            .toDouble();
         return Material(
           color: cs.surfaceContainerHigh,
           child: SafeArea(
@@ -39,9 +49,27 @@ class MiniPlayer extends StatelessWidget {
                   child: Slider(
                     min: 0,
                     max: maxMs.toDouble(),
-                    value: posMs.toDouble(),
-                    onChanged: (v) =>
-                        player.seek(Duration(milliseconds: v.toInt())),
+                    value: posMs,
+                    onChanged: (v) => setState(() => _dragMs = v),
+                    onChangeEnd: (v) async {
+                      final requested = Duration(milliseconds: v.toInt());
+                      final duration = Duration(milliseconds: durMs);
+                      final target =
+                          duration > _endSeekEpsilon &&
+                              requested >= duration - _endSeekEpsilon
+                          ? duration - _endSeekEpsilon
+                          : requested;
+                      setState(() => _dragMs = null);
+                      try {
+                        await player.seek(target);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Seek failed: $e')),
+                          );
+                        }
+                      }
+                    },
                   ),
                 ),
                 Padding(
@@ -68,7 +96,7 @@ class MiniPlayer extends StatelessWidget {
                             ),
                             Text(
                               '${t.artist.isEmpty ? 'Unknown' : t.artist}'
-                              '   ${fmtDuration(posMs)} / ${fmtDuration(durMs)}',
+                              '   ${fmtDuration(posMs.round())} / ${fmtDuration(durMs)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

@@ -1,10 +1,13 @@
 import 'dart:io';
-
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Int64List;
 
 import '../playback/player.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/db/browse.dart';
+import '../src/rust/db/playlists.dart';
 import '../src/rust/db/tracks.dart';
 import 'mini_player.dart';
 import 'network_screen.dart';
@@ -22,6 +25,7 @@ class LibraryHome extends StatefulWidget {
 }
 
 class _LibraryHomeState extends State<LibraryHome> {
+  int _section = 0;
   String _query = '';
   bool _busy = false;
   int _version = 0; // bumped after a scan to refresh tab data
@@ -39,34 +43,7 @@ class _LibraryHomeState extends State<LibraryHome> {
   }
 
   Future<void> _scan() async {
-    final controller = TextEditingController(
-      text: Platform.environment['HOME'] ?? '',
-    );
-    final path = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Scan a music folder'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Folder path',
-            hintText: '/home/you/Music',
-          ),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('Scan'),
-          ),
-        ],
-      ),
-    );
+    final path = await _pickMusicFolder(context);
     if (path == null || path.trim().isEmpty) return;
     setState(() => _busy = true);
     try {
@@ -94,16 +71,58 @@ class _LibraryHomeState extends State<LibraryHome> {
     }
   }
 
+  Future<String?> _pickMusicFolder(BuildContext context) async {
+    try {
+      return await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Scan a music folder',
+        initialDirectory: Platform.environment['HOME'],
+      );
+    } catch (_) {
+      if (!context.mounted) return null;
+      final controller = TextEditingController(
+        text: Platform.environment['HOME'] ?? '',
+      );
+      return showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Scan a music folder'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Folder path',
+              hintText: '/home/you/Music',
+            ),
+            onSubmitted: (v) => Navigator.pop(ctx, v),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text),
+              child: const Text('Scan'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final searching = _query.trim().isNotEmpty;
-    return DefaultTabController(
-      length: 5,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('PeerBeat'),
-          actions: [
+    final title = switch (_section) {
+      0 => 'Songs',
+      1 => 'Playlists',
+      _ => 'Network',
+    };
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          if (_section == 0)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Center(
@@ -113,60 +132,113 @@ class _LibraryHomeState extends State<LibraryHome> {
                 ),
               ),
             ),
+          if (_section == 0)
             IconButton(
               tooltip: 'Scan folder',
               onPressed: _busy ? null : _scan,
               icon: const Icon(Icons.create_new_folder_outlined),
             ),
-            IconButton(
-              tooltip: 'Network',
-              onPressed: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const NetworkScreen())),
-              icon: const Icon(Icons.wifi_tethering),
-            ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: Size.fromHeight(searching ? 64 : 112),
-            child: Column(
-              children: [
-                if (_busy) const LinearProgressIndicator(minHeight: 2),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: SearchBar(
-                    hintText: 'Search songs, artists, albums…',
-                    leading: const Icon(Icons.search),
-                    onChanged: (v) => setState(() => _query = v),
-                  ),
-                ),
-                if (!searching)
-                  const TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    tabs: [
-                      Tab(text: 'Songs'),
-                      Tab(text: 'Albums'),
-                      Tab(text: 'Artists'),
-                      Tab(text: 'Genres'),
-                      Tab(text: 'Recent'),
-                    ],
-                  ),
-              ],
+        ],
+      ),
+      body: Row(
+        children: [
+          NavigationRail(
+            selectedIndex: _section,
+            onDestinationSelected: (value) => setState(() => _section = value),
+            labelType: NavigationRailLabelType.all,
+            destinations: const [
+              NavigationRailDestination(
+                icon: Icon(Icons.library_music_outlined),
+                selectedIcon: Icon(Icons.library_music),
+                label: Text('Songs'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.queue_music_outlined),
+                selectedIcon: Icon(Icons.queue_music),
+                label: Text('Playlists'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.wifi_tethering_outlined),
+                selectedIcon: Icon(Icons.wifi_tethering),
+                label: Text('Network'),
+              ),
+            ],
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(
+            child: switch (_section) {
+              0 => _SongsSection(
+                query: _query,
+                busy: _busy,
+                version: _version,
+                onQueryChanged: (v) => setState(() => _query = v),
+              ),
+              1 => _PlaylistsTab(key: ValueKey('playlists$_version')),
+              _ => const NetworkPanel(),
+            },
+          ),
+        ],
+      ),
+      bottomNavigationBar: const MiniPlayer(),
+    );
+  }
+}
+
+class _SongsSection extends StatelessWidget {
+  const _SongsSection({
+    required this.query,
+    required this.busy,
+    required this.version,
+    required this.onQueryChanged,
+  });
+
+  final String query;
+  final bool busy;
+  final int version;
+  final ValueChanged<String> onQueryChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final searching = query.trim().isNotEmpty;
+    return DefaultTabController(
+      length: 5,
+      child: Column(
+        children: [
+          if (busy) const LinearProgressIndicator(minHeight: 2),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: SearchBar(
+              hintText: 'Search songs, artists, albums…',
+              leading: const Icon(Icons.search),
+              onChanged: onQueryChanged,
             ),
           ),
-        ),
-        body: searching
-            ? _SearchResults(query: _query.trim())
-            : TabBarView(
-                children: [
-                  _SongsTab(key: ValueKey('songs$_version')),
-                  _AlbumsTab(key: ValueKey('albums$_version')),
-                  _ArtistsTab(key: ValueKey('artists$_version')),
-                  _GenresTab(key: ValueKey('genres$_version')),
-                  _RecentTab(key: ValueKey('recent$_version')),
-                ],
-              ),
-        bottomNavigationBar: const MiniPlayer(),
+          if (!searching)
+            const TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [
+                Tab(text: 'Songs'),
+                Tab(text: 'Albums'),
+                Tab(text: 'Artists'),
+                Tab(text: 'Genres'),
+                Tab(text: 'Recent'),
+              ],
+            ),
+          Expanded(
+            child: searching
+                ? _SearchResults(query: query.trim())
+                : TabBarView(
+                    children: [
+                      _SongsTab(key: ValueKey('songs$version')),
+                      _AlbumsTab(key: ValueKey('albums$version')),
+                      _ArtistsTab(key: ValueKey('artists$version')),
+                      _GenresTab(key: ValueKey('genres$version')),
+                      _RecentTab(key: ValueKey('recent$version')),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -209,12 +281,65 @@ class TrackListView extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: Text(fmtDuration(t.durationMs)),
-            onTap: () => player.playQueue(tracks, i),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(fmtDuration(t.durationMs)),
+                PopupMenuButton<String>(
+                  tooltip: 'Track actions',
+                  onSelected: (value) => _handleTrackAction(context, value, t),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'play_next', child: Text('Play next')),
+                    PopupMenuItem(
+                      value: 'add_queue',
+                      child: Text('Add to queue'),
+                    ),
+                    PopupMenuItem(
+                      value: 'add_playlist',
+                      child: Text('Add to playlist'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            onTap: () async {
+              try {
+                await player.playQueue(tracks, i);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Playback failed: $e')),
+                  );
+                }
+              }
+            },
           );
         },
       ),
     );
+  }
+
+  Future<void> _handleTrackAction(
+    BuildContext context,
+    String value,
+    TrackRow track,
+  ) async {
+    switch (value) {
+      case 'play_next':
+        player.playNext(track);
+        break;
+      case 'add_queue':
+        player.addToQueue(track);
+        break;
+      case 'add_playlist':
+        await _addTrackToPlaylist(context, track);
+        return;
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Queued "${track.title}"')));
+    }
   }
 }
 
@@ -259,6 +384,306 @@ class _SearchResults extends StatelessWidget {
     () => librarySearch(query: query, limit: 500),
     key: ValueKey(query),
   );
+}
+
+// ── Playlists ──────────────────────────────────────────────────────────────
+
+class _PlaylistsTab extends StatefulWidget {
+  const _PlaylistsTab({super.key});
+
+  @override
+  State<_PlaylistsTab> createState() => _PlaylistsTabState();
+}
+
+class _PlaylistsTabState extends State<_PlaylistsTab> {
+  int _version = 0;
+
+  void _refresh() => setState(() => _version++);
+
+  Future<void> _create() async {
+    final name = await _playlistNameDialog(context, title: 'New playlist');
+    if (name == null) return;
+    await playlistCreate(name: name);
+    if (mounted) _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<PlaylistRow>>(
+      key: ValueKey(_version),
+      future: playlistList(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final playlists = snap.data!;
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  onPressed: _create,
+                  icon: const Icon(Icons.add),
+                  label: const Text('New playlist'),
+                ),
+              ),
+            ),
+            Expanded(
+              child: playlists.isEmpty
+                  ? const Center(child: Text('No playlists yet'))
+                  : ListView.builder(
+                      itemCount: playlists.length,
+                      itemBuilder: (_, i) {
+                        final p = playlists[i];
+                        return ListTile(
+                          leading: const CircleAvatar(
+                            child: Icon(Icons.queue_music),
+                          ),
+                          title: Text(p.name),
+                          subtitle: Text('${p.trackCount} tracks'),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              await _handlePlaylistAction(context, value, p);
+                              if (mounted) _refresh();
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'rename',
+                                child: Text('Rename'),
+                              ),
+                              PopupMenuItem(
+                                value: 'duplicate',
+                                child: Text('Duplicate'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
+                            ],
+                          ),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => _PlaylistDetail(playlist: p),
+                              ),
+                            );
+                            if (mounted) _refresh();
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PlaylistDetail extends StatefulWidget {
+  const _PlaylistDetail({required this.playlist});
+  final PlaylistRow playlist;
+
+  @override
+  State<_PlaylistDetail> createState() => _PlaylistDetailState();
+}
+
+class _PlaylistDetailState extends State<_PlaylistDetail> {
+  late Future<List<TrackRow>> _future = playlistTracks(
+    playlistId: widget.playlist.id,
+  );
+  List<TrackRow> _tracks = const [];
+
+  void _reload() {
+    setState(() {
+      _future = playlistTracks(playlistId: widget.playlist.id);
+    });
+  }
+
+  Future<void> _playAll() async {
+    if (_tracks.isEmpty) return;
+    await player.playQueue(_tracks, 0);
+  }
+
+  Future<void> _removeAt(int index) async {
+    await playlistRemovePosition(
+      playlistId: widget.playlist.id,
+      position: index,
+    );
+    _reload();
+  }
+
+  Future<void> _reorderTo(int oldIndex, int newIndex) async {
+    final next = [..._tracks];
+    final item = next.removeAt(oldIndex);
+    next.insert(newIndex, item);
+    setState(() => _tracks = next);
+    await playlistReorderTracks(
+      playlistId: widget.playlist.id,
+      trackIds: Int64List.fromList(next.map((t) => t.id).toList()),
+    );
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.playlist.name),
+        actions: [
+          IconButton(
+            tooltip: 'Play playlist',
+            onPressed: _tracks.isEmpty ? null : _playAll,
+            icon: const Icon(Icons.play_arrow),
+          ),
+        ],
+      ),
+      body: FutureBuilder<List<TrackRow>>(
+        future: _future,
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          _tracks = snap.data!;
+          if (_tracks.isEmpty) {
+            return const Center(child: Text('No tracks in this playlist'));
+          }
+          return ReorderableListView.builder(
+            itemCount: _tracks.length,
+            onReorderItem: _reorderTo,
+            itemBuilder: (_, i) {
+              final t = _tracks[i];
+              return ListTile(
+                key: ValueKey('${t.id}-$i'),
+                leading: const Icon(Icons.drag_handle),
+                title: Text(
+                  t.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  t.artist.isEmpty ? 'Unknown artist' : t.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  tooltip: 'Remove',
+                  onPressed: () => _removeAt(i),
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+                onTap: () => player.playQueue(_tracks, i),
+              );
+            },
+          );
+        },
+      ),
+      bottomNavigationBar: const MiniPlayer(),
+    );
+  }
+}
+
+Future<void> _handlePlaylistAction(
+  BuildContext context,
+  String value,
+  PlaylistRow playlist,
+) async {
+  switch (value) {
+    case 'rename':
+      final name = await _playlistNameDialog(
+        context,
+        title: 'Rename playlist',
+        initial: playlist.name,
+      );
+      if (name != null) {
+        await playlistRename(playlistId: playlist.id, name: name);
+      }
+      break;
+    case 'duplicate':
+      final name = await _playlistNameDialog(
+        context,
+        title: 'Duplicate playlist',
+        initial: '${playlist.name} copy',
+      );
+      if (name != null) {
+        await playlistDuplicate(playlistId: playlist.id, name: name);
+      }
+      break;
+    case 'delete':
+      await playlistDelete(playlistId: playlist.id);
+      break;
+  }
+}
+
+Future<void> _addTrackToPlaylist(BuildContext context, TrackRow track) async {
+  final playlists = await playlistList();
+  if (!context.mounted) return;
+  if (playlists.isEmpty) {
+    final name = await _playlistNameDialog(context, title: 'New playlist');
+    if (name == null) return;
+    final id = await playlistCreate(name: name);
+    await playlistAddTracks(
+      playlistId: id,
+      trackIds: Int64List.fromList([track.id]),
+    );
+    return;
+  }
+  final picked = await showDialog<PlaylistRow>(
+    context: context,
+    builder: (ctx) => SimpleDialog(
+      title: const Text('Add to playlist'),
+      children: [
+        for (final p in playlists)
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, p),
+            child: Text(p.name),
+          ),
+      ],
+    ),
+  );
+  if (picked == null) return;
+  await playlistAddTracks(
+    playlistId: picked.id,
+    trackIds: Int64List.fromList([track.id]),
+  );
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Added "${track.title}" to ${picked.name}')),
+    );
+  }
+}
+
+Future<String?> _playlistNameDialog(
+  BuildContext context, {
+  required String title,
+  String initial = '',
+}) async {
+  final controller = TextEditingController(text: initial);
+  final name = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Name'),
+        onSubmitted: (v) => Navigator.pop(ctx, v),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, controller.text),
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+  final clean = name?.trim();
+  return clean == null || clean.isEmpty ? null : clean;
 }
 
 // ── Albums / Artists / Genres ───────────────────────────────────────────────

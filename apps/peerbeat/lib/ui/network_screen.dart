@@ -10,14 +10,27 @@ import '../src/rust/net/discovery.dart';
 import 'library_home.dart' show TrackListView;
 import 'mini_player.dart';
 
-class NetworkScreen extends StatefulWidget {
+class NetworkScreen extends StatelessWidget {
   const NetworkScreen({super.key});
 
   @override
-  State<NetworkScreen> createState() => _NetworkScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Network')),
+      bottomNavigationBar: const MiniPlayer(),
+      body: const NetworkPanel(),
+    );
+  }
 }
 
-class _NetworkScreenState extends State<NetworkScreen> {
+class NetworkPanel extends StatefulWidget {
+  const NetworkPanel({super.key});
+
+  @override
+  State<NetworkPanel> createState() => _NetworkPanelState();
+}
+
+class _NetworkPanelState extends State<NetworkPanel> {
   bool _hosting = false;
   int? _port;
   bool _discovering = false;
@@ -128,74 +141,70 @@ class _NetworkScreenState extends State<NetworkScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Network')),
-      bottomNavigationBar: const MiniPlayer(),
-      body: ListView(
-        children: [
-          // LAN-only banner
-          Container(
-            width: double.infinity,
-            color: cs.secondaryContainer,
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Icon(Icons.lock_outline, color: cs.onSecondaryContainer),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Local network only — nothing leaves your Wi-Fi. No cloud, no accounts.',
-                    style: TextStyle(color: cs.onSecondaryContainer),
-                  ),
+    return ListView(
+      children: [
+        // LAN-only banner
+        Container(
+          width: double.infinity,
+          color: cs.secondaryContainer,
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(Icons.lock_outline, color: cs.onSecondaryContainer),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Local network only — nothing leaves your Wi-Fi. No cloud, no accounts.',
+                  style: TextStyle(color: cs.onSecondaryContainer),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          SwitchListTile(
-            secondary: const Icon(Icons.wifi_tethering),
-            title: const Text('Share my library'),
-            subtitle: Text(
-              _hosting
-                  ? 'Sharing on port ${_port ?? '…'} as "$appDisplayName"'
-                  : 'Off',
-            ),
-            value: _hosting,
-            onChanged: _toggleHost,
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.wifi_tethering),
+          title: const Text('Share my library'),
+          subtitle: Text(
+            _hosting
+                ? 'Sharing on port ${_port ?? '…'} as "$appDisplayName"'
+                : 'Off',
           ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(_error!, style: TextStyle(color: cs.error)),
-            ),
-          const Divider(),
+          value: _hosting,
+          onChanged: _toggleHost,
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(_error!, style: TextStyle(color: cs.error)),
+          ),
+        const Divider(),
+        ListTile(
+          title: const Text('Discovered hosts'),
+          trailing: _discovering
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _discover,
+                ),
+        ),
+        if (_hosts.isEmpty && !_discovering)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: Text('No hosts found on the network')),
+          ),
+        for (final h in _hosts)
           ListTile(
-            title: const Text('Discovered hosts'),
-            trailing: _discovering
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _discover,
-                  ),
+            leading: const CircleAvatar(child: Icon(Icons.computer)),
+            title: Text(h.name),
+            subtitle: Text('${h.address}:${h.port}'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openHost(h),
           ),
-          if (_hosts.isEmpty && !_discovering)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: Text('No hosts found on the network')),
-            ),
-          for (final h in _hosts)
-            ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.computer)),
-              title: Text(h.name),
-              subtitle: Text('${h.address}:${h.port}'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _openHost(h),
-            ),
-        ],
-      ),
+      ],
     );
   }
 }

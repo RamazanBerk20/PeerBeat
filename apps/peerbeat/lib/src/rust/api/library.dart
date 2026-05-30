@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../db/browse.dart';
+import '../db/playlists.dart';
 import '../db/tracks.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -71,6 +72,58 @@ Future<List<TrackRow>> libraryRecentlyAdded({required PlatformInt64 limit}) =>
 /// Total track count.
 Future<PlatformInt64> libraryTrackCount() =>
     RustLib.instance.api.crateApiLibraryLibraryTrackCount();
+
+Future<List<PlaylistRow>> playlistList() =>
+    RustLib.instance.api.crateApiLibraryPlaylistList();
+
+Future<PlatformInt64> playlistCreate({required String name}) =>
+    RustLib.instance.api.crateApiLibraryPlaylistCreate(name: name);
+
+Future<void> playlistRename({
+  required PlatformInt64 playlistId,
+  required String name,
+}) => RustLib.instance.api.crateApiLibraryPlaylistRename(
+  playlistId: playlistId,
+  name: name,
+);
+
+Future<void> playlistDelete({required PlatformInt64 playlistId}) =>
+    RustLib.instance.api.crateApiLibraryPlaylistDelete(playlistId: playlistId);
+
+Future<PlatformInt64> playlistDuplicate({
+  required PlatformInt64 playlistId,
+  required String name,
+}) => RustLib.instance.api.crateApiLibraryPlaylistDuplicate(
+  playlistId: playlistId,
+  name: name,
+);
+
+Future<List<TrackRow>> playlistTracks({required PlatformInt64 playlistId}) =>
+    RustLib.instance.api.crateApiLibraryPlaylistTracks(playlistId: playlistId);
+
+Future<void> playlistAddTracks({
+  required PlatformInt64 playlistId,
+  required Int64List trackIds,
+}) => RustLib.instance.api.crateApiLibraryPlaylistAddTracks(
+  playlistId: playlistId,
+  trackIds: trackIds,
+);
+
+Future<void> playlistRemovePosition({
+  required PlatformInt64 playlistId,
+  required PlatformInt64 position,
+}) => RustLib.instance.api.crateApiLibraryPlaylistRemovePosition(
+  playlistId: playlistId,
+  position: position,
+);
+
+Future<void> playlistReorderTracks({
+  required PlatformInt64 playlistId,
+  required Int64List trackIds,
+}) => RustLib.instance.api.crateApiLibraryPlaylistReorderTracks(
+  playlistId: playlistId,
+  trackIds: trackIds,
+);
 
 /// Result of a folder scan.
 class ScanReport {

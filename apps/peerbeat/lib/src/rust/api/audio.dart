@@ -32,3 +32,5 @@ PlatformInt64 audioDurationMs() =>
     RustLib.instance.api.crateApiAudioAudioDurationMs();
 
 bool audioIsPlaying() => RustLib.instance.api.crateApiAudioAudioIsPlaying();
+
+String? audioLastError() => RustLib.instance.api.crateApiAudioAudioLastError();

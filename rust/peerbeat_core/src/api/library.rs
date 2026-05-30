@@ -4,6 +4,7 @@
 //! and network APIs are added in later milestones.
 
 use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
+use crate::db::playlists::{self, PlaylistRow};
 use crate::db::tracks::{self, TrackRow};
 use crate::db::Db;
 use crate::library;
@@ -110,4 +111,57 @@ pub fn library_track_count() -> Result<i64, String> {
         db.conn()
             .query_row("SELECT count(*) FROM tracks", [], |r| r.get::<_, i64>(0))
     })
+}
+
+// ── Manual playlists ───────────────────────────────────────────────────────
+
+pub fn playlist_list() -> Result<Vec<PlaylistRow>, String> {
+    with_db(|db| playlists::list(db.conn()))
+}
+
+pub fn playlist_create(name: String) -> Result<i64, String> {
+    let clean = name.trim().to_string();
+    if clean.is_empty() {
+        return Err("playlist name cannot be empty".to_string());
+    }
+    with_db(|db| playlists::create(db.conn(), &clean, now_ms()))
+}
+
+pub fn playlist_rename(playlist_id: i64, name: String) -> Result<(), String> {
+    let clean = name.trim().to_string();
+    if clean.is_empty() {
+        return Err("playlist name cannot be empty".to_string());
+    }
+    with_db(|db| playlists::rename(db.conn(), playlist_id, &clean, now_ms()))
+}
+
+pub fn playlist_delete(playlist_id: i64) -> Result<(), String> {
+    with_db(|db| playlists::delete(db.conn(), playlist_id))
+}
+
+pub fn playlist_duplicate(playlist_id: i64, name: String) -> Result<i64, String> {
+    let clean = name.trim().to_string();
+    if clean.is_empty() {
+        return Err("playlist name cannot be empty".to_string());
+    }
+    with_db(|db| playlists::duplicate(db.conn(), playlist_id, &clean, now_ms()))
+}
+
+pub fn playlist_tracks(playlist_id: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| playlists::tracks(db.conn(), playlist_id))
+}
+
+pub fn playlist_add_tracks(playlist_id: i64, track_ids: Vec<i64>) -> Result<(), String> {
+    if track_ids.is_empty() {
+        return Ok(());
+    }
+    with_db(|db| playlists::add_tracks(db.conn(), playlist_id, &track_ids, now_ms()))
+}
+
+pub fn playlist_remove_position(playlist_id: i64, position: i64) -> Result<(), String> {
+    with_db(|db| playlists::remove_position(db.conn(), playlist_id, position, now_ms()))
+}
+
+pub fn playlist_reorder_tracks(playlist_id: i64, track_ids: Vec<i64>) -> Result<(), String> {
+    with_db(|db| playlists::reorder_tracks(db.conn(), playlist_id, &track_ids, now_ms()))
 }
