@@ -18,11 +18,10 @@
 //! Implemented in **M2** (discovery, host server, streaming, sharing, auth) and
 //! **M3** (party mode).
 
-// Submodules land in M2/M3:
-// mod discovery;    // mdns-sd advertise + browse
+pub mod discovery;
+pub mod server;
+
+// Further slices:
 // mod tls;          // rcgen self-signed cert + rustls config + TOFU pinning
-// mod server;       // axum REST + Range + auth middleware + audit
 // mod control;      // websocket control channel
-// mod client;       // pinned streaming/download client
 // mod party;        // clock-sync + synchronized playback
-// mod protocol;     // shared wire types (serde)

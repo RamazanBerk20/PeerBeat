@@ -16,6 +16,9 @@ abstract class AudioEngine {
   }
 
   Future<void> playPath(String path, {Duration? duration});
+
+  /// Play a remote URL (LAN stream).
+  Future<void> playUrl(String url, {Duration? duration});
   Future<void> pause();
   Future<void> resume();
   Future<void> stop();
@@ -59,6 +62,26 @@ class RustDesktopEngine implements AudioEngine {
     rust.audioPlayPath(path: path);
     _duration = duration ?? Duration(milliseconds: rust.audioDurationMs());
     _setPlaying(true);
+  }
+
+  @override
+  Future<void> playUrl(String url, {Duration? duration}) async {
+    // rodio plays from a file; download the LAN stream to a temp file first.
+    // (True Range streaming is a later slice.)
+    try {
+      final tmp = File(
+        '${Directory.systemTemp.path}/peerbeat_${url.hashCode}.audio',
+      );
+      final client = HttpClient();
+      final resp = await (await client.getUrl(Uri.parse(url))).close();
+      await resp.pipe(tmp.openWrite());
+      client.close();
+      rust.audioPlayPath(path: tmp.path);
+      _duration = duration ?? Duration(milliseconds: rust.audioDurationMs());
+      _setPlaying(true);
+    } catch (_) {
+      _setPlaying(false);
+    }
   }
 
   @override
@@ -121,6 +144,12 @@ class ExoPlayerEngine implements AudioEngine {
   Future<void> playPath(String path, {Duration? duration}) async {
     await _player.setFilePath(path);
     _player.play(); // do not await: completes only when playback ends
+  }
+
+  @override
+  Future<void> playUrl(String url, {Duration? duration}) async {
+    await _player.setUrl(url);
+    _player.play();
   }
 
   @override

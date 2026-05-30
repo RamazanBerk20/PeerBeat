@@ -7,8 +7,6 @@
 
 pub mod audio;
 pub mod library;
+pub mod network;
 pub mod simple;
 pub mod system;
-
-// Added per milestone as subsystems land:
-// pub mod network;   // M2 — host/peer, sharing, party mode

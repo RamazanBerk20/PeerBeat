@@ -49,7 +49,12 @@ class PlayerController extends ChangeNotifier {
     _index = i;
     _position = Duration.zero;
     _playing = true;
-    _engine.playPath(current!.path, duration: duration);
+    final p = current!.path;
+    if (p.startsWith('http://') || p.startsWith('https://')) {
+      _engine.playUrl(p, duration: duration);
+    } else {
+      _engine.playPath(p, duration: duration);
+    }
     notifyListeners();
   }
 

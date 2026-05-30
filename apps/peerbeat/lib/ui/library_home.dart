@@ -7,6 +7,7 @@ import '../src/rust/api/library.dart';
 import '../src/rust/db/browse.dart';
 import '../src/rust/db/tracks.dart';
 import 'mini_player.dart';
+import 'network_screen.dart';
 
 String fmtDuration(int ms) {
   final s = (ms / 1000).round();
@@ -116,6 +117,13 @@ class _LibraryHomeState extends State<LibraryHome> {
               tooltip: 'Scan folder',
               onPressed: _busy ? null : _scan,
               icon: const Icon(Icons.create_new_folder_outlined),
+            ),
+            IconButton(
+              tooltip: 'Network',
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const NetworkScreen())),
+              icon: const Icon(Icons.wifi_tethering),
             ),
           ],
           bottom: PreferredSize(
