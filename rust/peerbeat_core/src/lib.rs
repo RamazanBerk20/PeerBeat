@@ -15,6 +15,10 @@
 //! [`audio`] is therefore a desktop-only engine, while [`db`], [`library`], and
 //! [`net`] are used on every platform.
 
+// Our module docs use lists whose continuation lines are aligned with the item
+// text for readability; that trips this style-only lint.
+#![allow(clippy::doc_overindented_list_items)]
+
 pub mod api;
 pub mod audio;
 pub mod db;

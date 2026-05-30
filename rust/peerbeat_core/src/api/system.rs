@@ -8,7 +8,10 @@ pub fn core_version() -> String {
 /// A short banner the Dart side can show in About/Settings to confirm the native
 /// core loaded and bridged successfully.
 pub fn core_banner() -> String {
-    format!("PeerBeat core v{} — LAN-only, offline-first", core_version())
+    format!(
+        "PeerBeat core v{} — LAN-only, offline-first",
+        core_version()
+    )
 }
 
 /// Initialise process-wide state for the core: logging and the default crypto
@@ -26,7 +29,11 @@ mod tests {
     fn version_is_non_empty_semver() {
         let v = core_version();
         assert!(!v.is_empty());
-        assert_eq!(v.split('.').count(), 3, "expected MAJOR.MINOR.PATCH, got {v}");
+        assert_eq!(
+            v.split('.').count(),
+            3,
+            "expected MAJOR.MINOR.PATCH, got {v}"
+        );
     }
 
     #[test]
