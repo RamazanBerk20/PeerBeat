@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 
 import '../playback/player.dart';
-import 'library_home.dart' show fmtDuration;
+import 'library_home.dart' show TrackArt, fmtDuration;
 
 /// Persistent transport bar bound to the [player] singleton. Hidden when nothing
 /// is loaded.
@@ -76,13 +76,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                   padding: const EdgeInsets.fromLTRB(12, 0, 8, 8),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        backgroundColor: cs.primaryContainer,
-                        child: Icon(
-                          Icons.music_note,
-                          color: cs.onPrimaryContainer,
-                        ),
-                      ),
+                      TrackArt(track: t, size: 44),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(

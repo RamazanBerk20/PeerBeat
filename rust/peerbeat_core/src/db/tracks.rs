@@ -43,15 +43,20 @@ pub struct TrackRow {
     pub rating: i64,
     pub played_count: i64,
     pub path: String,
+    /// On-disk path of the album's cached cover image, if any.
+    pub art_path: Option<String>,
 }
 
+// The trailing `art_path` is a correlated subquery on the already-joined `al`
+// alias, so every caller's FROM clause stays unchanged (no extra join needed).
 pub(crate) const SELECT_ROW: &str = "
 SELECT t.id, t.title,
   COALESCE((SELECT group_concat(a.name, ', ')
             FROM track_artists ta JOIN artists a ON a.id = ta.artist_id
             WHERE ta.track_id = t.id AND ta.role = 'main'), '') AS artist,
   COALESCE(al.title, '') AS album,
-  t.album_id, t.duration_ms, t.year, t.rating, t.played_count, t.path
+  t.album_id, t.duration_ms, t.year, t.rating, t.played_count, t.path,
+  (SELECT ac.file_path FROM art_cache ac WHERE ac.id = al.art_id) AS art_path
 FROM ";
 
 pub(crate) fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackRow> {
@@ -66,6 +71,7 @@ pub(crate) fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackRow> {
         rating: r.get(7)?,
         played_count: r.get(8)?,
         path: r.get(9)?,
+        art_path: r.get(10)?,
     })
 }
 

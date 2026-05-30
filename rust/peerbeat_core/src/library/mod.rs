@@ -7,6 +7,7 @@
 //! Implemented in **M1** (scan + tag read) and extended in **M2** (tag
 //! write-back, watch-folders via `notify`, M3U/PLS import-export).
 
+pub mod art;
 pub mod metadata;
 pub mod scan;
 

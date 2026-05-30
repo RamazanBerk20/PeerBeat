@@ -47,14 +47,13 @@ pub fn library_open(db_path: String) -> Result<(), String> {
 /// Recursively scan `path`, importing new/changed audio files. Returns counts.
 pub fn library_scan(path: String) -> Result<ScanReport, String> {
     let added_at = now_ms();
-    with_db(|db| library::scan_folder(db.conn(), &PathBuf::from(&path), added_at)).map(|s| {
-        ScanReport {
+    with_db(|db| library::scan_folder(db.conn(), &PathBuf::from(&path), added_at, db.art_dir()))
+        .map(|s| ScanReport {
             added: s.added as u32,
             updated: s.updated as u32,
             skipped: s.skipped as u32,
             errors: s.errors as u32,
-        }
-    })
+        })
 }
 
 /// Browse all songs ordered by title, paginated.

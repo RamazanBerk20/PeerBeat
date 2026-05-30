@@ -15,26 +15,30 @@ pub mod tracks;
 pub use schema::SCHEMA_VERSION;
 
 use rusqlite::Connection;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// A handle to the PeerBeat database. Wraps a single rusqlite [`Connection`];
 /// the FRB layer owns one of these on a dedicated worker thread.
 pub struct Db {
     conn: Connection,
+    art_dir: PathBuf,
 }
 
 impl Db {
     /// Open (creating if absent) the database at `path`, applying migrations.
+    /// Extracted album art is cached in a sibling `art/` directory.
     pub fn open(path: &Path) -> rusqlite::Result<Self> {
-        Self::init(Connection::open(path)?)
+        let art_dir = path.parent().unwrap_or_else(|| Path::new(".")).join("art");
+        let _ = std::fs::create_dir_all(&art_dir);
+        Self::init(Connection::open(path)?, art_dir)
     }
 
     /// An in-memory database — used by tests and ephemeral tooling.
     pub fn open_in_memory() -> rusqlite::Result<Self> {
-        Self::init(Connection::open_in_memory()?)
+        Self::init(Connection::open_in_memory()?, PathBuf::new())
     }
 
-    fn init(conn: Connection) -> rusqlite::Result<Self> {
+    fn init(conn: Connection, art_dir: PathBuf) -> rusqlite::Result<Self> {
         // execute_batch ignores the row PRAGMA journal_mode returns and is a
         // no-op for WAL on an in-memory db.
         conn.execute_batch(
@@ -44,12 +48,17 @@ impl Db {
              PRAGMA temp_store=MEMORY;",
         )?;
         schema::migrate(&conn)?;
-        Ok(Self { conn })
+        Ok(Self { conn, art_dir })
     }
 
     /// Borrow the underlying connection (DAOs live in submodules).
     pub fn conn(&self) -> &Connection {
         &self.conn
+    }
+
+    /// Directory where extracted album art is cached (empty for in-memory DBs).
+    pub fn art_dir(&self) -> &Path {
+        &self.art_dir
     }
 }
 

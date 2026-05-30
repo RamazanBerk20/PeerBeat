@@ -1735,6 +1735,7 @@ impl SseDecode for crate::db::tracks::TrackRow {
         let mut var_rating = <i64>::sse_decode(deserializer);
         let mut var_playedCount = <i64>::sse_decode(deserializer);
         let mut var_path = <String>::sse_decode(deserializer);
+        let mut var_artPath = <Option<String>>::sse_decode(deserializer);
         return crate::db::tracks::TrackRow {
             id: var_id,
             title: var_title,
@@ -1746,6 +1747,7 @@ impl SseDecode for crate::db::tracks::TrackRow {
             rating: var_rating,
             played_count: var_playedCount,
             path: var_path,
+            art_path: var_artPath,
         };
     }
 }
@@ -2052,6 +2054,7 @@ impl flutter_rust_bridge::IntoDart for crate::db::tracks::TrackRow {
             self.rating.into_into_dart().into_dart(),
             self.played_count.into_into_dart().into_dart(),
             self.path.into_into_dart().into_dart(),
+            self.art_path.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2303,6 +2306,7 @@ impl SseEncode for crate::db::tracks::TrackRow {
         <i64>::sse_encode(self.rating, serializer);
         <i64>::sse_encode(self.played_count, serializer);
         <String>::sse_encode(self.path, serializer);
+        <Option<String>>::sse_encode(self.art_path, serializer);
     }
 }
 

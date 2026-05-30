@@ -246,6 +246,57 @@ class _SongsSection extends StatelessWidget {
 
 // ── Track list (reused by tabs, search, and detail pages) ───────────────────
 
+/// Album-cover thumbnail for a track: shows the scan-cached art when present,
+/// otherwise a music-note placeholder. [selected] tints it while playing.
+/// Always a rounded square so art-present and art-absent rows align.
+class TrackArt extends StatelessWidget {
+  const TrackArt({
+    super.key,
+    required this.track,
+    this.selected = false,
+    this.size = 40,
+  });
+
+  final TrackRow track;
+  final bool selected;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(size * 0.2);
+    final art = track.artPath;
+    if (art != null && art.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: Image.file(
+          File(art),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => _placeholder(cs, radius),
+        ),
+      );
+    }
+    return _placeholder(cs, radius);
+  }
+
+  Widget _placeholder(ColorScheme cs, BorderRadius radius) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: selected ? cs.primary : cs.surfaceContainerHighest,
+      borderRadius: radius,
+    ),
+    child: Icon(
+      selected ? Icons.equalizer : Icons.music_note,
+      size: size * 0.55,
+      color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+    ),
+  );
+}
+
 class TrackListView extends StatelessWidget {
   const TrackListView({super.key, required this.tracks});
   final List<TrackRow> tracks;
@@ -262,16 +313,9 @@ class TrackListView extends StatelessWidget {
         itemBuilder: (_, i) {
           final t = tracks[i];
           final selected = player.current?.id == t.id;
-          final cs = Theme.of(context).colorScheme;
           return ListTile(
             selected: selected,
-            leading: CircleAvatar(
-              backgroundColor: selected ? cs.primary : null,
-              child: Icon(
-                selected ? Icons.equalizer : Icons.music_note,
-                color: selected ? cs.onPrimary : null,
-              ),
-            ),
+            leading: TrackArt(track: t, selected: selected),
             title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
               [

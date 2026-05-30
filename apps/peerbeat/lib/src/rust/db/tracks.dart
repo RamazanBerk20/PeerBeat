@@ -19,6 +19,9 @@ class TrackRow {
   final PlatformInt64 playedCount;
   final String path;
 
+  /// On-disk path of the album's cached cover image, if any.
+  final String? artPath;
+
   const TrackRow({
     required this.id,
     required this.title,
@@ -30,6 +33,7 @@ class TrackRow {
     required this.rating,
     required this.playedCount,
     required this.path,
+    this.artPath,
   });
 
   @override
@@ -43,7 +47,8 @@ class TrackRow {
       year.hashCode ^
       rating.hashCode ^
       playedCount.hashCode ^
-      path.hashCode;
+      path.hashCode ^
+      artPath.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -59,5 +64,6 @@ class TrackRow {
           year == other.year &&
           rating == other.rating &&
           playedCount == other.playedCount &&
-          path == other.path;
+          path == other.path &&
+          artPath == other.artPath;
 }

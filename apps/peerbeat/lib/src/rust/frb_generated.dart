@@ -1651,8 +1651,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TrackRow dco_decode_track_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return TrackRow(
       id: dco_decode_i_64(arr[0]),
       title: dco_decode_String(arr[1]),
@@ -1664,6 +1664,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rating: dco_decode_i_64(arr[7]),
       playedCount: dco_decode_i_64(arr[8]),
       path: dco_decode_String(arr[9]),
+      artPath: dco_decode_opt_String(arr[10]),
     );
   }
 
@@ -1968,6 +1969,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_rating = sse_decode_i_64(deserializer);
     var var_playedCount = sse_decode_i_64(deserializer);
     var var_path = sse_decode_String(deserializer);
+    var var_artPath = sse_decode_opt_String(deserializer);
     return TrackRow(
       id: var_id,
       title: var_title,
@@ -1979,6 +1981,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rating: var_rating,
       playedCount: var_playedCount,
       path: var_path,
+      artPath: var_artPath,
     );
   }
 
@@ -2260,6 +2263,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.rating, serializer);
     sse_encode_i_64(self.playedCount, serializer);
     sse_encode_String(self.path, serializer);
+    sse_encode_opt_String(self.artPath, serializer);
   }
 
   @protected

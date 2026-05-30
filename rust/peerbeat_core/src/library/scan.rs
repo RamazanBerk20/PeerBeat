@@ -55,8 +55,14 @@ fn content_hash(path: &Path, size: u64) -> std::io::Result<String> {
 }
 
 /// Recursively scan `root`, upserting new/changed audio files. Idempotent:
-/// re-scanning an unchanged tree only does cheap stat checks.
-pub fn scan_folder(conn: &Connection, root: &Path, added_at: i64) -> anyhow::Result<ScanStats> {
+/// re-scanning an unchanged tree only does cheap stat checks. Embedded cover
+/// art is extracted into `art_dir` (once per album) as a side effect.
+pub fn scan_folder(
+    conn: &Connection,
+    root: &Path,
+    added_at: i64,
+    art_dir: &Path,
+) -> anyhow::Result<ScanStats> {
     let mut stats = ScanStats::default();
     for entry in WalkDir::new(root)
         .follow_links(true)
@@ -101,7 +107,8 @@ pub fn scan_folder(conn: &Connection, root: &Path, added_at: i64) -> anyhow::Res
             }
         };
         nt.content_hash = content_hash(path, size).ok();
-        upsert_track(conn, &nt)?;
+        let id = upsert_track(conn, &nt)?;
+        super::art::link_album_art(conn, id, path, art_dir)?;
         if was_new {
             stats.added += 1;
         } else {
@@ -157,12 +164,12 @@ mod tests {
         std::fs::write(dir.join("cover.jpg"), b"not audio").unwrap();
 
         let db = Db::open_in_memory().unwrap();
-        let s1 = scan_folder(db.conn(), &dir, 1).unwrap();
+        let s1 = scan_folder(db.conn(), &dir, 1, db.art_dir()).unwrap();
         assert_eq!(s1.added, 2, "two wavs imported, jpg ignored");
         assert_eq!(s1.errors, 0);
 
         // re-scan: nothing changed -> all skipped
-        let s2 = scan_folder(db.conn(), &dir, 2).unwrap();
+        let s2 = scan_folder(db.conn(), &dir, 2, db.art_dir()).unwrap();
         assert_eq!(s2.added, 0);
         assert_eq!(s2.skipped, 2);
 
