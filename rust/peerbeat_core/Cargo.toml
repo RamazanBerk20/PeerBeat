@@ -1,0 +1,34 @@
+[package]
+name = "peerbeat_core"
+version = "0.1.0"
+edition = "2021"
+description = "PeerBeat shared core: LAN protocol, library/metadata, SQLite store, desktop audio engine."
+license = "GPL-3.0-or-later"
+publish = false
+
+[lib]
+# `cdylib` -> the native lib loaded by Flutter on every platform.
+# `staticlib` -> iOS-style static linking (unused here, kept for completeness).
+# `lib`     -> so the crate's own integration tests / benches can link it.
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dependencies]
+# --- flutter_rust_bridge boundary ---
+flutter_rust_bridge = "=2.12.0"
+anyhow = "1"
+thiserror = "2"
+
+# Heavier subsystem deps (tokio, rusqlite, lofty, symphonia, cpal, rustls,
+# mdns-sd, ...) are added milestone-by-milestone as each module is implemented,
+# to keep the M0 hello-world build fast and green.
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "z"      # size-optimised; audio DSP hot paths opt back in via attrs
+panic = "abort"
+
+[profile.release-audio]
+inherits = "release"
+opt-level = 3        # used for release builds where DSP latency matters

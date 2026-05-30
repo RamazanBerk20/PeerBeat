@@ -1,0 +1,115 @@
+name: Release
+
+# Tag a version to build + publish all platform artifacts to the Releases page.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version tag to build (e.g. v0.1.0)
+        required: true
+
+permissions:
+  contents: write   # create releases + upload assets
+
+env:
+  FLUTTER_CHANNEL: stable
+
+jobs:
+  # ── Android signed APK + AAB ────────────────────────────────────────────────
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: rust/peerbeat_core }
+      - run: cargo install cargo-ndk --locked
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: dart pub global activate melos && melos bootstrap
+      # Materialise the signing keystore from secrets (never committed)
+      - name: Decode keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > apps/peerbeat/android/app/upload.keystore
+          printf '%s' "$KEY_PROPERTIES" > apps/peerbeat/android/key.properties
+      - run: flutter build apk --release --split-per-abi
+        working-directory: apps/peerbeat
+      - run: flutter build appbundle --release
+        working-directory: apps/peerbeat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            apps/peerbeat/build/app/outputs/flutter-apk/*.apk
+            apps/peerbeat/build/app/outputs/bundle/release/*.aab
+
+  # ── Linux: AppImage + .deb + Flatpak bundle ────────────────────────────────
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: rust/peerbeat_core }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev libasound2-dev imagemagick desktop-file-utils fuse
+      - run: dart pub global activate melos && melos bootstrap
+      - run: flutter config --enable-linux-desktop
+      - run: flutter build linux --release
+        working-directory: apps/peerbeat
+      - name: Package (AppImage + deb)
+        run: bash packaging/linux/build_linux_packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*
+
+  # ── Windows installer (Inno Setup) — must run on Windows ────────────────────
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: rust/peerbeat_core }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: dart pub global activate melos
+      - run: melos bootstrap
+      - run: flutter config --enable-windows-desktop
+      - run: flutter build windows --release
+        working-directory: apps/peerbeat
+      - name: Build installer (Inno Setup)
+        run: iscc packaging\windows\peerbeat.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.exe
+
+  # ── Collect + publish to the Releases page ─────────────────────────────────
+  publish:
+    needs: [android, linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: artifacts/**/*
+
+  # AUR (peerbeat / peerbeat-bin) is published from a maintainer machine after a
+  # release exists — see packaging/aur/README.md — to keep the AUR deploy key off CI.

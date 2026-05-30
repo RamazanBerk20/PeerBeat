@@ -1,0 +1,72 @@
+# ─── Secrets / signing (NEVER commit) ──────────────────────────────────────
+*.keystore
+*.jks
+**/key.properties
+**/keystore.properties
+*.pem
+*.p12
+*.pfx
+secrets/
+aur_deploy_key*
+*.cer
+
+# ─── Flutter / Dart ────────────────────────────────────────────────────────
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/doc/api/
+**/.fvm/
+pubspec_overrides.yaml
+coverage/
+*.lcov
+
+# ─── Rust ──────────────────────────────────────────────────────────────────
+/target/
+**/target/
+**/*.rs.bk
+Cargo.lock.orig
+
+# flutter_rust_bridge generated bindings are committed for reproducible builds,
+# but the intermediate codegen cache is not:
+.frb_cache/
+
+# ─── Android ───────────────────────────────────────────────────────────────
+**/android/**/gradle-wrapper.jar
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/key.properties
+**/*.iml
+.cxx/
+
+# ─── Linux / Windows desktop build ─────────────────────────────────────────
+**/linux/flutter/ephemeral/
+**/windows/flutter/ephemeral/
+*.so
+*.dll
+!**/blobs/**/*.so
+
+# ─── Packaging output ──────────────────────────────────────────────────────
+dist/
+*.AppImage
+*.deb
+*.flatpak
+*.apk
+*.aab
+*.exe
+packaging/**/build/
+packaging/aur/**/src/
+packaging/aur/**/pkg/
+packaging/aur/**/*.tar.*
+
+# ─── IDE / OS ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.ramazanberk20.PeerBeat</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>PeerBeat</name>
+  <summary>Local-first music player with LAN peer-to-peer sharing</summary>
+  <description>
+    <p>
+      PeerBeat plays your local music and lets you share playlists with people on
+      the same network. Peers discover your library automatically over mDNS,
+      stream tracks with full playback controls, or download them — all encrypted
+      with TLS and without ever touching the internet. Start a party session and
+      everyone hears the same song in sync.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Gapless playback, crossfade, pitch-preserving speed, EQ, ReplayGain</li>
+      <li>Fast library for 50k+ tracks with fuzzy search and smart playlists</li>
+      <li>LAN sharing with PIN / approval, per-playlist permissions, party mode</li>
+      <li>No cloud, no accounts, no telemetry — everything stays local</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">peerbeat.desktop</launchable>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Player</category>
+  </categories>
+  <url type="homepage">https://github.com/RamazanBerk20/PeerBeat</url>
+  <url type="bugtracker">https://github.com/RamazanBerk20/PeerBeat/issues</url>
+  <provides>
+    <binary>peerbeat</binary>
+  </provides>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-audio">intense</content_attribute>
+  </content_rating>
+  <releases>
+    <release version="0.1.0" date="2026-05-30">
+      <description><p>Initial release.</p></description>
+    </release>
+  </releases>
+</component>

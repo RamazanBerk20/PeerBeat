@@ -1,0 +1,57 @@
+name: peerbeat_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+# Dart pub workspace — all members resolve together with one lockfile.
+workspace:
+  - apps/peerbeat
+  - packages/peerbeat_bindings
+  - packages/pb_audio
+  - packages/pb_os
+  - packages/pb_design
+
+dev_dependencies:
+  melos: ^7.8.0
+
+# Melos 7 reads its config from here (melos.yaml is no longer used).
+melos:
+  scripts:
+    analyze:
+      description: Analyze all packages.
+      exec: flutter analyze --fatal-infos
+
+    format:
+      description: Format all Dart code.
+      run: dart format .
+
+    format-check:
+      description: Verify Dart formatting (CI).
+      run: dart format --output=none --set-exit-if-changed .
+
+    test:
+      description: Run tests in every package that has a test/ dir.
+      exec: flutter test
+      packageFilters:
+        dirExists: test
+
+    rust-test:
+      description: Test the Rust core.
+      run: cargo test --manifest-path rust/peerbeat_core/Cargo.toml
+
+    rust-clippy:
+      description: Lint the Rust core.
+      run: cargo clippy --manifest-path rust/peerbeat_core/Cargo.toml --all-targets -- -D warnings
+
+    rust-fmt-check:
+      description: Check Rust formatting.
+      run: cargo fmt --manifest-path rust/peerbeat_core/Cargo.toml --all --check
+
+    frb-gen:
+      description: Regenerate flutter_rust_bridge bindings.
+      run: bash scripts/frb_gen.sh
+
+    gen-icons:
+      description: Generate launcher/tray/window icons.
+      run: bash scripts/gen_icons.sh

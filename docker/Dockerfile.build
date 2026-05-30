@@ -1,0 +1,32 @@
+# Reproducible build image for PeerBeat — Linux desktop + Android.
+# (Windows installers cannot be built in a Linux container; CI uses a Windows
+#  runner for those.)
+#
+# Base ships Flutter (stable), Android SDK + NDK, and JDK 17 — solving the
+# "JDK 26 too new for Android Gradle" issue on the dev box.
+FROM ghcr.io/cirruslabs/flutter:stable
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Native deps: GTK + ninja/clang/cmake for Flutter Linux desktop; ALSA headers
+# for the cpal audio engine; tooling for AppImage/.deb packaging.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ninja-build libgtk-3-dev libasound2-dev pkg-config clang cmake \
+      imagemagick desktop-file-utils file fuse \
+      curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# Rust toolchain (rustup) + Android cross-compile targets + cargo-ndk + FRB codegen.
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal \
+ && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android \
+ && cargo install cargo-ndk --locked \
+ && cargo install flutter_rust_bridge_codegen --version 2.12.0 --locked
+
+WORKDIR /workspace
+# Usage:
+#   docker build -t peerbeat-build -f docker/Dockerfile.build .
+#   docker run --rm -v "$PWD":/workspace peerbeat-build \
+#       bash -lc "melos bootstrap && cd apps/peerbeat && flutter build linux --release"

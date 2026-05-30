@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=PeerBeat
+GenericName=Music Player
+Comment=Local-first music player with LAN peer-to-peer sharing
+Exec=peerbeat %U
+Icon=peerbeat
+Terminal=false
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=music;player;audio;lan;share;playlist;
+StartupNotify=true
+StartupWMClass=peerbeat
+MimeType=audio/mpeg;audio/flac;audio/x-flac;audio/wav;audio/x-wav;audio/aac;audio/ogg;audio/x-vorbis+ogg;audio/mp4;audio/x-m4a;

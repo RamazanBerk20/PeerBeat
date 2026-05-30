@@ -1,0 +1,36 @@
+name: peerbeat
+description: "Local-first music player with LAN peer-to-peer sharing"
+publish_to: 'none'
+version: 0.1.0+1
+
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+# Generated with: dart run flutter_launcher_icons   (from apps/peerbeat)
+# Source image is the single project icon at repo-root assets/icon/PeerBeat.png.
+flutter_launcher_icons:
+  image_path: "../../assets/icon/PeerBeat.png"
+  android: "ic_launcher"
+  min_sdk_android: 26
+  adaptive_icon_background: "#0C1226"
+  adaptive_icon_foreground: "../../assets/icon/PeerBeat.png"
+  windows:
+    generate: true
+    image_path: "../../assets/icon/PeerBeat.png"
+    icon_size: 256
