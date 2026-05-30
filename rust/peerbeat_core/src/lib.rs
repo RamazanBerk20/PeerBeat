@@ -18,6 +18,8 @@
 // Our module docs use lists whose continuation lines are aligned with the item
 // text for readability; that trips this style-only lint.
 #![allow(clippy::doc_overindented_list_items)]
+// The flutter_rust_bridge attribute macro emits its own `frb_` cfgs.
+#![allow(unexpected_cfgs)]
 
 pub mod api;
 pub mod audio;
@@ -25,8 +27,5 @@ pub mod db;
 pub mod library;
 pub mod net;
 
-// The flutter_rust_bridge code generator emits `src/frb_generated.rs` and the
-// matching Dart bindings. It is wired in (and committed) once the toolchain is
-// installed — see `scripts/frb_gen.sh`. Until then the crate builds and tests
-// as a plain library so CI stays green.
-// mod frb_generated;
+// flutter_rust_bridge generated glue (regenerate via `melos run frb-gen`).
+mod frb_generated;

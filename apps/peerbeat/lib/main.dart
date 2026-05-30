@@ -1,121 +1,242 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'src/rust/api/library.dart';
+import 'src/rust/db/tracks.dart';
+import 'src/rust/frb_generated.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await RustLib.init();
+  await libraryOpen(dbPath: _dbPath());
+  runApp(const PeerBeatApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+/// Resolve the per-platform library database path (desktop). Android uses
+/// path_provider once that integration lands.
+String _dbPath() {
+  final env = Platform.environment;
+  late String base;
+  if (Platform.isLinux) {
+    base = env['XDG_DATA_HOME'] ?? '${env['HOME']}/.local/share';
+  } else if (Platform.isWindows) {
+    base = env['APPDATA'] ?? '${env['USERPROFILE']}\\AppData\\Roaming';
+  } else {
+    base = env['HOME'] ?? '.';
+  }
+  final dir = Directory('$base${Platform.pathSeparator}PeerBeat')
+    ..createSync(recursive: true);
+  return '${dir.path}${Platform.pathSeparator}library.db';
+}
 
-  // This widget is the root of your application.
+class PeerBeatApp extends StatelessWidget {
+  const PeerBeatApp({super.key});
+
+  static const _seed = Color(0xFF2BD9C6); // neon teal from the PeerBeat icon
+
   @override
   Widget build(BuildContext context) {
+    ColorScheme scheme(Brightness b) =>
+        ColorScheme.fromSeed(seedColor: _seed, brightness: b);
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'PeerBeat',
+      debugShowCheckedModeBanner: false,
+      theme:
+          ThemeData(colorScheme: scheme(Brightness.light), useMaterial3: true),
+      darkTheme:
+          ThemeData(colorScheme: scheme(Brightness.dark), useMaterial3: true),
+      themeMode: ThemeMode.dark,
+      home: const LibraryScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class LibraryScreen extends StatefulWidget {
+  const LibraryScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _LibraryScreenState extends State<LibraryScreen> {
+  List<TrackRow> _tracks = [];
+  int _count = 0;
+  String _query = '';
+  bool _busy = false;
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final tracks = _query.trim().isEmpty
+        ? await libraryBrowseSongs(limit: 500, offset: 0)
+        : await librarySearch(query: _query.trim(), limit: 500);
+    final count = await libraryTrackCount();
+    if (!mounted) return;
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _tracks = tracks;
+      _count = count;
     });
+  }
+
+  Future<void> _scan() async {
+    final controller = TextEditingController(
+      text: Platform.environment['HOME'] ?? '',
+    );
+    final path = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Scan a music folder'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Folder path',
+            hintText: '/home/you/Music',
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Scan'),
+          ),
+        ],
+      ),
+    );
+    if (path == null || path.trim().isEmpty) return;
+
+    setState(() => _busy = true);
+    try {
+      final report = await libraryScan(path: path.trim());
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Scanned: ${report.added} added, ${report.updated} updated, '
+            '${report.skipped} unchanged, ${report.errors} errors',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        title: const Text('PeerBeat'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(2),
+          child: _busy
+              ? const LinearProgressIndicator(minHeight: 2)
+              : const SizedBox(height: 2),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Center(
+              child: Text('$_count tracks',
+                  style: TextStyle(color: cs.onSurfaceVariant)),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Scan folder',
+            onPressed: _busy ? null : _scan,
+            icon: const Icon(Icons.create_new_folder_outlined),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: SearchBar(
+              hintText: 'Search songs, artists, albums…',
+              leading: const Icon(Icons.search),
+              onChanged: (v) {
+                _query = v;
+                _refresh();
+              },
+            ),
+          ),
+          Expanded(
+            child: _tracks.isEmpty
+                ? _EmptyState(onScan: _busy ? null : _scan)
+                : ListView.builder(
+                    itemCount: _tracks.length,
+                    itemBuilder: (_, i) => _TrackTile(track: _tracks[i]),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackTile extends StatelessWidget {
+  const _TrackTile({required this.track});
+  final TrackRow track;
+
+  String _fmt(int ms) {
+    final s = (ms / 1000).round();
+    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = [
+      if (track.artist.isNotEmpty) track.artist,
+      if (track.album.isNotEmpty) track.album,
+    ].join(' • ');
+    return ListTile(
+      leading: const CircleAvatar(child: Icon(Icons.music_note)),
+      title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: subtitle.isEmpty
+          ? null
+          : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: Text(_fmt(track.durationMs)),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({this.onScan});
+  final VoidCallback? onScan;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.library_music_outlined,
+              size: 64, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 12),
+          const Text('Your library is empty'),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: onScan,
+            icon: const Icon(Icons.create_new_folder_outlined),
+            label: const Text('Scan a folder'),
+          ),
+        ],
       ),
     );
   }

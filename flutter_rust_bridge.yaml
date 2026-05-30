@@ -1,6 +1,0 @@
-# flutter_rust_bridge v2 codegen config. Run via `melos run frb-gen`.
-rust_input: crate::api
-rust_root: rust/peerbeat_core/
-dart_output: packages/peerbeat_bindings/lib/src/rust
-dart_entrypoint_class_name: PeerbeatCore
-# Generated bindings + src/frb_generated.rs are committed for reproducible builds.
