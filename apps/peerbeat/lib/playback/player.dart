@@ -29,7 +29,16 @@ const _kStereoWidth = 'audio.stereo_width';
 /// A single instance ([player]) lives above the navigator so the mini-player
 /// persists across screens.
 class PlayerController extends ChangeNotifier {
-  PlayerController() {
+  PlayerController({AudioEngine? engine})
+    : this._(engine: engine, persistSettings: true);
+
+  @visibleForTesting
+  PlayerController.forTest({required AudioEngine engine})
+    : this._(engine: engine, persistSettings: false);
+
+  PlayerController._({AudioEngine? engine, required this._persistSettings})
+    : _engine = engine ?? AudioEngine.forPlatform(),
+      super() {
     _posSub = _engine.positionStream.listen((p) {
       // Ignore engine ticks until a track is actually loaded — otherwise the
       // desktop poller (which reads 0 while idle) would clobber a restored
@@ -41,12 +50,17 @@ class PlayerController extends ChangeNotifier {
       notifyListeners();
     });
     _playSub = _engine.playingStream.listen((p) {
+      final wasPlaying = _playing;
       _playing = p;
+      if (wasPlaying && !p) {
+        _maybeAdvance();
+      }
       notifyListeners();
     });
   }
 
-  final AudioEngine _engine = AudioEngine.forPlatform();
+  final AudioEngine _engine;
+  final bool _persistSettings;
   late final StreamSubscription<Duration> _posSub;
   late final StreamSubscription<bool> _playSub;
 
@@ -461,6 +475,7 @@ class PlayerController extends ChangeNotifier {
   // Persist the resume bookmark (track id + position), throttled to once every
   // 5 s except when `force`d (pause / load) so the latest state survives a quit.
   void _persistResume({bool force = false}) {
+    if (!_persistSettings) return;
     final t = current;
     if (t == null) return;
     final now = DateTime.now();
@@ -511,14 +526,19 @@ class PlayerController extends ChangeNotifier {
       return;
     }
     final ended =
-        !_playing && _position >= d - const Duration(milliseconds: 400);
+        !_playing && _position >= d - const Duration(milliseconds: 500);
     if (!ended) return;
     _advancing = true;
     try {
       if (_repeat == RepeatMode.one) {
+        _position = Duration.zero;
         await _playCurrent();
       } else if (hasNext) {
         await next();
+      } else {
+        _position = d;
+        _persistResume(force: true);
+        notifyListeners();
       }
     } finally {
       _advancing = false;

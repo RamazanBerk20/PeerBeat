@@ -39,10 +39,10 @@ void audioSetEq({required List<double> gains, required double preampDb}) =>
       preampDb: preampDb,
     );
 
-List<OutputDeviceRow> audioOutputDevices() =>
+Future<List<OutputDeviceRow>> audioOutputDevices() =>
     RustLib.instance.api.crateApiAudioAudioOutputDevices();
 
-void audioSetOutputDevice({String? deviceId}) =>
+Future<void> audioSetOutputDevice({String? deviceId}) =>
     RustLib.instance.api.crateApiAudioAudioSetOutputDevice(deviceId: deviceId);
 
 /// Stereo width: 0.0 = mono, 1.0 = unchanged, 2.0 = widened.

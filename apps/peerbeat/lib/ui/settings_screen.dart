@@ -44,7 +44,15 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late Future<List<EqPresetRow>> _customPresets = eqPresetList();
-  late Future<List<OutputDeviceRow>> _outputDevices = player.outputDevices();
+  Future<List<OutputDeviceRow>>? _outputDevices;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _reloadOutputDevices();
+    });
+  }
 
   void _reloadPresets() {
     setState(() {
@@ -208,7 +216,7 @@ class _StereoWidthCard extends StatelessWidget {
 class _OutputDeviceCard extends StatelessWidget {
   const _OutputDeviceCard({required this.devices, required this.onReload});
 
-  final Future<List<OutputDeviceRow>> devices;
+  final Future<List<OutputDeviceRow>>? devices;
   final VoidCallback onReload;
 
   @override
@@ -236,53 +244,57 @@ class _OutputDeviceCard extends StatelessWidget {
               style: text.bodySmall,
             ),
             const SizedBox(height: 12),
-            FutureBuilder<List<OutputDeviceRow>>(
-              future: devices,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const LinearProgressIndicator();
-                }
-                if (snapshot.hasError) {
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Could not list devices: ${snapshot.error}',
+            if (devices == null)
+              const LinearProgressIndicator()
+            else
+              FutureBuilder<List<OutputDeviceRow>>(
+                future: devices,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const LinearProgressIndicator();
+                  }
+                  if (snapshot.hasError) {
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Could not list devices: ${snapshot.error}',
+                          ),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: onReload,
-                        child: const Text('Retry'),
-                      ),
+                        TextButton(
+                          onPressed: onReload,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    );
+                  }
+                  final rows = snapshot.data ?? const <OutputDeviceRow>[];
+                  final selected =
+                      rows.any((d) => d.id == player.outputDeviceId)
+                      ? player.outputDeviceId
+                      : 'default';
+                  return DropdownButtonFormField<String>(
+                    initialValue: selected,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Audio output',
+                    ),
+                    items: [
+                      for (final d in rows)
+                        DropdownMenuItem<String>(
+                          value: d.id,
+                          child: Text(
+                            d.isDefault ? '${d.name} (default)' : d.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                     ],
+                    onChanged: (id) {
+                      if (id != null) player.setOutputDevice(id);
+                    },
                   );
-                }
-                final rows = snapshot.data ?? const <OutputDeviceRow>[];
-                final selected = rows.any((d) => d.id == player.outputDeviceId)
-                    ? player.outputDeviceId
-                    : 'default';
-                return DropdownButtonFormField<String>(
-                  initialValue: selected,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Audio output',
-                  ),
-                  items: [
-                    for (final d in rows)
-                      DropdownMenuItem<String>(
-                        value: d.id,
-                        child: Text(
-                          d.isDefault ? '${d.name} (default)' : d.name,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  onChanged: (id) {
-                    if (id != null) player.setOutputDevice(id);
-                  },
-                );
-              },
-            ),
+                },
+              ),
           ],
         ),
       ),

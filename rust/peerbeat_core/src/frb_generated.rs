@@ -134,15 +134,16 @@ fn wire__crate__api__audio__audio_last_error_impl(
     )
 }
 fn wire__crate__api__audio__audio_output_devices_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "audio_output_devices",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -155,10 +156,12 @@ fn wire__crate__api__audio__audio_output_devices_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
-                let output_ok = crate::api::audio::audio_output_devices()?;
-                Ok(output_ok)
-            })())
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::audio::audio_output_devices()?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -345,15 +348,16 @@ fn wire__crate__api__audio__audio_set_eq_impl(
     )
 }
 fn wire__crate__api__audio__audio_set_output_device_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "audio_set_output_device",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -367,10 +371,12 @@ fn wire__crate__api__audio__audio_set_output_device_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_device_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
-                let output_ok = crate::api::audio::audio_set_output_device(api_device_id)?;
-                Ok(output_ok)
-            })())
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::audio::audio_set_output_device(api_device_id)?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -2891,6 +2897,10 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
+        4 => wire__crate__api__audio__audio_output_devices_impl(port, ptr, rust_vec_len, data_len),
+        11 => {
+            wire__crate__api__audio__audio_set_output_device_impl(port, ptr, rust_vec_len, data_len)
+        }
         16 => wire__crate__api__system__core_banner_impl(port, ptr, rust_vec_len, data_len),
         17 => wire__crate__api__system__core_version_impl(port, ptr, rust_vec_len, data_len),
         18 => wire__crate__api__library__eq_preset_create_impl(port, ptr, rust_vec_len, data_len),
@@ -3023,14 +3033,12 @@ fn pde_ffi_dispatcher_sync_impl(
         1 => wire__crate__api__audio__audio_duration_ms_impl(ptr, rust_vec_len, data_len),
         2 => wire__crate__api__audio__audio_is_playing_impl(ptr, rust_vec_len, data_len),
         3 => wire__crate__api__audio__audio_last_error_impl(ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__audio__audio_output_devices_impl(ptr, rust_vec_len, data_len),
         5 => wire__crate__api__audio__audio_pause_impl(ptr, rust_vec_len, data_len),
         6 => wire__crate__api__audio__audio_play_path_impl(ptr, rust_vec_len, data_len),
         7 => wire__crate__api__audio__audio_position_ms_impl(ptr, rust_vec_len, data_len),
         8 => wire__crate__api__audio__audio_resume_impl(ptr, rust_vec_len, data_len),
         9 => wire__crate__api__audio__audio_seek_ms_impl(ptr, rust_vec_len, data_len),
         10 => wire__crate__api__audio__audio_set_eq_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__audio__audio_set_output_device_impl(ptr, rust_vec_len, data_len),
         12 => wire__crate__api__audio__audio_set_speed_impl(ptr, rust_vec_len, data_len),
         13 => wire__crate__api__audio__audio_set_stereo_width_impl(ptr, rust_vec_len, data_len),
         14 => wire__crate__api__audio__audio_set_volume_impl(ptr, rust_vec_len, data_len),

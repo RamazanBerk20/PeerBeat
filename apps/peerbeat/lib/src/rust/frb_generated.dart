@@ -95,7 +95,7 @@ abstract class RustLibApi extends BaseApi {
 
   String? crateApiAudioAudioLastError();
 
-  List<OutputDeviceRow> crateApiAudioAudioOutputDevices();
+  Future<List<OutputDeviceRow>> crateApiAudioAudioOutputDevices();
 
   void crateApiAudioAudioPause();
 
@@ -112,7 +112,7 @@ abstract class RustLibApi extends BaseApi {
     required double preampDb,
   });
 
-  void crateApiAudioAudioSetOutputDevice({String? deviceId});
+  Future<void> crateApiAudioAudioSetOutputDevice({String? deviceId});
 
   void crateApiAudioAudioSetSpeed({required double speed});
 
@@ -397,12 +397,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "audio_last_error", argNames: []);
 
   @override
-  List<OutputDeviceRow> crateApiAudioAudioOutputDevices() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<OutputDeviceRow>> crateApiAudioAudioOutputDevices() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_output_device_row,
@@ -560,13 +565,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  void crateApiAudioAudioSetOutputDevice({String? deviceId}) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<void> crateApiAudioAudioSetOutputDevice({String? deviceId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_opt_String(deviceId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,

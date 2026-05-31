@@ -71,7 +71,6 @@ pub fn audio_set_eq(gains: Vec<f64>, preamp_db: f64) -> Result<(), String> {
     Ok(())
 }
 
-#[flutter_rust_bridge::frb(sync)]
 pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
     use rodio::cpal::traits::{DeviceTrait, HostTrait};
 
@@ -99,7 +98,6 @@ pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
     Ok(rows)
 }
 
-#[flutter_rust_bridge::frb(sync)]
 pub fn audio_set_output_device(device_id: Option<String>) -> Result<(), String> {
     engine().set_output_device(device_id)
 }
