@@ -113,6 +113,12 @@ class _LibraryHomeState extends State<LibraryHome> {
     }
   }
 
+  static const _destinations = [
+    (Icons.library_music_outlined, Icons.library_music, 'Songs'),
+    (Icons.queue_music_outlined, Icons.queue_music, 'Playlists'),
+    (Icons.wifi_tethering_outlined, Icons.wifi_tethering, 'Network'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -121,68 +127,85 @@ class _LibraryHomeState extends State<LibraryHome> {
       1 => 'Playlists',
       _ => 'Network',
     };
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          if (_section == 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Center(
-                child: Text(
-                  '$_count tracks',
-                  style: TextStyle(color: cs.onSurfaceVariant),
-                ),
-              ),
-            ),
-          if (_section == 0)
-            IconButton(
-              tooltip: 'Scan folder',
-              onPressed: _busy ? null : _scan,
-              icon: const Icon(Icons.create_new_folder_outlined),
-            ),
-        ],
+    final section = switch (_section) {
+      0 => _SongsSection(
+        query: _query,
+        busy: _busy,
+        version: _version,
+        onQueryChanged: (v) => setState(() => _query = v),
       ),
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: _section,
-            onDestinationSelected: (value) => setState(() => _section = value),
-            labelType: NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.library_music_outlined),
-                selectedIcon: Icon(Icons.library_music),
-                label: Text('Songs'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.queue_music_outlined),
-                selectedIcon: Icon(Icons.queue_music),
-                label: Text('Playlists'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.wifi_tethering_outlined),
-                selectedIcon: Icon(Icons.wifi_tethering),
-                label: Text('Network'),
-              ),
+      1 => _PlaylistsTab(key: ValueKey('playlists$_version')),
+      _ => const NetworkPanel(),
+    };
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Rail on tablet/desktop widths; bottom NavigationBar on phones.
+        final wide = constraints.maxWidth >= 600;
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(title),
+            actions: [
+              if (_section == 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Center(
+                    child: Text(
+                      '$_count tracks',
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                ),
+              if (_section == 0)
+                IconButton(
+                  tooltip: 'Scan folder',
+                  onPressed: _busy ? null : _scan,
+                  icon: const Icon(Icons.create_new_folder_outlined),
+                ),
             ],
           ),
-          const VerticalDivider(width: 1),
-          Expanded(
-            child: switch (_section) {
-              0 => _SongsSection(
-                query: _query,
-                busy: _busy,
-                version: _version,
-                onQueryChanged: (v) => setState(() => _query = v),
-              ),
-              1 => _PlaylistsTab(key: ValueKey('playlists$_version')),
-              _ => const NetworkPanel(),
-            },
+          body: wide
+              ? Row(
+                  children: [
+                    NavigationRail(
+                      selectedIndex: _section,
+                      onDestinationSelected: (v) =>
+                          setState(() => _section = v),
+                      labelType: NavigationRailLabelType.all,
+                      destinations: [
+                        for (final (icon, sel, label) in _destinations)
+                          NavigationRailDestination(
+                            icon: Icon(icon),
+                            selectedIcon: Icon(sel),
+                            label: Text(label),
+                          ),
+                      ],
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: section),
+                  ],
+                )
+              : section,
+          bottomNavigationBar: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const MiniPlayer(),
+              if (!wide)
+                NavigationBar(
+                  selectedIndex: _section,
+                  onDestinationSelected: (v) => setState(() => _section = v),
+                  destinations: [
+                    for (final (icon, sel, label) in _destinations)
+                      NavigationDestination(
+                        icon: Icon(icon),
+                        selectedIcon: Icon(sel),
+                        label: label,
+                      ),
+                  ],
+                ),
+            ],
           ),
-        ],
-      ),
-      bottomNavigationBar: const MiniPlayer(),
+        );
+      },
     );
   }
 }
