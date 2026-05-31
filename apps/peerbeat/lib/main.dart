@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app_config.dart';
+import 'playback/player.dart';
 import 'src/rust/api/library.dart';
 import 'src/rust/frb_generated.dart';
 import 'ui/library_home.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
     appDbPath = '${dir.path}${Platform.pathSeparator}library.db';
     appDisplayName = _deviceName();
     await libraryOpen(dbPath: appDbPath);
+    await player.restoreSession(); // best-effort: restore last track + position
   } catch (e, st) {
     debugPrintStack(label: 'PeerBeat startup failed', stackTrace: st);
     runApp(_StartupErrorApp(error: '$e'));

@@ -4,9 +4,13 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../audio/audio_engine.dart';
+import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
 
 enum RepeatMode { off, all, one }
+
+const _kResumeTrack = 'resume.track_id';
+const _kResumePos = 'resume.position_ms';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -17,6 +21,7 @@ class PlayerController extends ChangeNotifier {
     _posSub = _engine.positionStream.listen((p) {
       _position = p;
       _maybeAdvance();
+      _persistResume();
       notifyListeners();
     });
     _playSub = _engine.playingStream.listen((p) {
@@ -40,6 +45,11 @@ class PlayerController extends ChangeNotifier {
   bool _muted = false;
   Duration _position = Duration.zero;
   String? _lastError;
+  // Resume support: a restored session is shown paused with the engine not yet
+  // holding the track; the first play loads it and seeks to `_resumeFrom`.
+  bool _engineLoaded = false;
+  Duration? _resumeFrom;
+  DateTime _lastPersist = DateTime.fromMillisecondsSinceEpoch(0);
 
   TrackRow? get current =>
       (_pos >= 0 && _pos < _order.length) ? _queue[_order[_pos]] : null;
@@ -62,6 +72,7 @@ class PlayerController extends ChangeNotifier {
 
   /// Play [tracks] starting at [index] (the new queue).
   Future<void> playQueue(List<TrackRow> tracks, int index) async {
+    _resumeFrom = null; // a fresh user choice supersedes any restored bookmark
     _queue = List.of(tracks);
     _order = List<int>.generate(_queue.length, (i) => i);
     _pos = index.clamp(0, _order.isEmpty ? 0 : _order.length - 1);
@@ -164,7 +175,8 @@ class PlayerController extends ChangeNotifier {
   Future<void> _playCurrent() async {
     final t = current;
     if (t == null) return;
-    _position = Duration.zero;
+    final resume = _resumeFrom;
+    _position = resume ?? Duration.zero;
     _playing = true;
     _userPaused = false;
     _lastError = null;
@@ -176,6 +188,12 @@ class PlayerController extends ChangeNotifier {
       } else {
         await _engine.playPath(p, duration: duration);
       }
+      _engineLoaded = true;
+      if (resume != null) {
+        _resumeFrom = null;
+        await _engine.seek(resume);
+      }
+      _persistResume(force: true);
     } catch (e) {
       _playing = false;
       _lastError = _engine.lastError ?? e.toString();
@@ -189,6 +207,10 @@ class PlayerController extends ChangeNotifier {
     if (_playing) {
       _userPaused = true;
       _engine.pause();
+      _persistResume(force: true);
+    } else if (!_engineLoaded) {
+      // Restored session: load the track (seeks to the saved position).
+      _playCurrent();
     } else {
       _userPaused = false;
       _engine.resume();
@@ -196,6 +218,15 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> seek(Duration p) async {
+    // Before the engine holds the track (restored session), a scrub just moves
+    // the pending resume target.
+    if (!_engineLoaded) {
+      _position = p;
+      _resumeFrom = p == Duration.zero ? null : p;
+      _persistResume(force: true);
+      notifyListeners();
+      return;
+    }
     final previous = _position;
     _position = p;
     _lastError = null;
@@ -207,6 +238,50 @@ class PlayerController extends ChangeNotifier {
       _lastError = _engine.lastError ?? e.toString();
       notifyListeners();
       rethrow;
+    }
+  }
+
+  // Persist the resume bookmark (track id + position), throttled to once every
+  // 5 s except when `force`d (pause / load) so the latest state survives a quit.
+  void _persistResume({bool force = false}) {
+    final t = current;
+    if (t == null) return;
+    final now = DateTime.now();
+    if (!force && now.difference(_lastPersist).inSeconds < 5) return;
+    _lastPersist = now;
+    unawaited(settingsSet(key: _kResumeTrack, value: '${t.id}'));
+    unawaited(
+      settingsSet(key: _kResumePos, value: '${_position.inMilliseconds}'),
+    );
+  }
+
+  /// Restore the last session at startup (after the library opens): show the
+  /// last track paused at its saved position. The engine loads the file only
+  /// when the user presses play. Best-effort — a missing/renamed track is
+  /// silently ignored.
+  Future<void> restoreSession() async {
+    try {
+      final id = int.tryParse(await settingsGet(key: _kResumeTrack) ?? '');
+      if (id == null) return;
+      final track = await libraryTrackById(trackId: id);
+      if (track == null) return;
+      final posMs =
+          int.tryParse(await settingsGet(key: _kResumePos) ?? '') ?? 0;
+      // Don't resume on the last second — restart that track from the top.
+      final clamped = posMs >= track.durationMs - 1000
+          ? 0
+          : posMs.clamp(0, track.durationMs).toInt();
+      _queue = [track];
+      _order = [0];
+      _pos = 0;
+      _position = Duration(milliseconds: clamped);
+      _resumeFrom = _position == Duration.zero ? null : _position;
+      _engineLoaded = false;
+      _playing = false;
+      _userPaused = true; // guards _maybeAdvance against a near-end bookmark
+      notifyListeners();
+    } catch (_) {
+      // best-effort: no resume on any failure
     }
   }
 

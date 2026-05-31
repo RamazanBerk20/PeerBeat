@@ -19,13 +19,19 @@ pub fn set(conn: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Delete a setting (no-op if absent).
+pub fn delete(conn: &Connection, key: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM settings WHERE key = ?1", [key])?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::Db;
 
     #[test]
-    fn get_set_roundtrip() {
+    fn get_set_delete_roundtrip() {
         let db = Db::open_in_memory().unwrap();
         let c = db.conn();
         assert_eq!(get(c, "k").unwrap(), None);
@@ -33,5 +39,7 @@ mod tests {
         assert_eq!(get(c, "k").unwrap().as_deref(), Some("v1"));
         set(c, "k", "v2").unwrap();
         assert_eq!(get(c, "k").unwrap().as_deref(), Some("v2"));
+        delete(c, "k").unwrap();
+        assert_eq!(get(c, "k").unwrap(), None);
     }
 }

@@ -207,6 +207,13 @@ pub fn upsert_track(conn: &Connection, t: &NewTrack) -> rusqlite::Result<i64> {
     Ok(id)
 }
 
+/// Fetch a single track by id (e.g. to restore the resume bookmark).
+pub fn track_by_id(conn: &Connection, id: i64) -> rusqlite::Result<Option<TrackRow>> {
+    let sql =
+        format!("{SELECT_ROW} tracks t LEFT JOIN albums al ON al.id = t.album_id WHERE t.id = ?1");
+    conn.query_row(&sql, params![id], map_row).optional()
+}
+
 /// Browse all songs, ordered by title, paginated.
 pub fn browse_songs(conn: &Connection, limit: i64, offset: i64) -> rusqlite::Result<Vec<TrackRow>> {
     let sql = format!(

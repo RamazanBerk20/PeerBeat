@@ -37,6 +37,22 @@ Future<List<TrackRow>> librarySearch({
   limit: limit,
 );
 
+/// Fetch a single track by id (`None` if it no longer exists).
+Future<TrackRow?> libraryTrackById({required PlatformInt64 trackId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryTrackById(trackId: trackId);
+
+/// Read a persisted setting, or `None` if unset.
+Future<String?> settingsGet({required String key}) =>
+    RustLib.instance.api.crateApiLibrarySettingsGet(key: key);
+
+/// Write (upsert) a persisted setting.
+Future<void> settingsSet({required String key, required String value}) =>
+    RustLib.instance.api.crateApiLibrarySettingsSet(key: key, value: value);
+
+/// Delete a persisted setting (no-op if absent).
+Future<void> settingsDelete({required String key}) =>
+    RustLib.instance.api.crateApiLibrarySettingsDelete(key: key);
+
 Future<List<AlbumRow>> libraryBrowseAlbums({
   required PlatformInt64 limit,
   required PlatformInt64 offset,

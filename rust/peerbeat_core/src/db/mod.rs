@@ -10,6 +10,7 @@
 pub mod browse;
 pub mod playlists;
 mod schema;
+pub mod settings;
 pub mod tracks;
 
 pub use schema::SCHEMA_VERSION;

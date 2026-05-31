@@ -6,7 +6,7 @@
 use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
 use crate::db::playlists::{self, PlaylistRow};
 use crate::db::tracks::{self, TrackRow};
-use crate::db::Db;
+use crate::db::{settings, Db};
 use crate::library;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -64,6 +64,28 @@ pub fn library_browse_songs(limit: i64, offset: i64) -> Result<Vec<TrackRow>, St
 /// Fuzzy search across title/artist/album/genre.
 pub fn library_search(query: String, limit: i64) -> Result<Vec<TrackRow>, String> {
     with_db(|db| tracks::search_tracks(db.conn(), &query, limit))
+}
+
+/// Fetch a single track by id (`None` if it no longer exists).
+pub fn library_track_by_id(track_id: i64) -> Result<Option<TrackRow>, String> {
+    with_db(|db| tracks::track_by_id(db.conn(), track_id))
+}
+
+// ── Settings (key/value) ────────────────────────────────────────────────────
+
+/// Read a persisted setting, or `None` if unset.
+pub fn settings_get(key: String) -> Result<Option<String>, String> {
+    with_db(|db| settings::get(db.conn(), &key))
+}
+
+/// Write (upsert) a persisted setting.
+pub fn settings_set(key: String, value: String) -> Result<(), String> {
+    with_db(|db| settings::set(db.conn(), &key, &value))
+}
+
+/// Delete a persisted setting (no-op if absent).
+pub fn settings_delete(key: String) -> Result<(), String> {
+    with_db(|db| settings::delete(db.conn(), &key))
 }
 
 // ── Browse views ───────────────────────────────────────────────────────────
