@@ -45,6 +45,10 @@ List<OutputDeviceRow> audioOutputDevices() =>
 void audioSetOutputDevice({String? deviceId}) =>
     RustLib.instance.api.crateApiAudioAudioSetOutputDevice(deviceId: deviceId);
 
+/// Stereo width: 0.0 = mono, 1.0 = unchanged, 2.0 = widened.
+void audioSetStereoWidth({required double width}) =>
+    RustLib.instance.api.crateApiAudioAudioSetStereoWidth(width: width);
+
 PlatformInt64 audioPositionMs() =>
     RustLib.instance.api.crateApiAudioAudioPositionMs();
 

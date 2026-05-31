@@ -104,6 +104,12 @@ pub fn audio_set_output_device(device_id: Option<String>) -> Result<(), String> 
     engine().set_output_device(device_id)
 }
 
+/// Stereo width: 0.0 = mono, 1.0 = unchanged, 2.0 = widened.
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_set_stereo_width(width: f64) {
+    engine().set_stereo_width(width as f32);
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn audio_position_ms() -> i64 {
     engine().position_ms() as i64

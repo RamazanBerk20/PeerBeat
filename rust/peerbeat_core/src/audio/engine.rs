@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::eq::{EqHandle, EqSource};
+use super::widen::{StereoWidenHandle, StereoWidenSource};
 
 const END_SEEK_EPSILON: Duration = Duration::from_millis(250);
 
@@ -28,6 +29,7 @@ enum Cmd {
     Speed(f32),
     Eq([f32; 10], f32),
     Device(Option<String>, Sender<Result<(), String>>),
+    StereoWidth(f32),
 }
 
 #[derive(Default)]
@@ -121,6 +123,9 @@ impl AudioEngine {
         reply_rx
             .recv()
             .map_err(|e| format!("audio worker closed before switching output device: {e}"))?
+    }
+    pub fn set_stereo_width(&self, width: f32) {
+        let _ = self.send(Cmd::StereoWidth(width.clamp(0.0, 2.0)));
     }
     pub fn position_ms(&self) -> u64 {
         self.shared.position_ms.load(Ordering::Relaxed)
@@ -397,11 +402,12 @@ fn open_source(path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, 
     }
 }
 
-fn with_eq(
+fn with_dsp(
     source: Box<dyn rodio::Source<Item = i16> + Send>,
     eq: EqHandle,
+    widen: StereoWidenHandle,
 ) -> Box<dyn rodio::Source<Item = i16> + Send> {
-    Box::new(EqSource::new(source, eq))
+    Box::new(StereoWidenSource::new(EqSource::new(source, eq), widen))
 }
 
 fn open_output_stream(
@@ -491,6 +497,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
     let mut volume = 1.0f32;
     let mut speed = 1.0f32;
     let eq = EqHandle::new();
+    let widen = StereoWidenHandle::new();
     let mut current_path: Option<String> = None;
     let mut base_position_ms = 0u64;
     let mut force_position_ms: Option<u64> = None;
@@ -500,7 +507,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
         match rx.recv_timeout(Duration::from_millis(150)) {
             Ok(Cmd::Load(path, reply)) => {
                 let result: Result<(), String> = (|| {
-                    let source = with_eq(open_source(&path)?, eq.clone());
+                    let source = with_dsp(open_source(&path)?, eq.clone(), widen.clone());
                     let dur = source.total_duration().unwrap_or(Duration::ZERO);
                     // A fresh sink avoids rodio 0.19 getting stuck after clear().
                     let s = Sink::try_new(&handle)
@@ -573,7 +580,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                                 .as_deref()
                                 .ok_or_else(|| "no track loaded".to_string())?;
                             let was_playing = !sink.is_paused() && !sink.empty();
-                            let source = with_eq(open_source(path)?, eq.clone());
+                            let source = with_dsp(open_source(path)?, eq.clone(), widen.clone());
                             let s = Sink::try_new(&handle)
                                 .map_err(|e| format!("cannot create audio sink: {e}"))?;
                             sink = s;
@@ -627,7 +634,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                             Duration::from_millis(resume_ms),
                             (current_duration != Duration::ZERO).then_some(current_duration),
                         );
-                        let source = with_eq(open_source(path)?, eq.clone());
+                        let source = with_dsp(open_source(path)?, eq.clone(), widen.clone());
                         sink.append(source.skip_duration(target));
                         base_position_ms = target.as_millis() as u64;
                         force_position_ms = Some(base_position_ms);
@@ -644,6 +651,9 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     set_last_error(&last_error, Some(e.clone()));
                 }
                 let _ = reply.send(result);
+            }
+            Ok(Cmd::StereoWidth(width)) => {
+                widen.set(width);
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,

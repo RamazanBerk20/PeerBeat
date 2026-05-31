@@ -22,6 +22,7 @@ const _kEqEnabled = 'audio.eq_enabled';
 const _kEqGains = 'audio.eq_gains';
 const _kEqPreamp = 'audio.eq_preamp';
 const _kOutputDevice = 'audio.output_device';
+const _kStereoWidth = 'audio.stereo_width';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -66,6 +67,7 @@ class PlayerController extends ChangeNotifier {
   List<double> _eqGains = List.filled(10, 0.0);
   double _eqPreampDb = 0.0;
   String _outputDeviceId = 'default';
+  double _stereoWidth = 1.0;
   Duration _position = Duration.zero;
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
@@ -97,6 +99,7 @@ class PlayerController extends ChangeNotifier {
   List<double> get eqGains => List.unmodifiable(_eqGains);
   double get eqPreampDb => _eqPreampDb;
   String get outputDeviceId => _outputDeviceId;
+  double get stereoWidth => _stereoWidth;
   Duration get position => _position;
   Duration get duration => current == null
       ? Duration.zero
@@ -272,6 +275,13 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setStereoWidth(double width) {
+    _stereoWidth = width.clamp(0.0, 2.0);
+    unawaited(_engine.setStereoWidth(_stereoWidth));
+    unawaited(settingsSet(key: _kStereoWidth, value: '$_stereoWidth'));
+    notifyListeners();
+  }
+
   void _applyEq() {
     final gains = _eqEnabled ? _eqGains : List<double>.filled(10, 0.0);
     final preamp = _eqEnabled ? _eqPreampDb : 0.0;
@@ -313,9 +323,14 @@ class PlayerController extends ChangeNotifier {
         _eqPreampDb = (double.tryParse(eqPreamp) ?? 0.0).clamp(-15.0, 15.0);
       }
       _outputDeviceId = await settingsGet(key: _kOutputDevice) ?? 'default';
+      final stereoWidth = await settingsGet(key: _kStereoWidth);
+      if (stereoWidth != null) {
+        _stereoWidth = (double.tryParse(stereoWidth) ?? 1.0).clamp(0.0, 2.0);
+      }
       _recomputeRg();
       _applyVolume();
       _applyEq();
+      unawaited(_engine.setStereoWidth(_stereoWidth));
       try {
         await _engine.setOutputDevice(
           _outputDeviceId == 'default' ? null : _outputDeviceId,
@@ -388,6 +403,7 @@ class PlayerController extends ChangeNotifier {
       // worker) resets them, and the gain is per-track.
       if (_speed != 1.0) await _engine.setSpeed(_speed);
       _applyEq();
+      await _engine.setStereoWidth(_stereoWidth);
       _recomputeRg();
       _applyVolume();
       if (resume != null) {

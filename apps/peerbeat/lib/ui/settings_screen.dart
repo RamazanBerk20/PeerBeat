@@ -139,6 +139,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               devices: _outputDevices,
               onReload: _reloadOutputDevices,
             ),
+            const SizedBox(height: 12),
+            const _StereoWidthCard(),
             const SizedBox(height: 16),
             Text('About', style: text.titleLarge),
             const Card(
@@ -151,6 +153,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+class _StereoWidthCard extends StatelessWidget {
+  const _StereoWidthCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Stereo widening', style: text.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Adjust mid/side width on desktop output. 100% leaves the file unchanged.',
+              style: text.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text('Width'),
+                Expanded(
+                  child: Slider(
+                    min: 0,
+                    max: 2,
+                    divisions: 40,
+                    value: player.stereoWidth,
+                    label: '${(player.stereoWidth * 100).round()}%',
+                    onChanged: player.setStereoWidth,
+                  ),
+                ),
+                SizedBox(
+                  width: 64,
+                  child: Text(
+                    '${(player.stereoWidth * 100).round()}%',
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

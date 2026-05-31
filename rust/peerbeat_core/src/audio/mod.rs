@@ -16,6 +16,7 @@
 
 mod engine;
 mod eq;
+mod widen;
 pub use engine::AudioEngine;
 
 // M2 replaces the rodio engine with a custom symphonia→cpal pipeline:

@@ -33,6 +33,9 @@ abstract class AudioEngine {
   /// 10-band graphic EQ. Gains are dB values for 31 Hz through 16 kHz.
   Future<void> setEq(List<double> gains, double preampDb);
 
+  /// Stereo width: 0.0 = mono, 1.0 = unchanged, 2.0 = widened.
+  Future<void> setStereoWidth(double width);
+
   Future<List<rust.OutputDeviceRow>> outputDevices();
   Future<void> setOutputDevice(String? deviceId);
 
@@ -164,6 +167,10 @@ class RustDesktopEngine implements AudioEngine {
       rust.audioSetEq(gains: gains, preampDb: preampDb);
 
   @override
+  Future<void> setStereoWidth(double width) async =>
+      rust.audioSetStereoWidth(width: width);
+
+  @override
   Future<List<rust.OutputDeviceRow>> outputDevices() async =>
       rust.audioOutputDevices();
 
@@ -233,6 +240,11 @@ class ExoPlayerEngine implements AudioEngine {
   Future<void> setEq(List<double> gains, double preampDb) async {
     // Android platform EQ lands with the Android audio-effects pass. Persisting
     // and exposing the same controls now keeps settings cross-platform.
+  }
+
+  @override
+  Future<void> setStereoWidth(double width) async {
+    // Android platform effects land in the Android audio-effects pass.
   }
 
   @override
