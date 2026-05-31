@@ -54,6 +54,14 @@ class PlayerController extends ChangeNotifier {
   TrackRow? get current =>
       (_pos >= 0 && _pos < _order.length) ? _queue[_order[_pos]] : null;
   List<TrackRow> get queue => [for (final i in _order) _queue[i]];
+
+  /// The play-order position of the current track (index into [queue]), or -1.
+  int get currentIndex => _pos;
+
+  /// Tracks queued after the current one, in play order (for "Up next").
+  List<TrackRow> get upNext => (_pos >= 0 && _pos + 1 < _order.length)
+      ? [for (final i in _order.sublist(_pos + 1)) _queue[i]]
+      : const [];
   bool get playing => _playing;
   bool get shuffle => _shuffle;
   RepeatMode get repeat => _repeat;
@@ -81,6 +89,14 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> playSingle(TrackRow t) => playQueue([t], 0);
+
+  /// Jump to a track already in the queue by its play-order [index].
+  Future<void> playQueueIndex(int index) async {
+    if (index < 0 || index >= _order.length) return;
+    _resumeFrom = null;
+    _pos = index;
+    await _playCurrent();
+  }
 
   void addToQueue(TrackRow t) {
     _queue = [..._queue, t];

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide RepeatMode;
 
 import '../playback/player.dart';
 import 'library_home.dart' show TrackArt, fmtDuration;
+import 'now_playing.dart';
 
 /// Persistent transport bar bound to the [player] singleton. Hidden when nothing
 /// is loaded.
@@ -76,29 +77,44 @@ class _MiniPlayerState extends State<MiniPlayer> {
                   padding: const EdgeInsets.fromLTRB(12, 0, 8, 8),
                   child: Row(
                     children: [
-                      TrackArt(track: t, size: 44),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              t.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const NowPlayingScreen(),
+                              fullscreenDialog: true,
                             ),
-                            Text(
-                              '${t.artist.isEmpty ? 'Unknown' : t.artist}'
-                              '   ${fmtDuration(posMs.round())} / ${fmtDuration(durMs)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: cs.onSurfaceVariant,
-                                fontSize: 12,
+                          ),
+                          child: Row(
+                            children: [
+                              TrackArt(track: t, size: 44),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      t.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '${t.artist.isEmpty ? 'Unknown' : t.artist}'
+                                      '   ${fmtDuration(posMs.round())} / ${fmtDuration(durMs)}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: cs.onSurfaceVariant,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       IconButton(
