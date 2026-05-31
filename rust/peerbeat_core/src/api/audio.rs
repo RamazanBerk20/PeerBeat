@@ -50,6 +50,21 @@ pub fn audio_set_speed(speed: f64) {
     engine().set_speed(speed as f32);
 }
 
+/// 10-band graphic EQ, using ISO octave centers from 31 Hz to 16 kHz.
+/// `gains` must contain exactly 10 dB values. Values are clamped by the engine
+/// to -12..12 dB; `preamp_db` is clamped to -15..15 dB.
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_set_eq(gains: Vec<f64>, preamp_db: f64) -> Result<(), String> {
+    let gains: [f32; 10] = gains
+        .into_iter()
+        .map(|g| g as f32)
+        .collect::<Vec<_>>()
+        .try_into()
+        .map_err(|_| "EQ requires exactly 10 band gains".to_string())?;
+    engine().set_eq(gains, preamp_db as f32);
+    Ok(())
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn audio_position_ms() -> i64 {
     engine().position_ms() as i64

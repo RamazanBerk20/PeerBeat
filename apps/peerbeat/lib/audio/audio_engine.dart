@@ -30,6 +30,9 @@ abstract class AudioEngine {
   /// Playback speed (1.0 = normal). Desktop currently shifts pitch with speed.
   Future<void> setSpeed(double speed);
 
+  /// 10-band graphic EQ. Gains are dB values for 31 Hz through 16 kHz.
+  Future<void> setEq(List<double> gains, double preampDb);
+
   String? get lastError;
 
   Stream<Duration> get positionStream;
@@ -153,6 +156,10 @@ class RustDesktopEngine implements AudioEngine {
   @override
   Future<void> setSpeed(double speed) async => rust.audioSetSpeed(speed: speed);
 
+  @override
+  Future<void> setEq(List<double> gains, double preampDb) async =>
+      rust.audioSetEq(gains: gains, preampDb: preampDb);
+
   void _setPlaying(bool p) {
     _lastPlaying = p;
     _playing.add(p);
@@ -210,6 +217,12 @@ class ExoPlayerEngine implements AudioEngine {
 
   @override
   Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+
+  @override
+  Future<void> setEq(List<double> gains, double preampDb) async {
+    // Android platform EQ lands with the Android audio-effects pass. Persisting
+    // and exposing the same controls now keeps settings cross-platform.
+  }
 
   @override
   String? get lastError => null;

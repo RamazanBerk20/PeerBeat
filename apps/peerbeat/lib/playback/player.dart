@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -16,6 +17,9 @@ const _kResumeTrack = 'resume.track_id';
 const _kResumePos = 'resume.position_ms';
 const _kRgMode = 'audio.rg_mode';
 const _kRgPreamp = 'audio.rg_preamp';
+const _kEqEnabled = 'audio.eq_enabled';
+const _kEqGains = 'audio.eq_gains';
+const _kEqPreamp = 'audio.eq_preamp';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -56,6 +60,9 @@ class PlayerController extends ChangeNotifier {
   ReplayGainMode _rgMode = ReplayGainMode.off;
   double _rgPreampDb = 0.0;
   double _rgFactor = 1.0; // cached multiplier for the current track
+  bool _eqEnabled = false;
+  List<double> _eqGains = List.filled(10, 0.0);
+  double _eqPreampDb = 0.0;
   Duration _position = Duration.zero;
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
@@ -83,6 +90,9 @@ class PlayerController extends ChangeNotifier {
   double get speed => _speed;
   ReplayGainMode get replayGainMode => _rgMode;
   double get replayGainPreampDb => _rgPreampDb;
+  bool get eqEnabled => _eqEnabled;
+  List<double> get eqGains => List.unmodifiable(_eqGains);
+  double get eqPreampDb => _eqPreampDb;
   Duration get position => _position;
   Duration get duration => current == null
       ? Duration.zero
@@ -211,6 +221,55 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setEqEnabled(bool enabled) {
+    _eqEnabled = enabled;
+    _applyEq();
+    unawaited(settingsSet(key: _kEqEnabled, value: enabled ? '1' : '0'));
+    notifyListeners();
+  }
+
+  void setEqBand(int index, double gainDb) {
+    if (index < 0 || index >= _eqGains.length) return;
+    _eqGains = [..._eqGains]..[index] = gainDb.clamp(-12.0, 12.0);
+    _eqEnabled = true;
+    _applyEq();
+    _persistEq();
+    notifyListeners();
+  }
+
+  void setEqPreamp(double db) {
+    _eqPreampDb = db.clamp(-15.0, 15.0);
+    _eqEnabled = true;
+    _applyEq();
+    _persistEq();
+    notifyListeners();
+  }
+
+  void setEqPreset(List<double> gains, double preampDb) {
+    if (gains.length != 10) return;
+    _eqGains = [for (final g in gains) g.clamp(-12.0, 12.0).toDouble()];
+    _eqPreampDb = preampDb.clamp(-15.0, 15.0);
+    _eqEnabled =
+        _eqPreampDb.abs() > 0.001 || _eqGains.any((g) => g.abs() > 0.001);
+    _applyEq();
+    _persistEq();
+    unawaited(settingsSet(key: _kEqEnabled, value: _eqEnabled ? '1' : '0'));
+    notifyListeners();
+  }
+
+  void resetEq() => setEqPreset(List.filled(10, 0.0), 0.0);
+
+  void _applyEq() {
+    final gains = _eqEnabled ? _eqGains : List<double>.filled(10, 0.0);
+    final preamp = _eqEnabled ? _eqPreampDb : 0.0;
+    unawaited(_engine.setEq(gains, preamp));
+  }
+
+  void _persistEq() {
+    unawaited(settingsSet(key: _kEqGains, value: jsonEncode(_eqGains)));
+    unawaited(settingsSet(key: _kEqPreamp, value: '$_eqPreampDb'));
+  }
+
   /// Load persisted audio settings (ReplayGain). Best-effort; call once at start.
   Future<void> loadAudioSettings() async {
     try {
@@ -225,8 +284,24 @@ class PlayerController extends ChangeNotifier {
       if (preamp != null) {
         _rgPreampDb = (double.tryParse(preamp) ?? 0.0).clamp(-15.0, 15.0);
       }
+      _eqEnabled = (await settingsGet(key: _kEqEnabled)) == '1';
+      final eqGains = await settingsGet(key: _kEqGains);
+      if (eqGains != null) {
+        final decoded = jsonDecode(eqGains);
+        if (decoded is List && decoded.length == 10) {
+          _eqGains = [
+            for (final g in decoded)
+              ((g is num ? g.toDouble() : 0.0).clamp(-12.0, 12.0)).toDouble(),
+          ];
+        }
+      }
+      final eqPreamp = await settingsGet(key: _kEqPreamp);
+      if (eqPreamp != null) {
+        _eqPreampDb = (double.tryParse(eqPreamp) ?? 0.0).clamp(-15.0, 15.0);
+      }
       _recomputeRg();
       _applyVolume();
+      _applyEq();
       notifyListeners();
     } catch (_) {
       // best-effort
@@ -289,6 +364,7 @@ class PlayerController extends ChangeNotifier {
       // Re-apply speed + ReplayGain volume: a fresh source (or a restarted
       // worker) resets them, and the gain is per-track.
       if (_speed != 1.0) await _engine.setSpeed(_speed);
+      _applyEq();
       _recomputeRg();
       _applyVolume();
       if (resume != null) {

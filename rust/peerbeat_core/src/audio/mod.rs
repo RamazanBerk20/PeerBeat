@@ -15,6 +15,7 @@
 //! **M2** (EQ, ReplayGain, output-device selection, stereo widening).
 
 mod engine;
+mod eq;
 pub use engine::AudioEngine;
 
 // M2 replaces the rodio engine with a custom symphonia→cpal pipeline:

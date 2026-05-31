@@ -8,6 +8,7 @@
 //! See `docs/data-model.md` for the full table set and indexing strategy.
 
 pub mod browse;
+pub mod eq_presets;
 pub mod folders;
 pub mod playlists;
 mod schema;

@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../db/browse.dart';
+import '../db/eq_presets.dart';
 import '../db/folders.dart';
 import '../db/playlists.dart';
 import '../db/smart.dart';
@@ -95,6 +96,34 @@ Future<void> settingsSet({required String key, required String value}) =>
 /// Delete a persisted setting (no-op if absent).
 Future<void> settingsDelete({required String key}) =>
     RustLib.instance.api.crateApiLibrarySettingsDelete(key: key);
+
+Future<List<EqPresetRow>> eqPresetList() =>
+    RustLib.instance.api.crateApiLibraryEqPresetList();
+
+Future<PlatformInt64> eqPresetCreate({
+  required String name,
+  required List<double> bands,
+  required double preamp,
+}) => RustLib.instance.api.crateApiLibraryEqPresetCreate(
+  name: name,
+  bands: bands,
+  preamp: preamp,
+);
+
+Future<void> eqPresetUpdate({
+  required PlatformInt64 presetId,
+  required String name,
+  required List<double> bands,
+  required double preamp,
+}) => RustLib.instance.api.crateApiLibraryEqPresetUpdate(
+  presetId: presetId,
+  name: name,
+  bands: bands,
+  preamp: preamp,
+);
+
+Future<void> eqPresetDelete({required PlatformInt64 presetId}) =>
+    RustLib.instance.api.crateApiLibraryEqPresetDelete(presetId: presetId);
 
 Future<List<AlbumRow>> libraryBrowseAlbums({
   required PlatformInt64 limit,

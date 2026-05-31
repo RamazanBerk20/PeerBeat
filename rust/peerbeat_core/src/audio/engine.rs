@@ -14,6 +14,8 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use super::eq::{EqHandle, EqSource};
+
 const END_SEEK_EPSILON: Duration = Duration::from_millis(250);
 
 enum Cmd {
@@ -24,6 +26,7 @@ enum Cmd {
     Seek(u64, Sender<Result<(), String>>),
     Volume(f32),
     Speed(f32),
+    Eq([f32; 10], f32),
 }
 
 #[derive(Default)]
@@ -106,6 +109,10 @@ impl AudioEngine {
     }
     pub fn set_speed(&self, s: f32) {
         let _ = self.send(Cmd::Speed(s.clamp(0.25, 4.0)));
+    }
+    pub fn set_eq(&self, gains: [f32; 10], preamp_db: f32) {
+        let gains = gains.map(|g| g.clamp(-12.0, 12.0));
+        let _ = self.send(Cmd::Eq(gains, preamp_db.clamp(-15.0, 15.0)));
     }
     pub fn position_ms(&self) -> u64 {
         self.shared.position_ms.load(Ordering::Relaxed)
@@ -382,6 +389,13 @@ fn open_source(path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, 
     }
 }
 
+fn with_eq(
+    source: Box<dyn rodio::Source<Item = i16> + Send>,
+    eq: EqHandle,
+) -> Box<dyn rodio::Source<Item = i16> + Send> {
+    Box::new(EqSource::new(source, eq))
+}
+
 fn spawn_worker(shared: Arc<Shared>, last_error: Arc<Mutex<Option<String>>>) -> Sender<Cmd> {
     let (tx, rx) = channel();
     std::thread::Builder::new()
@@ -440,6 +454,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
     };
     let mut volume = 1.0f32;
     let mut speed = 1.0f32;
+    let eq = EqHandle::new();
     let mut current_path: Option<String> = None;
     let mut base_position_ms = 0u64;
     let mut force_position_ms: Option<u64> = None;
@@ -449,7 +464,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
         match rx.recv_timeout(Duration::from_millis(150)) {
             Ok(Cmd::Load(path, reply)) => {
                 let result: Result<(), String> = (|| {
-                    let source = open_source(&path)?;
+                    let source = with_eq(open_source(&path)?, eq.clone());
                     let dur = source.total_duration().unwrap_or(Duration::ZERO);
                     // A fresh sink avoids rodio 0.19 getting stuck after clear().
                     let s = Sink::try_new(&handle)
@@ -522,7 +537,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                                 .as_deref()
                                 .ok_or_else(|| "no track loaded".to_string())?;
                             let was_playing = !sink.is_paused() && !sink.empty();
-                            let source = open_source(path)?;
+                            let source = with_eq(open_source(path)?, eq.clone());
                             let s = Sink::try_new(&handle)
                                 .map_err(|e| format!("cannot create audio sink: {e}"))?;
                             sink = s;
@@ -555,6 +570,9 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
             Ok(Cmd::Speed(s)) => {
                 speed = s;
                 sink.set_speed(s);
+            }
+            Ok(Cmd::Eq(gains, preamp_db)) => {
+                eq.set(gains, preamp_db);
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,

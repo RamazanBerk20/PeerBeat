@@ -30,6 +30,15 @@ void audioSetVolume({required double volume}) =>
 void audioSetSpeed({required double speed}) =>
     RustLib.instance.api.crateApiAudioAudioSetSpeed(speed: speed);
 
+/// 10-band graphic EQ, using ISO octave centers from 31 Hz to 16 kHz.
+/// `gains` must contain exactly 10 dB values. Values are clamped by the engine
+/// to -12..12 dB; `preamp_db` is clamped to -15..15 dB.
+void audioSetEq({required List<double> gains, required double preampDb}) =>
+    RustLib.instance.api.crateApiAudioAudioSetEq(
+      gains: gains,
+      preampDb: preampDb,
+    );
+
 PlatformInt64 audioPositionMs() =>
     RustLib.instance.api.crateApiAudioAudioPositionMs();
 

@@ -4,6 +4,7 @@
 //! and network APIs are added in later milestones.
 
 use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
+use crate::db::eq_presets::{self, EqPresetRow};
 use crate::db::folders::{self, FolderRow};
 use crate::db::playlists::{self, PlaylistRow};
 use crate::db::smart::{self, SmartPlaylistRow};
@@ -197,6 +198,37 @@ pub fn settings_set(key: String, value: String) -> Result<(), String> {
 /// Delete a persisted setting (no-op if absent).
 pub fn settings_delete(key: String) -> Result<(), String> {
     with_db(|db| settings::delete(db.conn(), &key))
+}
+
+// ── EQ presets ──────────────────────────────────────────────────────────────
+
+pub fn eq_preset_list() -> Result<Vec<EqPresetRow>, String> {
+    with_db(|db| eq_presets::list(db.conn()))
+}
+
+pub fn eq_preset_create(name: String, bands: Vec<f64>, preamp: f64) -> Result<i64, String> {
+    let clean = name.trim().to_string();
+    if clean.is_empty() {
+        return Err("preset name cannot be empty".to_string());
+    }
+    with_db(|db| eq_presets::create(db.conn(), &clean, &bands, preamp))
+}
+
+pub fn eq_preset_update(
+    preset_id: i64,
+    name: String,
+    bands: Vec<f64>,
+    preamp: f64,
+) -> Result<(), String> {
+    let clean = name.trim().to_string();
+    if clean.is_empty() {
+        return Err("preset name cannot be empty".to_string());
+    }
+    with_db(|db| eq_presets::update(db.conn(), preset_id, &clean, &bands, preamp))
+}
+
+pub fn eq_preset_delete(preset_id: i64) -> Result<(), String> {
+    with_db(|db| eq_presets::delete(db.conn(), preset_id))
 }
 
 // ── Browse views ───────────────────────────────────────────────────────────

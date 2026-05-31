@@ -12,6 +12,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'db/browse.dart';
+import 'db/eq_presets.dart';
 import 'db/folders.dart';
 import 'db/playlists.dart';
 import 'db/smart.dart';
@@ -53,6 +54,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_box_autoadd_u_16(dynamic raw);
 
   @protected
+  EqPresetRow dco_decode_eq_preset_row(dynamic raw);
+
+  @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
@@ -74,6 +78,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ArtistRow> dco_decode_list_artist_row(dynamic raw);
 
   @protected
+  List<EqPresetRow> dco_decode_list_eq_preset_row(dynamic raw);
+
+  @protected
   List<FolderRow> dco_decode_list_folder_row(dynamic raw);
 
   @protected
@@ -84,6 +91,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<PlaylistRow> dco_decode_list_playlist_row(dynamic raw);
+
+  @protected
+  List<double> dco_decode_list_prim_f_64_loose(dynamic raw);
+
+  @protected
+  Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
 
   @protected
   Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
@@ -173,6 +186,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_box_autoadd_u_16(SseDeserializer deserializer);
 
   @protected
+  EqPresetRow sse_decode_eq_preset_row(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
@@ -194,6 +210,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ArtistRow> sse_decode_list_artist_row(SseDeserializer deserializer);
 
   @protected
+  List<EqPresetRow> sse_decode_list_eq_preset_row(SseDeserializer deserializer);
+
+  @protected
   List<FolderRow> sse_decode_list_folder_row(SseDeserializer deserializer);
 
   @protected
@@ -204,6 +223,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<PlaylistRow> sse_decode_list_playlist_row(SseDeserializer deserializer);
+
+  @protected
+  List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer);
+
+  @protected
+  Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
 
   @protected
   Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer);
@@ -306,6 +331,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_16(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_eq_preset_row(EqPresetRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -330,6 +358,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_eq_preset_row(
+    List<EqPresetRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_folder_row(
     List<FolderRow> self,
     SseSerializer serializer,
@@ -344,6 +378,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_playlist_row(
     List<PlaylistRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_loose(
+    List<double> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_strict(
+    Float64List self,
     SseSerializer serializer,
   );
 

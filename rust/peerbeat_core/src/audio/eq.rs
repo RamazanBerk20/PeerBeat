@@ -112,13 +112,10 @@ impl EqHandle {
     }
 
     fn read(&self) -> EqSettings {
-        self.settings
-            .lock()
-            .map(|s| *s)
-            .unwrap_or(EqSettings {
-                gains: [0.0; 10],
-                preamp_db: 0.0,
-            })
+        self.settings.lock().map(|s| *s).unwrap_or(EqSettings {
+            gains: [0.0; 10],
+            preamp_db: 0.0,
+        })
     }
 }
 
