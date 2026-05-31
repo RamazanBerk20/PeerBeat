@@ -23,6 +23,7 @@ enum Cmd {
     Stop,
     Seek(u64, Sender<Result<(), String>>),
     Volume(f32),
+    Speed(f32),
 }
 
 #[derive(Default)]
@@ -102,6 +103,9 @@ impl AudioEngine {
     }
     pub fn set_volume(&self, v: f32) {
         let _ = self.send(Cmd::Volume(v.clamp(0.0, 2.0)));
+    }
+    pub fn set_speed(&self, s: f32) {
+        let _ = self.send(Cmd::Speed(s.clamp(0.25, 4.0)));
     }
     pub fn position_ms(&self) -> u64 {
         self.shared.position_ms.load(Ordering::Relaxed)
@@ -435,6 +439,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
         }
     };
     let mut volume = 1.0f32;
+    let mut speed = 1.0f32;
     let mut current_path: Option<String> = None;
     let mut base_position_ms = 0u64;
     let mut force_position_ms: Option<u64> = None;
@@ -454,6 +459,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     current_duration = dur;
                     base_position_ms = 0;
                     sink.set_volume(volume);
+                    sink.set_speed(speed);
                     sink.append(source);
                     sink.play();
                     shared
@@ -481,6 +487,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 if let Ok(s) = Sink::try_new(&handle) {
                     sink = s;
                     sink.set_volume(volume);
+                    sink.set_speed(speed);
                 }
                 current_path = None;
                 current_duration = Duration::ZERO;
@@ -520,6 +527,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                                 .map_err(|e| format!("cannot create audio sink: {e}"))?;
                             sink = s;
                             sink.set_volume(volume);
+                            sink.set_speed(speed);
                             sink.append(source.skip_duration(target));
                             if was_playing {
                                 sink.play();
@@ -543,6 +551,10 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
             Ok(Cmd::Volume(v)) => {
                 volume = v;
                 sink.set_volume(v);
+            }
+            Ok(Cmd::Speed(s)) => {
+                speed = s;
+                sink.set_speed(s);
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,

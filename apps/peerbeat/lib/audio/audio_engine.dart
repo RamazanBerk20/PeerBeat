@@ -27,6 +27,9 @@ abstract class AudioEngine {
   /// Volume in 0.0–1.0 (1.0 = unity).
   Future<void> setVolume(double volume);
 
+  /// Playback speed (1.0 = normal). Desktop currently shifts pitch with speed.
+  Future<void> setSpeed(double speed);
+
   String? get lastError;
 
   Stream<Duration> get positionStream;
@@ -147,6 +150,9 @@ class RustDesktopEngine implements AudioEngine {
   Future<void> setVolume(double volume) async =>
       rust.audioSetVolume(volume: volume);
 
+  @override
+  Future<void> setSpeed(double speed) async => rust.audioSetSpeed(speed: speed);
+
   void _setPlaying(bool p) {
     _lastPlaying = p;
     _playing.add(p);
@@ -201,6 +207,9 @@ class ExoPlayerEngine implements AudioEngine {
   Future<void> seek(Duration position) => _player.seek(position);
   @override
   Future<void> setVolume(double volume) => _player.setVolume(volume);
+
+  @override
+  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
 
   @override
   String? get lastError => null;

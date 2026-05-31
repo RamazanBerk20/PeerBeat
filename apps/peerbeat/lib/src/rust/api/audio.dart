@@ -25,6 +25,11 @@ void audioSeekMs({required PlatformInt64 ms}) =>
 void audioSetVolume({required double volume}) =>
     RustLib.instance.api.crateApiAudioAudioSetVolume(volume: volume);
 
+/// Playback speed 0.25–4.0 (1.0 = normal). NOTE: rodio's speed also shifts
+/// pitch; pitch-preserving speed arrives with the P4 custom engine.
+void audioSetSpeed({required double speed}) =>
+    RustLib.instance.api.crateApiAudioAudioSetSpeed(speed: speed);
+
 PlatformInt64 audioPositionMs() =>
     RustLib.instance.api.crateApiAudioAudioPositionMs();
 

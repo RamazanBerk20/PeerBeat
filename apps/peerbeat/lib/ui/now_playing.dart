@@ -188,7 +188,7 @@ class _Controls extends StatelessWidget {
           const SizedBox(height: 8),
           _transportRow(cs),
           const SizedBox(height: 8),
-          _volumeRow(cs),
+          _volumeRow(context, cs),
           if (upNext.isNotEmpty) ...[
             const SizedBox(height: 8),
             Align(
@@ -247,7 +247,7 @@ class _Controls extends StatelessWidget {
     );
   }
 
-  Widget _volumeRow(ColorScheme cs) {
+  Widget _volumeRow(BuildContext context, ColorScheme cs) {
     return Row(
       children: [
         IconButton(
@@ -263,9 +263,41 @@ class _Controls extends StatelessWidget {
             onChanged: player.setVolume,
           ),
         ),
+        _speedButton(cs),
       ],
     );
   }
+
+  Widget _speedButton(ColorScheme cs) {
+    const presets = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+    final active = player.speed != 1.0;
+    return PopupMenuButton<double>(
+      tooltip: 'Playback speed',
+      initialValue: player.speed,
+      onSelected: player.setSpeed,
+      itemBuilder: (_) => [
+        for (final s in presets)
+          PopupMenuItem(value: s, child: Text('${_fmtSpeed(s)}×')),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.speed, size: 20, color: active ? cs.primary : null),
+            const SizedBox(width: 4),
+            Text(
+              '${_fmtSpeed(player.speed)}×',
+              style: TextStyle(color: active ? cs.primary : null),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _fmtSpeed(double s) =>
+      s.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
 }
 
 class _UpNextList extends StatelessWidget {

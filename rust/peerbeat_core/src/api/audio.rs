@@ -43,6 +43,13 @@ pub fn audio_set_volume(volume: f64) {
     engine().set_volume(volume as f32);
 }
 
+/// Playback speed 0.25–4.0 (1.0 = normal). NOTE: rodio's speed also shifts
+/// pitch; pitch-preserving speed arrives with the P4 custom engine.
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_set_speed(speed: f64) {
+    engine().set_speed(speed as f32);
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn audio_position_ms() -> i64 {
     engine().position_ms() as i64

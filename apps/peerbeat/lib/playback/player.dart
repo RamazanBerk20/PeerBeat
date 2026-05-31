@@ -43,6 +43,7 @@ class PlayerController extends ChangeNotifier {
   RepeatMode _repeat = RepeatMode.off;
   double _volume = 1.0;
   bool _muted = false;
+  double _speed = 1.0;
   Duration _position = Duration.zero;
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
@@ -67,6 +68,7 @@ class PlayerController extends ChangeNotifier {
   RepeatMode get repeat => _repeat;
   double get volume => _volume;
   bool get muted => _muted;
+  double get speed => _speed;
   Duration get position => _position;
   Duration get duration => current == null
       ? Duration.zero
@@ -159,6 +161,13 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Set playback speed (0.25–4×). Desktop currently shifts pitch with speed.
+  void setSpeed(double s) {
+    _speed = s.clamp(0.25, 4.0);
+    _engine.setSpeed(_speed);
+    notifyListeners();
+  }
+
   Future<void> next() async {
     if (_order.isEmpty) return;
     if (_pos + 1 < _order.length) {
@@ -205,6 +214,8 @@ class PlayerController extends ChangeNotifier {
         await _engine.playPath(p, duration: duration);
       }
       _engineLoaded = true;
+      // Re-apply speed: a fresh source (or a restarted worker) resets to 1×.
+      if (_speed != 1.0) await _engine.setSpeed(_speed);
       if (resume != null) {
         _resumeFrom = null;
         await _engine.seek(resume);
