@@ -19,6 +19,10 @@ const _kResumePos = 'resume.position_ms';
 class PlayerController extends ChangeNotifier {
   PlayerController() {
     _posSub = _engine.positionStream.listen((p) {
+      // Ignore engine ticks until a track is actually loaded — otherwise the
+      // desktop poller (which reads 0 while idle) would clobber a restored
+      // resume bookmark to 0:00 and then persist that 0.
+      if (!_engineLoaded) return;
       _position = p;
       _maybeAdvance();
       _persistResume();

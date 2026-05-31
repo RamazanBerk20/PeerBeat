@@ -559,9 +559,14 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
-        let pos_ms = force_position_ms
-            .take()
-            .unwrap_or_else(|| base_position_ms + sink.get_pos().as_millis() as u64);
+        let pos_ms = force_position_ms.take().unwrap_or_else(|| {
+            // rodio's get_pos() is sampled AFTER the speed adapter, so it
+            // reports output (wall-clock) time. Scale it back to source-content
+            // time so the position matches base_position_ms and the duration
+            // regardless of playback speed (no-op at 1.0×).
+            let content_ms = sink.get_pos().as_secs_f64() * speed as f64 * 1000.0;
+            base_position_ms + content_ms as u64
+        });
         shared.position_ms.store(pos_ms, Ordering::Relaxed);
         shared
             .playing

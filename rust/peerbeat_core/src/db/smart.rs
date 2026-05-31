@@ -93,7 +93,9 @@ fn rule_sql(rule: &Rule, now_ms: i64) -> Result<(String, Value), String> {
                     .trim()
                     .parse()
                     .map_err(|_| format!("'{}' is not a number", rule.value))?;
-                let threshold = now_ms - days.saturating_mul(DAY_MS);
+                // Fully saturating: a malicious/huge `days` must not overflow
+                // (an overflow panic would cross the FFI boundary).
+                let threshold = now_ms.saturating_sub(days.saturating_mul(DAY_MS));
                 return Ok((format!("{expr} >= ?"), Value::Integer(threshold)));
             }
             let n: i64 = rule
@@ -281,6 +283,17 @@ mod tests {
         assert!(compile(&bad_op, 0).is_err());
         let bad_num = q(r#"{"rules":[{"field":"year","op":"gte","value":"notanumber"}]}"#);
         assert!(compile(&bad_num, 0).is_err());
+    }
+
+    #[test]
+    fn in_last_days_extreme_values_saturate() {
+        // huge / negative day counts must saturate, never overflow-panic.
+        for v in ["-9223372036854775808", "9223372036854775807", "-1", "0"] {
+            let query = q(&format!(
+                r#"{{"rules":[{{"field":"added_at","op":"inLastDays","value":"{v}"}}]}}"#
+            ));
+            assert!(compile(&query, 0).is_ok());
+        }
     }
 
     #[test]
