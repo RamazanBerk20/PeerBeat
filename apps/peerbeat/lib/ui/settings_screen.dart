@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../playback/player.dart';
+import '../src/rust/api/audio.dart' show OutputDeviceRow;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/eq_presets.dart';
 
@@ -43,10 +44,17 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late Future<List<EqPresetRow>> _customPresets = eqPresetList();
+  late Future<List<OutputDeviceRow>> _outputDevices = player.outputDevices();
 
   void _reloadPresets() {
     setState(() {
       _customPresets = eqPresetList();
+    });
+  }
+
+  void _reloadOutputDevices() {
+    setState(() {
+      _outputDevices = player.outputDevices();
     });
   }
 
@@ -126,6 +134,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onSavePreset: _savePreset,
               onDeletePreset: _deletePreset,
             ),
+            const SizedBox(height: 12),
+            _OutputDeviceCard(
+              devices: _outputDevices,
+              onReload: _reloadOutputDevices,
+            ),
             const SizedBox(height: 16),
             Text('About', style: text.titleLarge),
             const Card(
@@ -138,6 +151,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+class _OutputDeviceCard extends StatelessWidget {
+  const _OutputDeviceCard({required this.devices, required this.onReload});
+
+  final Future<List<OutputDeviceRow>> devices;
+  final VoidCallback onReload;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('Output device', style: text.titleMedium)),
+                IconButton(
+                  tooltip: 'Refresh devices',
+                  onPressed: onReload,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Choose the desktop audio output. Android routing follows the system output.',
+              style: text.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            FutureBuilder<List<OutputDeviceRow>>(
+              future: devices,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const LinearProgressIndicator();
+                }
+                if (snapshot.hasError) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Could not list devices: ${snapshot.error}',
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: onReload,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  );
+                }
+                final rows = snapshot.data ?? const <OutputDeviceRow>[];
+                final selected = rows.any((d) => d.id == player.outputDeviceId)
+                    ? player.outputDeviceId
+                    : 'default';
+                return DropdownButtonFormField<String>(
+                  initialValue: selected,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Audio output',
+                  ),
+                  items: [
+                    for (final d in rows)
+                      DropdownMenuItem<String>(
+                        value: d.id,
+                        child: Text(
+                          d.isDefault ? '${d.name} (default)' : d.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (id) {
+                    if (id != null) player.setOutputDevice(id);
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

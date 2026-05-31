@@ -27,6 +27,7 @@ enum Cmd {
     Volume(f32),
     Speed(f32),
     Eq([f32; 10], f32),
+    Device(Option<String>, Sender<Result<(), String>>),
 }
 
 #[derive(Default)]
@@ -113,6 +114,13 @@ impl AudioEngine {
     pub fn set_eq(&self, gains: [f32; 10], preamp_db: f32) {
         let gains = gains.map(|g| g.clamp(-12.0, 12.0));
         let _ = self.send(Cmd::Eq(gains, preamp_db.clamp(-15.0, 15.0)));
+    }
+    pub fn set_output_device(&self, device_id: Option<String>) -> Result<(), String> {
+        let (reply_tx, reply_rx) = channel();
+        self.send(Cmd::Device(device_id, reply_tx))?;
+        reply_rx
+            .recv()
+            .map_err(|e| format!("audio worker closed before switching output device: {e}"))?
     }
     pub fn position_ms(&self) -> u64 {
         self.shared.position_ms.load(Ordering::Relaxed)
@@ -396,6 +404,34 @@ fn with_eq(
     Box::new(EqSource::new(source, eq))
 }
 
+fn open_output_stream(
+    device_id: Option<&str>,
+) -> Result<(rodio::OutputStream, rodio::OutputStreamHandle), String> {
+    use rodio::cpal::traits::HostTrait;
+    use rodio::{DeviceTrait, OutputStream};
+
+    match device_id {
+        None | Some("") | Some("default") => {
+            OutputStream::try_default().map_err(|e| format!("no audio output device: {e}"))
+        }
+        Some(id) => {
+            let index = id
+                .strip_prefix("device:")
+                .and_then(|s| s.parse::<usize>().ok())
+                .ok_or_else(|| format!("invalid output device id '{id}'"))?;
+            let host = rodio::cpal::default_host();
+            let device = host
+                .output_devices()
+                .map_err(|e| format!("cannot list output devices: {e}"))?
+                .nth(index)
+                .ok_or_else(|| format!("output device '{id}' not found"))?;
+            let name = device.name().unwrap_or_else(|_| id.to_string());
+            OutputStream::try_from_device(&device)
+                .map_err(|e| format!("cannot open output device '{name}': {e}"))
+        }
+    }
+}
+
 fn spawn_worker(shared: Arc<Shared>, last_error: Arc<Mutex<Option<String>>>) -> Sender<Cmd> {
     let (tx, rx) = channel();
     std::thread::Builder::new()
@@ -421,13 +457,13 @@ fn spawn_worker(shared: Arc<Shared>, last_error: Arc<Mutex<Option<String>>>) -> 
 }
 
 fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option<String>>>) {
-    use rodio::{OutputStream, Sink, Source};
+    use rodio::{Sink, Source};
 
     // `_stream` must stay alive for audio to play.
-    let (_stream, handle) = match OutputStream::try_default() {
+    let (mut _stream, mut handle) = match open_output_stream(None) {
         Ok(s) => s,
         Err(e) => {
-            let msg = format!("no audio output device: {e}");
+            let msg = e;
             eprintln!("peerbeat: {msg}");
             set_last_error(&last_error, Some(msg.clone()));
             while let Ok(cmd) = rx.recv() {
@@ -573,6 +609,41 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
             }
             Ok(Cmd::Eq(gains, preamp_db)) => {
                 eq.set(gains, preamp_db);
+            }
+            Ok(Cmd::Device(device_id, reply)) => {
+                let result: Result<(), String> = (|| {
+                    let was_playing = !sink.is_paused() && !sink.empty();
+                    let resume_ms = shared.position_ms.load(Ordering::Relaxed);
+                    let (new_stream, new_handle) = open_output_stream(device_id.as_deref())?;
+                    let s = Sink::try_new(&new_handle)
+                        .map_err(|e| format!("cannot create audio sink: {e}"))?;
+                    _stream = new_stream;
+                    handle = new_handle;
+                    sink = s;
+                    sink.set_volume(volume);
+                    sink.set_speed(speed);
+                    if let Some(path) = current_path.as_deref() {
+                        let target = clamp_seek_position(
+                            Duration::from_millis(resume_ms),
+                            (current_duration != Duration::ZERO).then_some(current_duration),
+                        );
+                        let source = with_eq(open_source(path)?, eq.clone());
+                        sink.append(source.skip_duration(target));
+                        base_position_ms = target.as_millis() as u64;
+                        force_position_ms = Some(base_position_ms);
+                        if was_playing {
+                            sink.play();
+                        } else {
+                            sink.pause();
+                        }
+                    }
+                    set_last_error(&last_error, None);
+                    Ok(())
+                })();
+                if let Err(e) = &result {
+                    set_last_error(&last_error, Some(e.clone()));
+                }
+                let _ = reply.send(result);
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,

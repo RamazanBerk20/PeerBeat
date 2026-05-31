@@ -92,6 +92,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HostInfo> dco_decode_list_host_info(dynamic raw);
 
   @protected
+  List<OutputDeviceRow> dco_decode_list_output_device_row(dynamic raw);
+
+  @protected
   List<PlaylistRow> dco_decode_list_playlist_row(dynamic raw);
 
   @protected
@@ -129,6 +132,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? dco_decode_opt_box_autoadd_u_16(dynamic raw);
+
+  @protected
+  OutputDeviceRow dco_decode_output_device_row(dynamic raw);
 
   @protected
   PlaylistImportReport dco_decode_playlist_import_report(dynamic raw);
@@ -224,6 +230,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HostInfo> sse_decode_list_host_info(SseDeserializer deserializer);
 
   @protected
+  List<OutputDeviceRow> sse_decode_list_output_device_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PlaylistRow> sse_decode_list_playlist_row(SseDeserializer deserializer);
 
   @protected
@@ -263,6 +274,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? sse_decode_opt_box_autoadd_u_16(SseDeserializer deserializer);
+
+  @protected
+  OutputDeviceRow sse_decode_output_device_row(SseDeserializer deserializer);
 
   @protected
   PlaylistImportReport sse_decode_playlist_import_report(
@@ -378,6 +392,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_host_info(List<HostInfo> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_output_device_row(
+    List<OutputDeviceRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_playlist_row(
     List<PlaylistRow> self,
     SseSerializer serializer,
@@ -439,6 +459,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_16(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_output_device_row(
+    OutputDeviceRow self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_playlist_import_report(

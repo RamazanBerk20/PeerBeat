@@ -33,6 +33,9 @@ abstract class AudioEngine {
   /// 10-band graphic EQ. Gains are dB values for 31 Hz through 16 kHz.
   Future<void> setEq(List<double> gains, double preampDb);
 
+  Future<List<rust.OutputDeviceRow>> outputDevices();
+  Future<void> setOutputDevice(String? deviceId);
+
   String? get lastError;
 
   Stream<Duration> get positionStream;
@@ -160,6 +163,14 @@ class RustDesktopEngine implements AudioEngine {
   Future<void> setEq(List<double> gains, double preampDb) async =>
       rust.audioSetEq(gains: gains, preampDb: preampDb);
 
+  @override
+  Future<List<rust.OutputDeviceRow>> outputDevices() async =>
+      rust.audioOutputDevices();
+
+  @override
+  Future<void> setOutputDevice(String? deviceId) async =>
+      rust.audioSetOutputDevice(deviceId: deviceId);
+
   void _setPlaying(bool p) {
     _lastPlaying = p;
     _playing.add(p);
@@ -222,6 +233,21 @@ class ExoPlayerEngine implements AudioEngine {
   Future<void> setEq(List<double> gains, double preampDb) async {
     // Android platform EQ lands with the Android audio-effects pass. Persisting
     // and exposing the same controls now keeps settings cross-platform.
+  }
+
+  @override
+  Future<List<rust.OutputDeviceRow>> outputDevices() async => const [
+    rust.OutputDeviceRow(
+      id: 'default',
+      name: 'Android audio output',
+      isDefault: true,
+    ),
+  ];
+
+  @override
+  Future<void> setOutputDevice(String? deviceId) async {
+    // Android routing is controlled by the OS; per-app routing lands later
+    // where Android exposes it.
   }
 
   @override

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../audio/audio_engine.dart';
 import '../audio/replay_gain.dart';
+import '../src/rust/api/audio.dart' show OutputDeviceRow;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
 
@@ -20,6 +21,7 @@ const _kRgPreamp = 'audio.rg_preamp';
 const _kEqEnabled = 'audio.eq_enabled';
 const _kEqGains = 'audio.eq_gains';
 const _kEqPreamp = 'audio.eq_preamp';
+const _kOutputDevice = 'audio.output_device';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -63,6 +65,7 @@ class PlayerController extends ChangeNotifier {
   bool _eqEnabled = false;
   List<double> _eqGains = List.filled(10, 0.0);
   double _eqPreampDb = 0.0;
+  String _outputDeviceId = 'default';
   Duration _position = Duration.zero;
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
@@ -93,6 +96,7 @@ class PlayerController extends ChangeNotifier {
   bool get eqEnabled => _eqEnabled;
   List<double> get eqGains => List.unmodifiable(_eqGains);
   double get eqPreampDb => _eqPreampDb;
+  String get outputDeviceId => _outputDeviceId;
   Duration get position => _position;
   Duration get duration => current == null
       ? Duration.zero
@@ -259,6 +263,15 @@ class PlayerController extends ChangeNotifier {
 
   void resetEq() => setEqPreset(List.filled(10, 0.0), 0.0);
 
+  Future<List<OutputDeviceRow>> outputDevices() => _engine.outputDevices();
+
+  Future<void> setOutputDevice(String id) async {
+    _outputDeviceId = id;
+    await _engine.setOutputDevice(id == 'default' ? null : id);
+    unawaited(settingsSet(key: _kOutputDevice, value: id));
+    notifyListeners();
+  }
+
   void _applyEq() {
     final gains = _eqEnabled ? _eqGains : List<double>.filled(10, 0.0);
     final preamp = _eqEnabled ? _eqPreampDb : 0.0;
@@ -299,9 +312,19 @@ class PlayerController extends ChangeNotifier {
       if (eqPreamp != null) {
         _eqPreampDb = (double.tryParse(eqPreamp) ?? 0.0).clamp(-15.0, 15.0);
       }
+      _outputDeviceId = await settingsGet(key: _kOutputDevice) ?? 'default';
       _recomputeRg();
       _applyVolume();
       _applyEq();
+      try {
+        await _engine.setOutputDevice(
+          _outputDeviceId == 'default' ? null : _outputDeviceId,
+        );
+      } catch (_) {
+        _outputDeviceId = 'default';
+        await _engine.setOutputDevice(null);
+        unawaited(settingsSet(key: _kOutputDevice, value: 'default'));
+      }
       notifyListeners();
     } catch (_) {
       // best-effort

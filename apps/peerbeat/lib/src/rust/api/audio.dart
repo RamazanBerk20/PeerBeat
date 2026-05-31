@@ -39,6 +39,12 @@ void audioSetEq({required List<double> gains, required double preampDb}) =>
       preampDb: preampDb,
     );
 
+List<OutputDeviceRow> audioOutputDevices() =>
+    RustLib.instance.api.crateApiAudioAudioOutputDevices();
+
+void audioSetOutputDevice({String? deviceId}) =>
+    RustLib.instance.api.crateApiAudioAudioSetOutputDevice(deviceId: deviceId);
+
 PlatformInt64 audioPositionMs() =>
     RustLib.instance.api.crateApiAudioAudioPositionMs();
 
@@ -48,3 +54,27 @@ PlatformInt64 audioDurationMs() =>
 bool audioIsPlaying() => RustLib.instance.api.crateApiAudioAudioIsPlaying();
 
 String? audioLastError() => RustLib.instance.api.crateApiAudioAudioLastError();
+
+class OutputDeviceRow {
+  final String id;
+  final String name;
+  final bool isDefault;
+
+  const OutputDeviceRow({
+    required this.id,
+    required this.name,
+    required this.isDefault,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ isDefault.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OutputDeviceRow &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          isDefault == other.isDefault;
+}

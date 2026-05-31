@@ -11,6 +11,12 @@ fn engine() -> &'static AudioEngine {
     ENGINE.get_or_init(AudioEngine::new)
 }
 
+pub struct OutputDeviceRow {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+}
+
 /// Load `path` and start playing it (replacing anything current).
 #[flutter_rust_bridge::frb(sync)]
 pub fn audio_play_path(path: String) -> Result<(), String> {
@@ -63,6 +69,39 @@ pub fn audio_set_eq(gains: Vec<f64>, preamp_db: f64) -> Result<(), String> {
         .map_err(|_| "EQ requires exactly 10 band gains".to_string())?;
     engine().set_eq(gains, preamp_db as f32);
     Ok(())
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
+    use rodio::cpal::traits::{DeviceTrait, HostTrait};
+
+    let host = rodio::cpal::default_host();
+    let default_name = host.default_output_device().and_then(|d| d.name().ok());
+    let mut rows = vec![OutputDeviceRow {
+        id: "default".to_string(),
+        name: "System default".to_string(),
+        is_default: true,
+    }];
+    for (index, device) in host
+        .output_devices()
+        .map_err(|e| format!("cannot list output devices: {e}"))?
+        .enumerate()
+    {
+        let name = device
+            .name()
+            .unwrap_or_else(|_| format!("Output device {}", index + 1));
+        rows.push(OutputDeviceRow {
+            id: format!("device:{index}"),
+            is_default: default_name.as_deref() == Some(name.as_str()),
+            name,
+        });
+    }
+    Ok(rows)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_set_output_device(device_id: Option<String>) -> Result<(), String> {
+    engine().set_output_device(device_id)
 }
 
 #[flutter_rust_bridge::frb(sync)]
