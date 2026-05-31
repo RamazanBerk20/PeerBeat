@@ -72,6 +72,69 @@ pub fn library_track_by_id(track_id: i64) -> Result<Option<TrackRow>, String> {
     with_db(|db| tracks::track_by_id(db.conn(), track_id))
 }
 
+/// All editable tag fields for a track (read fresh from the file, so the editor
+/// can prefill every field and not clobber ones absent from [`TrackRow`]).
+pub struct TrackTags {
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub album_artist: String,
+    pub genre: String,
+    pub year: Option<i64>,
+    pub track_no: Option<i64>,
+}
+
+/// Read the current tag fields from a track's file (for the metadata editor).
+pub fn library_track_tags(track_id: i64) -> Result<TrackTags, String> {
+    with_db(|db| {
+        let row = tracks::track_by_id(db.conn(), track_id)?
+            .ok_or_else(|| anyhow::anyhow!("track not found"))?;
+        let nt = metadata::read_tags(Path::new(&row.path), 0, 0, 0)?;
+        Ok::<TrackTags, anyhow::Error>(TrackTags {
+            title: nt.title,
+            artist: nt.artists.join("; "),
+            album: nt.album.unwrap_or_default(),
+            album_artist: nt.album_artist.unwrap_or_default(),
+            genre: nt.genres.join("; "),
+            year: nt.year,
+            track_no: nt.track_no,
+        })
+    })
+}
+
+/// Write edited tags back to the track's file, then re-read it into the
+/// library. Returns the refreshed row. `artist`/`genre` accept `;`-separated
+/// multi-values; empty strings clear the field.
+#[allow(clippy::too_many_arguments)]
+pub fn library_update_tags(
+    track_id: i64,
+    title: String,
+    artist: String,
+    album: String,
+    album_artist: String,
+    genre: String,
+    year: Option<i64>,
+    track_no: Option<i64>,
+) -> Result<TrackRow, String> {
+    with_db(|db| {
+        let row = tracks::track_by_id(db.conn(), track_id)?
+            .ok_or_else(|| anyhow::anyhow!("track not found"))?;
+        let edit = metadata::TagEdit {
+            title,
+            artist,
+            album,
+            album_artist,
+            genre,
+            year,
+            track_no,
+        };
+        metadata::write_tags(Path::new(&row.path), &edit)?;
+        library::scan::rescan_file(db.conn(), Path::new(&row.path), db.art_dir(), now_ms())?;
+        tracks::track_by_id(db.conn(), track_id)?
+            .ok_or_else(|| anyhow::anyhow!("track vanished after edit"))
+    })
+}
+
 // ── Settings (key/value) ────────────────────────────────────────────────────
 
 /// Read a persisted setting, or `None` if unset.

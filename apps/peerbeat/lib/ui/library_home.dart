@@ -10,6 +10,7 @@ import '../src/rust/db/browse.dart';
 import '../src/rust/db/playlists.dart';
 import '../src/rust/db/smart.dart';
 import '../src/rust/db/tracks.dart';
+import 'edit_metadata.dart';
 import 'mini_player.dart';
 import 'network_screen.dart';
 import 'smart_playlist.dart';
@@ -299,21 +300,36 @@ class TrackArt extends StatelessWidget {
   );
 }
 
-class TrackListView extends StatelessWidget {
+class TrackListView extends StatefulWidget {
   const TrackListView({super.key, required this.tracks});
   final List<TrackRow> tracks;
 
   @override
+  State<TrackListView> createState() => _TrackListViewState();
+}
+
+class _TrackListViewState extends State<TrackListView> {
+  late List<TrackRow> _tracks = List.of(widget.tracks);
+
+  @override
+  void didUpdateWidget(TrackListView old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.tracks, widget.tracks)) {
+      _tracks = List.of(widget.tracks);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (tracks.isEmpty) {
+    if (_tracks.isEmpty) {
       return const Center(child: Text('Nothing here yet'));
     }
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) => ListView.builder(
-        itemCount: tracks.length,
+        itemCount: _tracks.length,
         itemBuilder: (_, i) {
-          final t = tracks[i];
+          final t = _tracks[i];
           final selected = player.current?.id == t.id;
           return ListTile(
             selected: selected,
@@ -344,13 +360,14 @@ class TrackListView extends StatelessWidget {
                       value: 'add_playlist',
                       child: Text('Add to playlist'),
                     ),
+                    PopupMenuItem(value: 'edit', child: Text('Edit metadata')),
                   ],
                 ),
               ],
             ),
             onTap: () async {
               try {
-                await player.playQueue(tracks, i);
+                await player.playQueue(_tracks, i);
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -379,6 +396,13 @@ class TrackListView extends StatelessWidget {
         break;
       case 'add_playlist':
         await _addTrackToPlaylist(context, track);
+        return;
+      case 'edit':
+        final updated = await showEditMetadataDialog(context, track);
+        if (updated != null) {
+          final i = _tracks.indexWhere((x) => x.id == updated.id);
+          if (i >= 0) setState(() => _tracks[i] = updated);
+        }
         return;
     }
     if (context.mounted) {

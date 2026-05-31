@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 643199233;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 20012426;
 
 // Section: executor
 
@@ -1004,6 +1004,39 @@ fn wire__crate__api__library__library_track_count_impl(
         },
     )
 }
+fn wire__crate__api__library__library_track_tags_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "library_track_tags",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_track_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::library::library_track_tags(api_track_id)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__library__library_tracks_by_year_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1031,6 +1064,55 @@ fn wire__crate__api__library__library_tracks_by_year_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::library::library_tracks_by_year(api_year)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__library__library_update_tags_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "library_update_tags",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_track_id = <i64>::sse_decode(&mut deserializer);
+            let api_title = <String>::sse_decode(&mut deserializer);
+            let api_artist = <String>::sse_decode(&mut deserializer);
+            let api_album = <String>::sse_decode(&mut deserializer);
+            let api_album_artist = <String>::sse_decode(&mut deserializer);
+            let api_genre = <String>::sse_decode(&mut deserializer);
+            let api_year = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_track_no = <Option<i64>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::library::library_update_tags(
+                        api_track_id,
+                        api_title,
+                        api_artist,
+                        api_album,
+                        api_album_artist,
+                        api_genre,
+                        api_year,
+                        api_track_no,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2255,6 +2337,28 @@ impl SseDecode for crate::db::tracks::TrackRow {
     }
 }
 
+impl SseDecode for crate::api::library::TrackTags {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_artist = <String>::sse_decode(deserializer);
+        let mut var_album = <String>::sse_decode(deserializer);
+        let mut var_albumArtist = <String>::sse_decode(deserializer);
+        let mut var_genre = <String>::sse_decode(deserializer);
+        let mut var_year = <Option<i64>>::sse_decode(deserializer);
+        let mut var_trackNo = <Option<i64>>::sse_decode(deserializer);
+        return crate::api::library::TrackTags {
+            title: var_title,
+            artist: var_artist,
+            album: var_album,
+            album_artist: var_albumArtist,
+            genre: var_genre,
+            year: var_year,
+            track_no: var_trackNo,
+        };
+    }
+}
+
 impl SseDecode for u16 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2355,62 +2459,66 @@ fn pde_ffi_dispatcher_primary_impl(
         30 => {
             wire__crate__api__library__library_track_count_impl(port, ptr, rust_vec_len, data_len)
         }
-        31 => wire__crate__api__library__library_tracks_by_year_impl(
+        31 => wire__crate__api__library__library_track_tags_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__library__library_tracks_by_year_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__network__net_discover_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__network__net_host_port_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__network__net_is_hosting_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__network__net_start_host_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__network__net_stop_host_impl(port, ptr, rust_vec_len, data_len),
-        37 => {
+        33 => {
+            wire__crate__api__library__library_update_tags_impl(port, ptr, rust_vec_len, data_len)
+        }
+        34 => wire__crate__api__network__net_discover_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__network__net_host_port_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__network__net_is_hosting_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__network__net_start_host_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__network__net_stop_host_impl(port, ptr, rust_vec_len, data_len),
+        39 => {
             wire__crate__api__library__playlist_add_tracks_impl(port, ptr, rust_vec_len, data_len)
         }
-        38 => wire__crate__api__library__playlist_create_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__library__playlist_delete_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__library__playlist_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__library__playlist_export_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__library__playlist_import_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__library__playlist_list_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__library__playlist_remove_position_impl(
+        40 => wire__crate__api__library__playlist_create_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__library__playlist_delete_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__library__playlist_duplicate_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__library__playlist_export_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__library__playlist_import_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__library__playlist_list_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__library__playlist_remove_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__library__playlist_rename_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__library__playlist_reorder_tracks_impl(
+        47 => wire__crate__api__library__playlist_rename_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__library__playlist_reorder_tracks_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__library__playlist_tracks_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__library__settings_delete_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__library__settings_get_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__library__settings_set_impl(port, ptr, rust_vec_len, data_len),
-        51 => {
+        49 => wire__crate__api__library__playlist_tracks_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__library__settings_delete_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__library__settings_get_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__library__settings_set_impl(port, ptr, rust_vec_len, data_len),
+        53 => {
             wire__crate__api__library__smart_playlist_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        52 => {
+        54 => {
             wire__crate__api__library__smart_playlist_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        53 => {
+        55 => {
             wire__crate__api__library__smart_playlist_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        54 => wire__crate__api__library__smart_playlist_preview_impl(
+        56 => wire__crate__api__library__smart_playlist_preview_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => {
+        57 => {
             wire__crate__api__library__smart_playlist_tracks_impl(port, ptr, rust_vec_len, data_len)
         }
-        56 => {
+        58 => {
             wire__crate__api__library__smart_playlist_update_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -2643,6 +2751,32 @@ impl flutter_rust_bridge::IntoIntoDart<crate::db::tracks::TrackRow>
     for crate::db::tracks::TrackRow
 {
     fn into_into_dart(self) -> crate::db::tracks::TrackRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::library::TrackTags {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.title.into_into_dart().into_dart(),
+            self.artist.into_into_dart().into_dart(),
+            self.album.into_into_dart().into_dart(),
+            self.album_artist.into_into_dart().into_dart(),
+            self.genre.into_into_dart().into_dart(),
+            self.year.into_into_dart().into_dart(),
+            self.track_no.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::library::TrackTags
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::library::TrackTags>
+    for crate::api::library::TrackTags
+{
+    fn into_into_dart(self) -> crate::api::library::TrackTags {
         self
     }
 }
@@ -2926,6 +3060,19 @@ impl SseEncode for crate::db::tracks::TrackRow {
         <i64>::sse_encode(self.played_count, serializer);
         <String>::sse_encode(self.path, serializer);
         <Option<String>>::sse_encode(self.art_path, serializer);
+    }
+}
+
+impl SseEncode for crate::api::library::TrackTags {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.title, serializer);
+        <String>::sse_encode(self.artist, serializer);
+        <String>::sse_encode(self.album, serializer);
+        <String>::sse_encode(self.album_artist, serializer);
+        <String>::sse_encode(self.genre, serializer);
+        <Option<i64>>::sse_encode(self.year, serializer);
+        <Option<i64>>::sse_encode(self.track_no, serializer);
     }
 }
 

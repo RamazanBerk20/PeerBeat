@@ -1,8 +1,9 @@
 //! Tag + audio-property reading via `lofty` (MP3/FLAC/WAV/AAC/OGG/M4A).
 
 use crate::db::tracks::NewTrack;
+use lofty::config::WriteOptions;
 use lofty::file::{AudioFile, TaggedFileExt};
-use lofty::tag::{Accessor, ItemKey};
+use lofty::tag::{Accessor, ItemKey, Tag, TagExt};
 use std::path::Path;
 
 /// Audio file extensions PeerBeat imports.
@@ -120,6 +121,61 @@ pub fn read_tags(
     }
 
     Ok(nt)
+}
+
+/// Editable tag fields for write-back. Empty strings clear the field; a
+/// multi-value artist/genre may be entered with `;` separators (re-split on
+/// the next scan via [`split_multi`]).
+#[derive(Debug, Clone, Default)]
+pub struct TagEdit {
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub album_artist: String,
+    pub genre: String,
+    pub year: Option<i64>,
+    pub track_no: Option<i64>,
+}
+
+/// Write `edit` back into `path`'s primary tag (creating one if the file has
+/// none). The file's audio data is untouched.
+pub fn write_tags(path: &Path, edit: &TagEdit) -> anyhow::Result<()> {
+    let mut tagged = lofty::read_from_path(path)?;
+    if tagged.primary_tag().is_none() {
+        let tt = tagged.primary_tag_type();
+        tagged.insert_tag(Tag::new(tt));
+    }
+    let tag = tagged
+        .primary_tag_mut()
+        .ok_or_else(|| anyhow::anyhow!("this file format does not support tags"))?;
+
+    let set_or_clear = |tag: &mut Tag, value: &str, key: ItemKey| {
+        let v = value.trim();
+        if v.is_empty() {
+            tag.remove_key(key);
+        } else {
+            tag.insert_text(key, v.to_string());
+        }
+    };
+    set_or_clear(tag, &edit.title, ItemKey::TrackTitle);
+    set_or_clear(tag, &edit.artist, ItemKey::TrackArtist);
+    set_or_clear(tag, &edit.album, ItemKey::AlbumTitle);
+    set_or_clear(tag, &edit.album_artist, ItemKey::AlbumArtist);
+    set_or_clear(tag, &edit.genre, ItemKey::Genre);
+
+    match edit.year {
+        Some(y) if y > 0 => {
+            tag.insert_text(ItemKey::Year, y.to_string());
+        }
+        _ => tag.remove_key(ItemKey::Year),
+    }
+    match edit.track_no {
+        Some(n) if n > 0 => tag.set_track(n as u32),
+        _ => tag.remove_track(),
+    }
+
+    tag.save_to_path(path, WriteOptions::default())?;
+    Ok(())
 }
 
 #[cfg(test)]

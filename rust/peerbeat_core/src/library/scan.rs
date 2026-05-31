@@ -118,6 +118,34 @@ pub fn scan_folder(
     Ok(stats)
 }
 
+/// Re-read a single file's tags + properties and upsert it, preserving the
+/// existing `added_at` when the track is already known (else `now_ms`). Used
+/// after a tag write-back and (later) by the folder watcher.
+pub fn rescan_file(
+    conn: &Connection,
+    path: &Path,
+    art_dir: &Path,
+    now_ms: i64,
+) -> anyhow::Result<()> {
+    let md = std::fs::metadata(path)?;
+    let size = md.len();
+    let mt = mtime_ns(&md);
+    let norm = normalize_path(path);
+    let added_at: i64 = conn
+        .query_row(
+            "SELECT added_at FROM tracks WHERE normalized_path = ?1",
+            [&norm],
+            |r| r.get(0),
+        )
+        .optional()?
+        .unwrap_or(now_ms);
+    let mut nt = read_tags(path, size as i64, mt, added_at)?;
+    nt.content_hash = content_hash(path, size).ok();
+    let id = upsert_track(conn, &nt)?;
+    super::art::link_album_art(conn, id, path, art_dir)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +215,55 @@ mod tests {
         // searchable by filename-derived title
         let hits = search_tracks(db.conn(), "track", 10).unwrap();
         assert_eq!(hits.len(), 2);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn tag_write_back_updates_library() {
+        use crate::library::metadata::{write_tags, TagEdit};
+        let dir = unique_tmp();
+        let f = dir.join("song.wav");
+        write_wav(&f, 1);
+
+        let db = Db::open_in_memory().unwrap();
+        scan_folder(db.conn(), &dir, 1, db.art_dir()).unwrap();
+
+        write_tags(
+            &f,
+            &TagEdit {
+                title: "Edited Title".into(),
+                artist: "New Artist".into(),
+                album: "New Album".into(),
+                year: Some(2021),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        rescan_file(db.conn(), &f, db.art_dir(), 2).unwrap();
+
+        let title: String = db
+            .conn()
+            .query_row(
+                "SELECT title FROM tracks WHERE normalized_path LIKE '%song.wav'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(title, "Edited Title");
+
+        let artist: String = db
+            .conn()
+            .query_row(
+                "SELECT a.name FROM track_artists ta \
+                 JOIN artists a ON a.id = ta.artist_id \
+                 JOIN tracks t ON t.id = ta.track_id \
+                 WHERE t.normalized_path LIKE '%song.wav'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(artist, "New Artist");
 
         std::fs::remove_dir_all(&dir).ok();
     }

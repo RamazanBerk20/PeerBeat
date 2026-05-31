@@ -42,6 +42,33 @@ Future<List<TrackRow>> librarySearch({
 Future<TrackRow?> libraryTrackById({required PlatformInt64 trackId}) =>
     RustLib.instance.api.crateApiLibraryLibraryTrackById(trackId: trackId);
 
+/// Read the current tag fields from a track's file (for the metadata editor).
+Future<TrackTags> libraryTrackTags({required PlatformInt64 trackId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryTrackTags(trackId: trackId);
+
+/// Write edited tags back to the track's file, then re-read it into the
+/// library. Returns the refreshed row. `artist`/`genre` accept `;`-separated
+/// multi-values; empty strings clear the field.
+Future<TrackRow> libraryUpdateTags({
+  required PlatformInt64 trackId,
+  required String title,
+  required String artist,
+  required String album,
+  required String albumArtist,
+  required String genre,
+  PlatformInt64? year,
+  PlatformInt64? trackNo,
+}) => RustLib.instance.api.crateApiLibraryLibraryUpdateTags(
+  trackId: trackId,
+  title: title,
+  artist: artist,
+  album: album,
+  albumArtist: albumArtist,
+  genre: genre,
+  year: year,
+  trackNo: trackNo,
+);
+
 /// Read a persisted setting, or `None` if unset.
 Future<String?> settingsGet({required String key}) =>
     RustLib.instance.api.crateApiLibrarySettingsGet(key: key);
@@ -256,4 +283,49 @@ class ScanReport {
           updated == other.updated &&
           skipped == other.skipped &&
           errors == other.errors;
+}
+
+/// All editable tag fields for a track (read fresh from the file, so the editor
+/// can prefill every field and not clobber ones absent from [`TrackRow`]).
+class TrackTags {
+  final String title;
+  final String artist;
+  final String album;
+  final String albumArtist;
+  final String genre;
+  final PlatformInt64? year;
+  final PlatformInt64? trackNo;
+
+  const TrackTags({
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.albumArtist,
+    required this.genre,
+    this.year,
+    this.trackNo,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      artist.hashCode ^
+      album.hashCode ^
+      albumArtist.hashCode ^
+      genre.hashCode ^
+      year.hashCode ^
+      trackNo.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TrackTags &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          artist == other.artist &&
+          album == other.album &&
+          albumArtist == other.albumArtist &&
+          genre == other.genre &&
+          year == other.year &&
+          trackNo == other.trackNo;
 }
