@@ -118,6 +118,70 @@ pub fn scan_folder(
     Ok(stats)
 }
 
+/// A `LIKE` pattern matching exactly the tracks whose files live under `root`
+/// (with a trailing `/` so `/m/Music` doesn't also match `/m/MusicVideos`).
+fn under_root_like(root: &Path) -> String {
+    let norm = normalize_path(root);
+    format!("{}/%", norm.trim_end_matches('/'))
+}
+
+fn delete_track(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM tracks WHERE id = ?1", [id])?;
+    // tracks_fts stores its own copy (not external-content) → delete explicitly.
+    conn.execute("DELETE FROM tracks_fts WHERE rowid = ?1", [id])?;
+    Ok(())
+}
+
+/// Delete every track whose file lives under `root` (used when forgetting a
+/// library folder). Track-artist/genre joins cascade via the schema.
+pub fn delete_under_root(conn: &Connection, root: &Path) -> rusqlite::Result<usize> {
+    let like = under_root_like(root);
+    let ids: Vec<i64> = {
+        let mut stmt = conn.prepare("SELECT id FROM tracks WHERE normalized_path LIKE ?1")?;
+        let rows = stmt.query_map([&like], |r| r.get(0))?;
+        rows.collect::<rusqlite::Result<_>>()?
+    };
+    for id in &ids {
+        delete_track(conn, *id)?;
+    }
+    Ok(ids.len())
+}
+
+/// Remove DB tracks under `root` whose files no longer exist on disk. Safe
+/// against an inaccessible/unmounted root: if walking the tree finds **no**
+/// audio files at all, nothing is pruned (we assume the volume is missing,
+/// not that every track was deleted).
+pub fn prune_missing(conn: &Connection, root: &Path) -> rusqlite::Result<usize> {
+    let mut present = std::collections::HashSet::new();
+    for entry in WalkDir::new(root)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        if entry.file_type().is_file() && is_audio(entry.path()) {
+            present.insert(normalize_path(entry.path()));
+        }
+    }
+    if present.is_empty() {
+        return Ok(0); // inaccessible / empty root — do not prune
+    }
+    let like = under_root_like(root);
+    let candidates: Vec<(i64, String)> = {
+        let mut stmt =
+            conn.prepare("SELECT id, normalized_path FROM tracks WHERE normalized_path LIKE ?1")?;
+        let rows = stmt.query_map([&like], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<rusqlite::Result<_>>()?
+    };
+    let mut removed = 0;
+    for (id, np) in candidates {
+        if !present.contains(&np) {
+            delete_track(conn, id)?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 /// Re-read a single file's tags + properties and upsert it, preserving the
 /// existing `added_at` when the track is already known (else `now_ms`). Used
 /// after a tag write-back and (later) by the folder watcher.
@@ -216,6 +280,44 @@ mod tests {
         let hits = search_tracks(db.conn(), "track", 10).unwrap();
         assert_eq!(hits.len(), 2);
 
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn prune_missing_removes_deleted_but_guards_empty_root() {
+        let dir = unique_tmp();
+        write_wav(&dir.join("a.wav"), 1);
+        write_wav(&dir.join("b.wav"), 1);
+        let db = Db::open_in_memory().unwrap();
+        scan_folder(db.conn(), &dir, 1, db.art_dir()).unwrap();
+        assert_eq!(
+            db.conn()
+                .query_row("SELECT count(*) FROM tracks", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+
+        // delete one file on disk → prune removes exactly that track
+        std::fs::remove_file(dir.join("b.wav")).unwrap();
+        let removed = prune_missing(db.conn(), &dir).unwrap();
+        assert_eq!(removed, 1);
+        assert_eq!(
+            db.conn()
+                .query_row("SELECT count(*) FROM tracks", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+
+        // wipe the rest → empty root is treated as inaccessible (no prune)
+        std::fs::remove_file(dir.join("a.wav")).unwrap();
+        assert_eq!(prune_missing(db.conn(), &dir).unwrap(), 0);
+        assert_eq!(
+            db.conn()
+                .query_row("SELECT count(*) FROM tracks", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1,
+            "must not prune when the root yields no audio files"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

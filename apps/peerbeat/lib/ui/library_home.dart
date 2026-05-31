@@ -7,6 +7,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
 import '../playback/player.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/db/browse.dart';
+import '../src/rust/db/folders.dart';
 import '../src/rust/db/playlists.dart';
 import '../src/rust/db/smart.dart';
 import '../src/rust/db/tracks.dart';
@@ -71,6 +72,17 @@ class _LibraryHomeState extends State<LibraryHome> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _manageFolders() async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _FoldersDialog(),
+    );
+    if (changed == true && mounted) {
+      await _refreshCount();
+      setState(() => _version++);
     }
   }
 
@@ -157,6 +169,12 @@ class _LibraryHomeState extends State<LibraryHome> {
                 ),
               if (_section == 0)
                 IconButton(
+                  tooltip: 'Library folders',
+                  onPressed: _busy ? null : _manageFolders,
+                  icon: const Icon(Icons.folder_outlined),
+                ),
+              if (_section == 0)
+                IconButton(
                   tooltip: 'Scan folder',
                   onPressed: _busy ? null : _scan,
                   icon: const Icon(Icons.create_new_folder_outlined),
@@ -206,6 +224,142 @@ class _LibraryHomeState extends State<LibraryHome> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Manage library source folders: list, rescan-all (prunes deleted files), and
+/// remove. Pops `true` if anything changed so the caller can refresh.
+class _FoldersDialog extends StatefulWidget {
+  const _FoldersDialog();
+
+  @override
+  State<_FoldersDialog> createState() => _FoldersDialogState();
+}
+
+class _FoldersDialogState extends State<_FoldersDialog> {
+  late Future<List<FolderRow>> _future = libraryFolders();
+  bool _changed = false;
+  bool _busy = false;
+
+  void _reload() => setState(() => _future = libraryFolders());
+
+  Future<void> _rescanAll() async {
+    setState(() => _busy = true);
+    try {
+      final r = await libraryRescanAll();
+      _changed = true;
+      _reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Rescan: ${r.added} added, ${r.updated} updated, '
+              '${r.removed} removed',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Rescan failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _remove(FolderRow f) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove folder?'),
+        content: Text(
+          'Forget "${f.path}" and remove its tracks from the library? '
+          'Files on disk are not deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await libraryRemoveFolder(folderId: f.id);
+    _changed = true;
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Expanded(child: Text('Library folders')),
+          TextButton.icon(
+            onPressed: _busy ? null : _rescanAll,
+            icon: _busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+            label: const Text('Rescan all'),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 460,
+        height: 320,
+        child: FutureBuilder<List<FolderRow>>(
+          future: _future,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final folders = snap.data!;
+            if (folders.isEmpty) {
+              return const Center(
+                child: Text('No folders yet — use "Scan folder".'),
+              );
+            }
+            return ListView.builder(
+              itemCount: folders.length,
+              itemBuilder: (_, i) {
+                final f = folders[i];
+                return ListTile(
+                  leading: const Icon(Icons.folder),
+                  title: Text(
+                    f.path,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Remove',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _remove(f),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, _changed),
+          child: const Text('Done'),
+        ),
+      ],
     );
   }
 }

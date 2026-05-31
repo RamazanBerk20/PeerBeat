@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../db/browse.dart';
+import '../db/folders.dart';
 import '../db/playlists.dart';
 import '../db/smart.dart';
 import '../db/tracks.dart';
@@ -16,9 +17,23 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 Future<void> libraryOpen({required String dbPath}) =>
     RustLib.instance.api.crateApiLibraryLibraryOpen(dbPath: dbPath);
 
-/// Recursively scan `path`, importing new/changed audio files. Returns counts.
+/// Recursively scan `path`, importing new/changed audio files, and remember it
+/// as a library folder. Returns counts.
 Future<ScanReport> libraryScan({required String path}) =>
     RustLib.instance.api.crateApiLibraryLibraryScan(path: path);
+
+/// The folders the user has scanned (library sources).
+Future<List<FolderRow>> libraryFolders() =>
+    RustLib.instance.api.crateApiLibraryLibraryFolders();
+
+/// Forget a library folder and remove the tracks under it.
+Future<void> libraryRemoveFolder({required PlatformInt64 folderId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryRemoveFolder(folderId: folderId);
+
+/// Re-scan every known folder: import new/changed files and prune tracks whose
+/// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
+Future<ScanReport> libraryRescanAll() =>
+    RustLib.instance.api.crateApiLibraryLibraryRescanAll();
 
 /// Browse all songs ordered by title, paginated.
 Future<List<TrackRow>> libraryBrowseSongs({
@@ -256,23 +271,31 @@ class PlaylistImportReport {
           total == other.total;
 }
 
-/// Result of a folder scan.
+/// Result of a folder scan (or a rescan-all).
 class ScanReport {
   final int added;
   final int updated;
   final int skipped;
   final int errors;
 
+  /// Tracks pruned because their files no longer exist (rescan-all only).
+  final int removed;
+
   const ScanReport({
     required this.added,
     required this.updated,
     required this.skipped,
     required this.errors,
+    required this.removed,
   });
 
   @override
   int get hashCode =>
-      added.hashCode ^ updated.hashCode ^ skipped.hashCode ^ errors.hashCode;
+      added.hashCode ^
+      updated.hashCode ^
+      skipped.hashCode ^
+      errors.hashCode ^
+      removed.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -282,7 +305,8 @@ class ScanReport {
           added == other.added &&
           updated == other.updated &&
           skipped == other.skipped &&
-          errors == other.errors;
+          errors == other.errors &&
+          removed == other.removed;
 }
 
 /// All editable tag fields for a track (read fresh from the file, so the editor

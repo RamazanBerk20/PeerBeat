@@ -4,6 +4,7 @@
 //! and network APIs are added in later milestones.
 
 use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
+use crate::db::folders::{self, FolderRow};
 use crate::db::playlists::{self, PlaylistRow};
 use crate::db::smart::{self, SmartPlaylistRow};
 use crate::db::tracks::{self, TrackRow};
@@ -30,12 +31,14 @@ fn with_db<T, E: std::fmt::Display>(f: impl FnOnce(&Db) -> Result<T, E>) -> Resu
     f(db).map_err(|e| e.to_string())
 }
 
-/// Result of a folder scan.
+/// Result of a folder scan (or a rescan-all).
 pub struct ScanReport {
     pub added: u32,
     pub updated: u32,
     pub skipped: u32,
     pub errors: u32,
+    /// Tracks pruned because their files no longer exist (rescan-all only).
+    pub removed: u32,
 }
 
 /// Open (creating if needed) the library database at `db_path`.
@@ -45,16 +48,60 @@ pub fn library_open(db_path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Recursively scan `path`, importing new/changed audio files. Returns counts.
+/// Recursively scan `path`, importing new/changed audio files, and remember it
+/// as a library folder. Returns counts.
 pub fn library_scan(path: String) -> Result<ScanReport, String> {
     let added_at = now_ms();
-    with_db(|db| library::scan_folder(db.conn(), &PathBuf::from(&path), added_at, db.art_dir()))
-        .map(|s| ScanReport {
+    with_db(|db| -> anyhow::Result<ScanReport> {
+        let root = PathBuf::from(&path);
+        let s = library::scan_folder(db.conn(), &root, added_at, db.art_dir())?;
+        folders::add(db.conn(), &path, added_at)?;
+        Ok(ScanReport {
             added: s.added as u32,
             updated: s.updated as u32,
             skipped: s.skipped as u32,
             errors: s.errors as u32,
+            removed: 0,
         })
+    })
+}
+
+// ── Library folders (sources) ───────────────────────────────────────────────
+
+/// The folders the user has scanned (library sources).
+pub fn library_folders() -> Result<Vec<FolderRow>, String> {
+    with_db(|db| folders::list(db.conn()))
+}
+
+/// Forget a library folder and remove the tracks under it.
+pub fn library_remove_folder(folder_id: i64) -> Result<(), String> {
+    with_db(|db| folders::remove(db.conn(), folder_id))
+}
+
+/// Re-scan every known folder: import new/changed files and prune tracks whose
+/// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
+pub fn library_rescan_all() -> Result<ScanReport, String> {
+    let now = now_ms();
+    with_db(|db| -> anyhow::Result<ScanReport> {
+        let mut rep = ScanReport {
+            added: 0,
+            updated: 0,
+            skipped: 0,
+            errors: 0,
+            removed: 0,
+        };
+        for f in folders::list(db.conn())? {
+            let root = PathBuf::from(&f.path);
+            let s = library::scan_folder(db.conn(), &root, now, db.art_dir())?;
+            let pruned = library::scan::prune_missing(db.conn(), &root)?;
+            rep.added += s.added as u32;
+            rep.updated += s.updated as u32;
+            rep.skipped += s.skipped as u32;
+            rep.errors += s.errors as u32;
+            rep.removed += pruned as u32;
+        }
+        Ok(rep)
+    })
 }
 
 /// Browse all songs ordered by title, paginated.

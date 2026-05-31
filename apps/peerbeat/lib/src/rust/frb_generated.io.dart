@@ -12,6 +12,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'db/browse.dart';
+import 'db/folders.dart';
 import 'db/playlists.dart';
 import 'db/smart.dart';
 import 'db/tracks.dart';
@@ -52,6 +53,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  FolderRow dco_decode_folder_row(dynamic raw);
+
+  @protected
   GenreRow dco_decode_genre_row(dynamic raw);
 
   @protected
@@ -65,6 +69,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ArtistRow> dco_decode_list_artist_row(dynamic raw);
+
+  @protected
+  List<FolderRow> dco_decode_list_folder_row(dynamic raw);
 
   @protected
   List<GenreRow> dco_decode_list_genre_row(dynamic raw);
@@ -160,6 +167,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  FolderRow sse_decode_folder_row(SseDeserializer deserializer);
+
+  @protected
   GenreRow sse_decode_genre_row(SseDeserializer deserializer);
 
   @protected
@@ -173,6 +183,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ArtistRow> sse_decode_list_artist_row(SseDeserializer deserializer);
+
+  @protected
+  List<FolderRow> sse_decode_list_folder_row(SseDeserializer deserializer);
 
   @protected
   List<GenreRow> sse_decode_list_genre_row(SseDeserializer deserializer);
@@ -281,6 +294,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_folder_row(FolderRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_genre_row(GenreRow self, SseSerializer serializer);
 
   @protected
@@ -295,6 +311,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_artist_row(
     List<ArtistRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_folder_row(
+    List<FolderRow> self,
     SseSerializer serializer,
   );
 
