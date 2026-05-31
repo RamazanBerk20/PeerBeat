@@ -152,6 +152,12 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setRepeat(RepeatMode mode) {
+    if (mode == _repeat) return;
+    _repeat = mode;
+    notifyListeners();
+  }
+
   void toggleMute() {
     _muted = !_muted;
     _engine.setVolume(_muted ? 0.0 : _volume);

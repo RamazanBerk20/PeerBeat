@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app_config.dart';
+import 'os/os_media_controller.dart';
 import 'playback/player.dart';
 import 'src/rust/api/library.dart';
 import 'src/rust/frb_generated.dart';
@@ -18,6 +19,7 @@ Future<void> main() async {
     appDisplayName = _deviceName();
     await libraryOpen(dbPath: appDbPath);
     await player.restoreSession(); // best-effort: restore last track + position
+    await osMedia.start(); // best-effort: MPRIS media-key/lockscreen on Linux
   } catch (e, st) {
     debugPrintStack(label: 'PeerBeat startup failed', stackTrace: st);
     runApp(_StartupErrorApp(error: '$e'));
