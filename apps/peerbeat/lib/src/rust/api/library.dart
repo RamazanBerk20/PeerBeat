@@ -5,6 +5,7 @@
 
 import '../db/browse.dart';
 import '../db/playlists.dart';
+import '../db/smart.dart';
 import '../db/tracks.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -155,6 +156,48 @@ Future<void> playlistExport({
 }) => RustLib.instance.api.crateApiLibraryPlaylistExport(
   playlistId: playlistId,
   filePath: filePath,
+);
+
+Future<List<SmartPlaylistRow>> smartPlaylistList() =>
+    RustLib.instance.api.crateApiLibrarySmartPlaylistList();
+
+/// Create a smart playlist after validating the rule JSON compiles.
+Future<PlatformInt64> smartPlaylistCreate({
+  required String name,
+  required String ruleJson,
+  PlatformInt64? limitN,
+}) => RustLib.instance.api.crateApiLibrarySmartPlaylistCreate(
+  name: name,
+  ruleJson: ruleJson,
+  limitN: limitN,
+);
+
+Future<void> smartPlaylistUpdate({
+  required PlatformInt64 smartId,
+  required String name,
+  required String ruleJson,
+  PlatformInt64? limitN,
+}) => RustLib.instance.api.crateApiLibrarySmartPlaylistUpdate(
+  smartId: smartId,
+  name: name,
+  ruleJson: ruleJson,
+  limitN: limitN,
+);
+
+Future<void> smartPlaylistDelete({required PlatformInt64 smartId}) =>
+    RustLib.instance.api.crateApiLibrarySmartPlaylistDelete(smartId: smartId);
+
+/// Resolve a saved smart playlist to its current matching tracks.
+Future<List<TrackRow>> smartPlaylistTracks({required PlatformInt64 smartId}) =>
+    RustLib.instance.api.crateApiLibrarySmartPlaylistTracks(smartId: smartId);
+
+/// Preview a rule set without saving it (for the rule builder UI).
+Future<List<TrackRow>> smartPlaylistPreview({
+  required String ruleJson,
+  PlatformInt64? limitN,
+}) => RustLib.instance.api.crateApiLibrarySmartPlaylistPreview(
+  ruleJson: ruleJson,
+  limitN: limitN,
 );
 
 /// Outcome of importing a playlist file.

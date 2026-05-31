@@ -8,9 +8,11 @@ import '../playback/player.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/db/browse.dart';
 import '../src/rust/db/playlists.dart';
+import '../src/rust/db/smart.dart';
 import '../src/rust/db/tracks.dart';
 import 'mini_player.dart';
 import 'network_screen.dart';
+import 'smart_playlist.dart';
 
 String fmtDuration(int ms) {
   final s = (ms / 1000).round();
@@ -488,28 +490,78 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     }
   }
 
+  Future<void> _createSmart() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const SmartPlaylistEditor()),
+    );
+    if (saved == true && mounted) _refresh();
+  }
+
+  Future<void> _editSmart(SmartPlaylistRow s) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => SmartPlaylistEditor(existing: s)),
+    );
+    if (saved == true && mounted) _refresh();
+  }
+
+  Future<void> _deleteSmart(SmartPlaylistRow s) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete smart playlist?'),
+        content: Text('Delete "${s.name}" permanently?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await smartPlaylistDelete(smartId: s.id);
+      if (mounted) _refresh();
+    }
+  }
+
+  Future<(List<PlaylistRow>, List<SmartPlaylistRow>)> _load() async {
+    final manual = await playlistList();
+    final smart = await smartPlaylistList();
+    return (manual, smart);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<PlaylistRow>>(
+    return FutureBuilder<(List<PlaylistRow>, List<SmartPlaylistRow>)>(
       key: ValueKey(_version),
-      future: playlistList(),
+      future: _load(),
       builder: (context, snap) {
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final playlists = snap.data!;
+        final (playlists, smarts) = snap.data!;
         return Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              child: Row(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   FilledButton.icon(
                     onPressed: _create,
                     icon: const Icon(Icons.add),
                     label: const Text('New playlist'),
                   ),
-                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: _createSmart,
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('Smart'),
+                  ),
                   OutlinedButton.icon(
                     onPressed: _import,
                     icon: const Icon(Icons.file_open),
@@ -519,52 +571,18 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ),
             ),
             Expanded(
-              child: playlists.isEmpty
+              child: (playlists.isEmpty && smarts.isEmpty)
                   ? const Center(child: Text('No playlists yet'))
-                  : ListView.builder(
-                      itemCount: playlists.length,
-                      itemBuilder: (_, i) {
-                        final p = playlists[i];
-                        return ListTile(
-                          leading: const CircleAvatar(
-                            child: Icon(Icons.queue_music),
+                  : ListView(
+                      children: [
+                        for (final p in playlists) _manualTile(p),
+                        if (smarts.isNotEmpty)
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                            child: Text('Smart playlists'),
                           ),
-                          title: Text(p.name),
-                          subtitle: Text('${p.trackCount} tracks'),
-                          trailing: PopupMenuButton<String>(
-                            onSelected: (value) async {
-                              await _handlePlaylistAction(context, value, p);
-                              if (mounted) _refresh();
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(
-                                value: 'rename',
-                                child: Text('Rename'),
-                              ),
-                              PopupMenuItem(
-                                value: 'duplicate',
-                                child: Text('Duplicate'),
-                              ),
-                              PopupMenuItem(
-                                value: 'export',
-                                child: Text('Export…'),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text('Delete'),
-                              ),
-                            ],
-                          ),
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => _PlaylistDetail(playlist: p),
-                              ),
-                            );
-                            if (mounted) _refresh();
-                          },
-                        );
-                      },
+                        for (final s in smarts) _smartTile(s),
+                      ],
                     ),
             ),
           ],
@@ -572,6 +590,49 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       },
     );
   }
+
+  Widget _manualTile(PlaylistRow p) => ListTile(
+    leading: const CircleAvatar(child: Icon(Icons.queue_music)),
+    title: Text(p.name),
+    subtitle: Text('${p.trackCount} tracks'),
+    trailing: PopupMenuButton<String>(
+      onSelected: (value) async {
+        await _handlePlaylistAction(context, value, p);
+        if (mounted) _refresh();
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'rename', child: Text('Rename')),
+        PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
+        PopupMenuItem(value: 'export', child: Text('Export…')),
+        PopupMenuItem(value: 'delete', child: Text('Delete')),
+      ],
+    ),
+    onTap: () async {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => _PlaylistDetail(playlist: p)));
+      if (mounted) _refresh();
+    },
+  );
+
+  Widget _smartTile(SmartPlaylistRow s) => ListTile(
+    leading: const CircleAvatar(child: Icon(Icons.auto_awesome)),
+    title: Text(s.name),
+    subtitle: const Text('Smart'),
+    trailing: PopupMenuButton<String>(
+      onSelected: (value) {
+        if (value == 'edit') _editSmart(s);
+        if (value == 'delete') _deleteSmart(s);
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'edit', child: Text('Edit')),
+        PopupMenuItem(value: 'delete', child: Text('Delete')),
+      ],
+    ),
+    onTap: () => Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => SmartPlaylistDetail(smart: s))),
+  );
 }
 
 class _PlaylistDetail extends StatefulWidget {

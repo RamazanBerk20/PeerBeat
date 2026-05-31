@@ -5,6 +5,7 @@
 
 use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
 use crate::db::playlists::{self, PlaylistRow};
+use crate::db::smart::{self, SmartPlaylistRow};
 use crate::db::tracks::{self, TrackRow};
 use crate::db::{settings, Db};
 use crate::library::{self, metadata, playlist_io};
@@ -255,6 +256,61 @@ fn import_playlist_file(db: &Db, file_path: &str) -> anyhow::Result<PlaylistImpo
 /// (`.pls` → PLS, otherwise extended M3U).
 pub fn playlist_export(playlist_id: i64, file_path: String) -> Result<(), String> {
     with_db(|db| export_playlist_file(db, playlist_id, &file_path))
+}
+
+// ── Smart playlists (JSON rule sets) ────────────────────────────────────────
+
+pub fn smart_playlist_list() -> Result<Vec<SmartPlaylistRow>, String> {
+    with_db(|db| smart::list(db.conn()))
+}
+
+/// Create a smart playlist after validating the rule JSON compiles.
+pub fn smart_playlist_create(
+    name: String,
+    rule_json: String,
+    limit_n: Option<i64>,
+) -> Result<i64, String> {
+    let clean = name.trim().to_string();
+    if clean.is_empty() {
+        return Err("playlist name cannot be empty".to_string());
+    }
+    smart::validate(&rule_json, now_ms())?;
+    with_db(|db| smart::create(db.conn(), &clean, &rule_json, limit_n, now_ms()))
+}
+
+pub fn smart_playlist_update(
+    smart_id: i64,
+    name: String,
+    rule_json: String,
+    limit_n: Option<i64>,
+) -> Result<(), String> {
+    let clean = name.trim().to_string();
+    if clean.is_empty() {
+        return Err("playlist name cannot be empty".to_string());
+    }
+    smart::validate(&rule_json, now_ms())?;
+    with_db(|db| smart::update(db.conn(), smart_id, &clean, &rule_json, limit_n, now_ms()))
+}
+
+pub fn smart_playlist_delete(smart_id: i64) -> Result<(), String> {
+    with_db(|db| smart::delete(db.conn(), smart_id))
+}
+
+/// Resolve a saved smart playlist to its current matching tracks.
+pub fn smart_playlist_tracks(smart_id: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| {
+        let sp = smart::get(db.conn(), smart_id)?
+            .ok_or_else(|| anyhow::anyhow!("smart playlist not found"))?;
+        smart::tracks_for_rules(db.conn(), &sp.rule_json, sp.limit_n, now_ms())
+    })
+}
+
+/// Preview a rule set without saving it (for the rule builder UI).
+pub fn smart_playlist_preview(
+    rule_json: String,
+    limit_n: Option<i64>,
+) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| smart::tracks_for_rules(db.conn(), &rule_json, limit_n, now_ms()))
 }
 
 fn export_playlist_file(db: &Db, playlist_id: i64, file_path: &str) -> anyhow::Result<()> {

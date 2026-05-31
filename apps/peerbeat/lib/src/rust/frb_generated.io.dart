@@ -13,6 +13,7 @@ import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'db/browse.dart';
 import 'db/playlists.dart';
+import 'db/smart.dart';
 import 'db/tracks.dart';
 import 'frb_generated.dart';
 import 'net/discovery.dart';
@@ -81,6 +82,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<SmartPlaylistRow> dco_decode_list_smart_playlist_row(dynamic raw);
+
+  @protected
   List<TrackRow> dco_decode_list_track_row(dynamic raw);
 
   @protected
@@ -106,6 +110,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScanReport dco_decode_scan_report(dynamic raw);
+
+  @protected
+  SmartPlaylistRow dco_decode_smart_playlist_row(dynamic raw);
 
   @protected
   TrackRow dco_decode_track_row(dynamic raw);
@@ -180,6 +187,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<SmartPlaylistRow> sse_decode_list_smart_playlist_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TrackRow> sse_decode_list_track_row(SseDeserializer deserializer);
 
   @protected
@@ -207,6 +219,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScanReport sse_decode_scan_report(SseDeserializer deserializer);
+
+  @protected
+  SmartPlaylistRow sse_decode_smart_playlist_row(SseDeserializer deserializer);
 
   @protected
   TrackRow sse_decode_track_row(SseDeserializer deserializer);
@@ -302,6 +317,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_smart_playlist_row(
+    List<SmartPlaylistRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_track_row(List<TrackRow> self, SseSerializer serializer);
 
   @protected
@@ -336,6 +357,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_scan_report(ScanReport self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_smart_playlist_row(
+    SmartPlaylistRow self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_track_row(TrackRow self, SseSerializer serializer);
