@@ -2331,6 +2331,17 @@ impl SseDecode for Option<String> {
     }
 }
 
+impl SseDecode for Option<f64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<f64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<i64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2448,6 +2459,8 @@ impl SseDecode for crate::db::tracks::TrackRow {
         let mut var_playedCount = <i64>::sse_decode(deserializer);
         let mut var_path = <String>::sse_decode(deserializer);
         let mut var_artPath = <Option<String>>::sse_decode(deserializer);
+        let mut var_replaygainTrackDb = <Option<f64>>::sse_decode(deserializer);
+        let mut var_replaygainAlbumDb = <Option<f64>>::sse_decode(deserializer);
         return crate::db::tracks::TrackRow {
             id: var_id,
             title: var_title,
@@ -2460,6 +2473,8 @@ impl SseDecode for crate::db::tracks::TrackRow {
             played_count: var_playedCount,
             path: var_path,
             art_path: var_artPath,
+            replaygain_track_db: var_replaygainTrackDb,
+            replaygain_album_db: var_replaygainAlbumDb,
         };
     }
 }
@@ -2895,6 +2910,8 @@ impl flutter_rust_bridge::IntoDart for crate::db::tracks::TrackRow {
             self.played_count.into_into_dart().into_dart(),
             self.path.into_into_dart().into_dart(),
             self.art_path.into_into_dart().into_dart(),
+            self.replaygain_track_db.into_into_dart().into_dart(),
+            self.replaygain_album_db.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3147,6 +3164,16 @@ impl SseEncode for Option<String> {
     }
 }
 
+impl SseEncode for Option<f64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <f64>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<i64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -3234,6 +3261,8 @@ impl SseEncode for crate::db::tracks::TrackRow {
         <i64>::sse_encode(self.played_count, serializer);
         <String>::sse_encode(self.path, serializer);
         <Option<String>>::sse_encode(self.art_path, serializer);
+        <Option<f64>>::sse_encode(self.replaygain_track_db, serializer);
+        <Option<f64>>::sse_encode(self.replaygain_album_db, serializer);
     }
 }
 

@@ -22,6 +22,10 @@ class TrackRow {
   /// On-disk path of the album's cached cover image, if any.
   final String? artPath;
 
+  /// ReplayGain track/album gain in dB (for volume normalization).
+  final double? replaygainTrackDb;
+  final double? replaygainAlbumDb;
+
   const TrackRow({
     required this.id,
     required this.title,
@@ -34,6 +38,8 @@ class TrackRow {
     required this.playedCount,
     required this.path,
     this.artPath,
+    this.replaygainTrackDb,
+    this.replaygainAlbumDb,
   });
 
   @override
@@ -48,7 +54,9 @@ class TrackRow {
       rating.hashCode ^
       playedCount.hashCode ^
       path.hashCode ^
-      artPath.hashCode;
+      artPath.hashCode ^
+      replaygainTrackDb.hashCode ^
+      replaygainAlbumDb.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -65,5 +73,7 @@ class TrackRow {
           rating == other.rating &&
           playedCount == other.playedCount &&
           path == other.path &&
-          artPath == other.artPath;
+          artPath == other.artPath &&
+          replaygainTrackDb == other.replaygainTrackDb &&
+          replaygainAlbumDb == other.replaygainAlbumDb;
 }

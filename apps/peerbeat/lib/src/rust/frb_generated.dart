@@ -2173,6 +2173,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
@@ -2315,6 +2321,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
+  }
+
+  @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
@@ -2395,8 +2407,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TrackRow dco_decode_track_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return TrackRow(
       id: dco_decode_i_64(arr[0]),
       title: dco_decode_String(arr[1]),
@@ -2409,6 +2421,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       playedCount: dco_decode_i_64(arr[8]),
       path: dco_decode_String(arr[9]),
       artPath: dco_decode_opt_String(arr[10]),
+      replaygainTrackDb: dco_decode_opt_box_autoadd_f_64(arr[11]),
+      replaygainAlbumDb: dco_decode_opt_box_autoadd_f_64(arr[12]),
     );
   }
 
@@ -2508,6 +2522,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_64(deserializer));
   }
 
   @protected
@@ -2709,6 +2729,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2823,6 +2854,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_playedCount = sse_decode_i_64(deserializer);
     var var_path = sse_decode_String(deserializer);
     var var_artPath = sse_decode_opt_String(deserializer);
+    var var_replaygainTrackDb = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_replaygainAlbumDb = sse_decode_opt_box_autoadd_f_64(deserializer);
     return TrackRow(
       id: var_id,
       title: var_title,
@@ -2835,6 +2868,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       playedCount: var_playedCount,
       path: var_path,
       artPath: var_artPath,
+      replaygainTrackDb: var_replaygainTrackDb,
+      replaygainAlbumDb: var_replaygainAlbumDb,
     );
   }
 
@@ -2925,6 +2960,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self, serializer);
   }
 
   @protected
@@ -3124,6 +3165,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_64(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_i_64(
     PlatformInt64? self,
     SseSerializer serializer,
@@ -3218,6 +3269,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.playedCount, serializer);
     sse_encode_String(self.path, serializer);
     sse_encode_opt_String(self.artPath, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.replaygainTrackDb, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.replaygainAlbumDb, serializer);
   }
 
   @protected

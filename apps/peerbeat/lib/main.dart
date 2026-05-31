@@ -18,6 +18,7 @@ Future<void> main() async {
     appDbPath = '${dir.path}${Platform.pathSeparator}library.db';
     appDisplayName = _deviceName();
     await libraryOpen(dbPath: appDbPath);
+    await player.loadAudioSettings(); // ReplayGain mode/preamp
     await player.restoreSession(); // best-effort: restore last track + position
     await osMedia.start(); // best-effort: MPRIS media-key/lockscreen on Linux
   } catch (e, st) {

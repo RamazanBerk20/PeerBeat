@@ -14,6 +14,7 @@ import '../src/rust/db/tracks.dart';
 import 'edit_metadata.dart';
 import 'mini_player.dart';
 import 'network_screen.dart';
+import 'settings_screen.dart';
 import 'smart_playlist.dart';
 
 String fmtDuration(int ms) {
@@ -129,6 +130,7 @@ class _LibraryHomeState extends State<LibraryHome> {
     (Icons.library_music_outlined, Icons.library_music, 'Songs'),
     (Icons.queue_music_outlined, Icons.queue_music, 'Playlists'),
     (Icons.wifi_tethering_outlined, Icons.wifi_tethering, 'Network'),
+    (Icons.settings_outlined, Icons.settings, 'Settings'),
   ];
 
   @override
@@ -137,7 +139,8 @@ class _LibraryHomeState extends State<LibraryHome> {
     final title = switch (_section) {
       0 => 'Songs',
       1 => 'Playlists',
-      _ => 'Network',
+      2 => 'Network',
+      _ => 'Settings',
     };
     final section = switch (_section) {
       0 => _SongsSection(
@@ -147,7 +150,8 @@ class _LibraryHomeState extends State<LibraryHome> {
         onQueryChanged: (v) => setState(() => _query = v),
       ),
       1 => _PlaylistsTab(key: ValueKey('playlists$_version')),
-      _ => const NetworkPanel(),
+      2 => const NetworkPanel(),
+      _ => const SettingsScreen(),
     };
     return LayoutBuilder(
       builder: (context, constraints) {

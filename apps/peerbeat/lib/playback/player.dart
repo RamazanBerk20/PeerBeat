@@ -4,13 +4,18 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../audio/audio_engine.dart';
+import '../audio/replay_gain.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
+
+export '../audio/replay_gain.dart' show ReplayGainMode;
 
 enum RepeatMode { off, all, one }
 
 const _kResumeTrack = 'resume.track_id';
 const _kResumePos = 'resume.position_ms';
+const _kRgMode = 'audio.rg_mode';
+const _kRgPreamp = 'audio.rg_preamp';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -48,6 +53,9 @@ class PlayerController extends ChangeNotifier {
   double _volume = 1.0;
   bool _muted = false;
   double _speed = 1.0;
+  ReplayGainMode _rgMode = ReplayGainMode.off;
+  double _rgPreampDb = 0.0;
+  double _rgFactor = 1.0; // cached multiplier for the current track
   Duration _position = Duration.zero;
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
@@ -73,6 +81,8 @@ class PlayerController extends ChangeNotifier {
   double get volume => _volume;
   bool get muted => _muted;
   double get speed => _speed;
+  ReplayGainMode get replayGainMode => _rgMode;
+  double get replayGainPreampDb => _rgPreampDb;
   Duration get position => _position;
   Duration get duration => current == null
       ? Duration.zero
@@ -160,15 +170,67 @@ class PlayerController extends ChangeNotifier {
 
   void toggleMute() {
     _muted = !_muted;
-    _engine.setVolume(_muted ? 0.0 : _volume);
+    _applyVolume();
     notifyListeners();
   }
 
   void setVolume(double v) {
     _volume = v.clamp(0.0, 1.0);
     _muted = false;
-    _engine.setVolume(_volume);
+    _applyVolume();
     notifyListeners();
+  }
+
+  /// Push the effective output volume (user volume × ReplayGain, or 0 if muted).
+  void _applyVolume() {
+    _engine.setVolume((_muted ? 0.0 : _volume) * _rgFactor);
+  }
+
+  void _recomputeRg() {
+    _rgFactor = replayGainFactor(
+      mode: _rgMode,
+      trackDb: current?.replaygainTrackDb,
+      albumDb: current?.replaygainAlbumDb,
+      preampDb: _rgPreampDb,
+    );
+  }
+
+  void setReplayGainMode(ReplayGainMode mode) {
+    _rgMode = mode;
+    _recomputeRg();
+    _applyVolume();
+    unawaited(settingsSet(key: _kRgMode, value: mode.name));
+    notifyListeners();
+  }
+
+  void setReplayGainPreamp(double db) {
+    _rgPreampDb = db.clamp(-15.0, 15.0);
+    _recomputeRg();
+    _applyVolume();
+    unawaited(settingsSet(key: _kRgPreamp, value: '$_rgPreampDb'));
+    notifyListeners();
+  }
+
+  /// Load persisted audio settings (ReplayGain). Best-effort; call once at start.
+  Future<void> loadAudioSettings() async {
+    try {
+      final mode = await settingsGet(key: _kRgMode);
+      if (mode != null) {
+        _rgMode = ReplayGainMode.values.firstWhere(
+          (m) => m.name == mode,
+          orElse: () => ReplayGainMode.off,
+        );
+      }
+      final preamp = await settingsGet(key: _kRgPreamp);
+      if (preamp != null) {
+        _rgPreampDb = (double.tryParse(preamp) ?? 0.0).clamp(-15.0, 15.0);
+      }
+      _recomputeRg();
+      _applyVolume();
+      notifyListeners();
+    } catch (_) {
+      // best-effort
+    }
   }
 
   /// Set playback speed (0.25–4×). Desktop currently shifts pitch with speed.
@@ -224,8 +286,11 @@ class PlayerController extends ChangeNotifier {
         await _engine.playPath(p, duration: duration);
       }
       _engineLoaded = true;
-      // Re-apply speed: a fresh source (or a restarted worker) resets to 1×.
+      // Re-apply speed + ReplayGain volume: a fresh source (or a restarted
+      // worker) resets them, and the gain is per-track.
       if (_speed != 1.0) await _engine.setSpeed(_speed);
+      _recomputeRg();
+      _applyVolume();
       if (resume != null) {
         _resumeFrom = null;
         await _engine.seek(resume);
