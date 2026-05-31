@@ -462,6 +462,32 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     if (mounted) _refresh();
   }
 
+  Future<void> _import() async {
+    final res = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Import playlist (M3U / PLS)',
+      type: FileType.custom,
+      allowedExtensions: ['m3u', 'm3u8', 'pls'],
+    );
+    final path = res?.files.single.path;
+    if (path == null) return;
+    try {
+      final report = await playlistImport(filePath: path);
+      if (!mounted) return;
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Imported ${report.matched}/${report.total} tracks'),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<PlaylistRow>>(
@@ -476,13 +502,20 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.icon(
-                  onPressed: _create,
-                  icon: const Icon(Icons.add),
-                  label: const Text('New playlist'),
-                ),
+              child: Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: _create,
+                    icon: const Icon(Icons.add),
+                    label: const Text('New playlist'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: _import,
+                    icon: const Icon(Icons.file_open),
+                    label: const Text('Import'),
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -511,6 +544,10 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                               PopupMenuItem(
                                 value: 'duplicate',
                                 child: Text('Duplicate'),
+                              ),
+                              PopupMenuItem(
+                                value: 'export',
+                                child: Text('Export…'),
                               ),
                               PopupMenuItem(
                                 value: 'delete',
@@ -663,6 +700,22 @@ Future<void> _handlePlaylistAction(
       );
       if (name != null) {
         await playlistDuplicate(playlistId: playlist.id, name: name);
+      }
+      break;
+    case 'export':
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Export playlist',
+        fileName: '${playlist.name}.m3u',
+        type: FileType.custom,
+        allowedExtensions: ['m3u', 'm3u8', 'pls'],
+      );
+      if (path != null) {
+        await playlistExport(playlistId: playlist.id, filePath: path);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Exported "${playlist.name}"')),
+          );
+        }
       }
       break;
     case 'delete':

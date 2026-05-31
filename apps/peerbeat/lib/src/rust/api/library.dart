@@ -9,7 +9,7 @@ import '../db/tracks.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `now_ms`, `with_db`
+// These functions are ignored because they are not marked as `pub`: `export_playlist_file`, `import_playlist_file`, `now_ms`, `with_db`
 
 /// Open (creating if needed) the library database at `db_path`.
 Future<void> libraryOpen({required String dbPath}) =>
@@ -140,6 +140,51 @@ Future<void> playlistReorderTracks({
   playlistId: playlistId,
   trackIds: trackIds,
 );
+
+/// Import an `.m3u`/`.m3u8`/`.pls` file as a new playlist (named after the
+/// file). Path entries are matched against the library by normalized path;
+/// unmatched entries are skipped and reported.
+Future<PlaylistImportReport> playlistImport({required String filePath}) =>
+    RustLib.instance.api.crateApiLibraryPlaylistImport(filePath: filePath);
+
+/// Export a playlist to `file_path`. Format is chosen by the file extension
+/// (`.pls` → PLS, otherwise extended M3U).
+Future<void> playlistExport({
+  required PlatformInt64 playlistId,
+  required String filePath,
+}) => RustLib.instance.api.crateApiLibraryPlaylistExport(
+  playlistId: playlistId,
+  filePath: filePath,
+);
+
+/// Outcome of importing a playlist file.
+class PlaylistImportReport {
+  final PlatformInt64 playlistId;
+
+  /// Entries matched to a library track (and added to the new playlist).
+  final int matched;
+
+  /// Total path entries found in the file.
+  final int total;
+
+  const PlaylistImportReport({
+    required this.playlistId,
+    required this.matched,
+    required this.total,
+  });
+
+  @override
+  int get hashCode => playlistId.hashCode ^ matched.hashCode ^ total.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlaylistImportReport &&
+          runtimeType == other.runtimeType &&
+          playlistId == other.playlistId &&
+          matched == other.matched &&
+          total == other.total;
+}
 
 /// Result of a folder scan.
 class ScanReport {

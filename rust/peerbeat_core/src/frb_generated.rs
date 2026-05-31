@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 984613180;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 45045970;
 
 // Section: executor
 
@@ -1308,6 +1308,74 @@ fn wire__crate__api__library__playlist_duplicate_impl(
         },
     )
 }
+fn wire__crate__api__library__playlist_export_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "playlist_export",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_playlist_id = <i64>::sse_decode(&mut deserializer);
+            let api_file_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok =
+                        crate::api::library::playlist_export(api_playlist_id, api_file_path)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__library__playlist_import_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "playlist_import",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_file_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::library::playlist_import(api_file_path)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__library__playlist_list_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1830,6 +1898,20 @@ impl SseDecode for Option<u16> {
     }
 }
 
+impl SseDecode for crate::api::library::PlaylistImportReport {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_playlistId = <i64>::sse_decode(deserializer);
+        let mut var_matched = <u32>::sse_decode(deserializer);
+        let mut var_total = <u32>::sse_decode(deserializer);
+        return crate::api::library::PlaylistImportReport {
+            playlist_id: var_playlistId,
+            matched: var_matched,
+            total: var_total,
+        };
+    }
+}
+
 impl SseDecode for crate::db::playlists::PlaylistRow {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2013,24 +2095,26 @@ fn pde_ffi_dispatcher_primary_impl(
         37 => wire__crate__api__library__playlist_create_impl(port, ptr, rust_vec_len, data_len),
         38 => wire__crate__api__library__playlist_delete_impl(port, ptr, rust_vec_len, data_len),
         39 => wire__crate__api__library__playlist_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__library__playlist_list_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__library__playlist_remove_position_impl(
+        40 => wire__crate__api__library__playlist_export_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__library__playlist_import_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__library__playlist_list_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__library__playlist_remove_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__library__playlist_rename_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__library__playlist_reorder_tracks_impl(
+        44 => wire__crate__api__library__playlist_rename_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__library__playlist_reorder_tracks_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__library__playlist_tracks_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__library__settings_delete_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__library__settings_get_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__library__settings_set_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__library__playlist_tracks_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__library__settings_delete_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__library__settings_get_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__library__settings_set_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2139,6 +2223,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::net::discovery::HostInfo>
     for crate::net::discovery::HostInfo
 {
     fn into_into_dart(self) -> crate::net::discovery::HostInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::library::PlaylistImportReport {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.playlist_id.into_into_dart().into_dart(),
+            self.matched.into_into_dart().into_dart(),
+            self.total.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::library::PlaylistImportReport
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::library::PlaylistImportReport>
+    for crate::api::library::PlaylistImportReport
+{
+    fn into_into_dart(self) -> crate::api::library::PlaylistImportReport {
         self
     }
 }
@@ -2428,6 +2534,15 @@ impl SseEncode for Option<u16> {
         if let Some(value) = self {
             <u16>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::library::PlaylistImportReport {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.playlist_id, serializer);
+        <u32>::sse_encode(self.matched, serializer);
+        <u32>::sse_encode(self.total, serializer);
     }
 }
 

@@ -9,6 +9,7 @@
 
 pub mod art;
 pub mod metadata;
+pub mod playlist_io;
 pub mod scan;
 
 pub use metadata::{is_audio, read_tags, AUDIO_EXTS};

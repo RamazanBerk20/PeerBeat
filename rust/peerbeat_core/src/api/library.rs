@@ -7,8 +7,8 @@ use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
 use crate::db::playlists::{self, PlaylistRow};
 use crate::db::tracks::{self, TrackRow};
 use crate::db::{settings, Db};
-use crate::library;
-use std::path::PathBuf;
+use crate::library::{self, metadata, playlist_io};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -185,4 +185,94 @@ pub fn playlist_remove_position(playlist_id: i64, position: i64) -> Result<(), S
 
 pub fn playlist_reorder_tracks(playlist_id: i64, track_ids: Vec<i64>) -> Result<(), String> {
     with_db(|db| playlists::reorder_tracks(db.conn(), playlist_id, &track_ids, now_ms()))
+}
+
+// ── Playlist file import / export (M3U · M3U8 · PLS) ─────────────────────────
+
+/// Outcome of importing a playlist file.
+pub struct PlaylistImportReport {
+    pub playlist_id: i64,
+    /// Entries matched to a library track (and added to the new playlist).
+    pub matched: u32,
+    /// Total path entries found in the file.
+    pub total: u32,
+}
+
+/// Import an `.m3u`/`.m3u8`/`.pls` file as a new playlist (named after the
+/// file). Path entries are matched against the library by normalized path;
+/// unmatched entries are skipped and reported.
+pub fn playlist_import(file_path: String) -> Result<PlaylistImportReport, String> {
+    with_db(|db| import_playlist_file(db, &file_path))
+}
+
+fn import_playlist_file(db: &Db, file_path: &str) -> anyhow::Result<PlaylistImportReport> {
+    let path = PathBuf::from(file_path);
+    let content = std::fs::read_to_string(&path)?;
+    let base = path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let parsed = if playlist_io::is_pls(&path) {
+        playlist_io::parse_pls(&content, &base)
+    } else {
+        playlist_io::parse_m3u(&content, &base)
+    };
+    let total = parsed.len() as u32;
+
+    let mut ids = Vec::new();
+    for p in &parsed {
+        // Try the literal path, then a canonicalized form, normalized like scan.
+        let mut candidates = vec![metadata::normalize_path(p)];
+        if let Ok(canon) = std::fs::canonicalize(p) {
+            candidates.push(metadata::normalize_path(&canon));
+        }
+        for c in candidates {
+            if let Some(id) = tracks::id_by_path(db.conn(), &c)? {
+                ids.push(id);
+                break;
+            }
+        }
+    }
+
+    let name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("Imported")
+        .to_string();
+    let playlist_id = playlists::create(db.conn(), &name, now_ms())?;
+    if !ids.is_empty() {
+        playlists::add_tracks(db.conn(), playlist_id, &ids, now_ms())?;
+    }
+    Ok(PlaylistImportReport {
+        playlist_id,
+        matched: ids.len() as u32,
+        total,
+    })
+}
+
+/// Export a playlist to `file_path`. Format is chosen by the file extension
+/// (`.pls` → PLS, otherwise extended M3U).
+pub fn playlist_export(playlist_id: i64, file_path: String) -> Result<(), String> {
+    with_db(|db| export_playlist_file(db, playlist_id, &file_path))
+}
+
+fn export_playlist_file(db: &Db, playlist_id: i64, file_path: &str) -> anyhow::Result<()> {
+    let path = PathBuf::from(file_path);
+    let rows = playlists::tracks(db.conn(), playlist_id)?;
+    let entries: Vec<playlist_io::Entry> = rows
+        .iter()
+        .map(|t| playlist_io::Entry {
+            path: t.path.clone(),
+            title: t.title.clone(),
+            duration_secs: t.duration_ms / 1000,
+        })
+        .collect();
+    let text = if playlist_io::is_pls(&path) {
+        playlist_io::to_pls(&entries)
+    } else {
+        playlist_io::to_m3u(&entries)
+    };
+    std::fs::write(&path, text)?;
+    Ok(())
 }

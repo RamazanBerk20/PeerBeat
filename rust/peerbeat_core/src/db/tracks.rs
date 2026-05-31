@@ -207,6 +207,16 @@ pub fn upsert_track(conn: &Connection, t: &NewTrack) -> rusqlite::Result<i64> {
     Ok(id)
 }
 
+/// Look up a track id by its normalized path (for playlist-file matching).
+pub fn id_by_path(conn: &Connection, normalized_path: &str) -> rusqlite::Result<Option<i64>> {
+    conn.query_row(
+        "SELECT id FROM tracks WHERE normalized_path = ?1",
+        [normalized_path],
+        |r| r.get(0),
+    )
+    .optional()
+}
+
 /// Fetch a single track by id (e.g. to restore the resume bookmark).
 pub fn track_by_id(conn: &Connection, id: i64) -> rusqlite::Result<Option<TrackRow>> {
     let sql =
