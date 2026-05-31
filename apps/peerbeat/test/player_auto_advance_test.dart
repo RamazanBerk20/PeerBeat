@@ -64,6 +64,22 @@ void main() {
     expect(controller.current?.id, 1);
     expect(engine.playedPaths, ['/tmp/1.mp3']);
   });
+
+  test(
+    'position at duration advances even if backend still reports playing',
+    () async {
+      final engine = _FakeAudioEngine();
+      final controller = PlayerController.forTest(engine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.playQueue([_track(1), _track(2)], 0);
+      engine.emitPosition(const Duration(milliseconds: 1000));
+      await _settle();
+
+      expect(controller.current?.id, 2);
+      expect(engine.playedPaths, ['/tmp/1.mp3', '/tmp/2.mp3']);
+    },
+  );
 }
 
 Future<void> _settle() async {

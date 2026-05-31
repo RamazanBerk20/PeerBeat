@@ -525,8 +525,8 @@ class PlayerController extends ChangeNotifier {
     if (_advancing || _userPaused || current == null || d == Duration.zero) {
       return;
     }
-    final ended =
-        !_playing && _position >= d - const Duration(milliseconds: 500);
+    final nearEnd = _position >= d - const Duration(milliseconds: 500);
+    final ended = nearEnd && (!_playing || _position >= d);
     if (!ended) return;
     _advancing = true;
     try {

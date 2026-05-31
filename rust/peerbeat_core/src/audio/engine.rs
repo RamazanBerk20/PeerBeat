@@ -37,6 +37,7 @@ struct Shared {
     position_ms: AtomicU64,
     duration_ms: AtomicU64,
     playing: AtomicBool,
+    ended: Arc<AtomicBool>,
 }
 
 /// Handle to the audio thread. `Send + Sync` (only a channel sender + atomics),
@@ -406,8 +407,68 @@ fn with_dsp(
     source: Box<dyn rodio::Source<Item = i16> + Send>,
     eq: EqHandle,
     widen: StereoWidenHandle,
+    ended: Arc<AtomicBool>,
 ) -> Box<dyn rodio::Source<Item = i16> + Send> {
-    Box::new(StereoWidenSource::new(EqSource::new(source, eq), widen))
+    Box::new(EndNotifySource::new(
+        StereoWidenSource::new(EqSource::new(source, eq), widen),
+        ended,
+    ))
+}
+
+struct EndNotifySource<S> {
+    inner: S,
+    ended: Arc<AtomicBool>,
+}
+
+impl<S> EndNotifySource<S>
+where
+    S: rodio::Source<Item = i16>,
+{
+    fn new(inner: S, ended: Arc<AtomicBool>) -> Self {
+        Self { inner, ended }
+    }
+}
+
+impl<S> Iterator for EndNotifySource<S>
+where
+    S: rodio::Source<Item = i16>,
+{
+    type Item = i16;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            Some(sample) => Some(sample),
+            None => {
+                self.ended.store(true, Ordering::Release);
+                None
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl<S> rodio::Source for EndNotifySource<S>
+where
+    S: rodio::Source<Item = i16>,
+{
+    fn current_frame_len(&self) -> Option<usize> {
+        self.inner.current_frame_len()
+    }
+
+    fn channels(&self) -> u16 {
+        self.inner.channels()
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.inner.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.inner.total_duration()
+    }
 }
 
 fn open_output_stream(
@@ -507,7 +568,13 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
         match rx.recv_timeout(Duration::from_millis(150)) {
             Ok(Cmd::Load(path, reply)) => {
                 let result: Result<(), String> = (|| {
-                    let source = with_dsp(open_source(&path)?, eq.clone(), widen.clone());
+                    shared.ended.store(false, Ordering::Release);
+                    let source = with_dsp(
+                        open_source(&path)?,
+                        eq.clone(),
+                        widen.clone(),
+                        shared.ended.clone(),
+                    );
                     let dur = source.total_duration().unwrap_or(Duration::ZERO);
                     // A fresh sink avoids rodio 0.19 getting stuck after clear().
                     let s = Sink::try_new(&handle)
@@ -550,8 +617,10 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 current_path = None;
                 current_duration = Duration::ZERO;
                 base_position_ms = 0;
+                shared.ended.store(false, Ordering::Release);
                 shared.duration_ms.store(0, Ordering::Relaxed);
                 shared.position_ms.store(0, Ordering::Relaxed);
+                shared.playing.store(false, Ordering::Relaxed);
             }
             Ok(Cmd::Seek(ms, reply)) => {
                 let result = (|| {
@@ -570,6 +639,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     match sink.try_seek(target) {
                         Ok(()) => {
                             base_position_ms = 0;
+                            shared.ended.store(false, Ordering::Release);
                             shared.position_ms.store(visible_ms, Ordering::Relaxed);
                             force_position_ms = Some(visible_ms);
                             set_last_error(&last_error, None);
@@ -580,7 +650,13 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                                 .as_deref()
                                 .ok_or_else(|| "no track loaded".to_string())?;
                             let was_playing = !sink.is_paused() && !sink.empty();
-                            let source = with_dsp(open_source(path)?, eq.clone(), widen.clone());
+                            shared.ended.store(false, Ordering::Release);
+                            let source = with_dsp(
+                                open_source(path)?,
+                                eq.clone(),
+                                widen.clone(),
+                                shared.ended.clone(),
+                            );
                             let s = Sink::try_new(&handle)
                                 .map_err(|e| format!("cannot create audio sink: {e}"))?;
                             sink = s;
@@ -634,7 +710,13 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                             Duration::from_millis(resume_ms),
                             (current_duration != Duration::ZERO).then_some(current_duration),
                         );
-                        let source = with_dsp(open_source(path)?, eq.clone(), widen.clone());
+                        shared.ended.store(false, Ordering::Release);
+                        let source = with_dsp(
+                            open_source(path)?,
+                            eq.clone(),
+                            widen.clone(),
+                            shared.ended.clone(),
+                        );
                         sink.append(source.skip_duration(target));
                         base_position_ms = target.as_millis() as u64;
                         force_position_ms = Some(base_position_ms);
@@ -658,17 +740,42 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
-        let pos_ms = force_position_ms.take().unwrap_or_else(|| {
-            // rodio's get_pos() is sampled AFTER the speed adapter, so it
-            // reports output (wall-clock) time. Scale it back to source-content
-            // time so the position matches base_position_ms and the duration
-            // regardless of playback speed (no-op at 1.0×).
-            let content_ms = sink.get_pos().as_secs_f64() * speed as f64 * 1000.0;
-            base_position_ms + content_ms as u64
-        });
+        let ended = shared.ended.load(Ordering::Acquire);
+        let pos_ms = if ended && current_duration != Duration::ZERO {
+            current_duration.as_millis() as u64
+        } else {
+            force_position_ms.take().unwrap_or_else(|| {
+                // rodio's get_pos() is sampled AFTER the speed adapter, so it
+                // reports output (wall-clock) time. Scale it back to source-content
+                // time so the position matches base_position_ms and the duration
+                // regardless of playback speed (no-op at 1.0×).
+                let content_ms = sink.get_pos().as_secs_f64() * speed as f64 * 1000.0;
+                base_position_ms + content_ms as u64
+            })
+        };
         shared.position_ms.store(pos_ms, Ordering::Relaxed);
-        shared
-            .playing
-            .store(!sink.is_paused() && !sink.empty(), Ordering::Relaxed);
+        shared.playing.store(
+            !ended && !sink.is_paused() && !sink.empty(),
+            Ordering::Relaxed,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rodio::buffer::SamplesBuffer;
+
+    #[test]
+    fn end_notify_source_sets_flag_at_eof() {
+        let ended = Arc::new(AtomicBool::new(false));
+        let src = SamplesBuffer::new(1, 44_100, vec![1i16, 2i16]);
+        let mut wrapped = EndNotifySource::new(src, ended.clone());
+
+        assert_eq!(wrapped.next(), Some(1));
+        assert_eq!(wrapped.next(), Some(2));
+        assert!(!ended.load(Ordering::Acquire));
+        assert_eq!(wrapped.next(), None);
+        assert!(ended.load(Ordering::Acquire));
     }
 }
