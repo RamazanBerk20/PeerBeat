@@ -80,6 +80,33 @@ void main() {
       expect(engine.playedPaths, ['/tmp/1.mp3', '/tmp/2.mp3']);
     },
   );
+
+  test('seek keeps the requested position when the engine succeeds', () async {
+    final engine = _FakeAudioEngine();
+    final controller = PlayerController.forTest(engine: engine);
+    addTearDown(controller.dispose);
+
+    await controller.playQueue([_track(1)], 0);
+    await controller.seek(const Duration(milliseconds: 400));
+
+    expect(engine.seekedPositions, [const Duration(milliseconds: 400)]);
+    expect(controller.position, const Duration(milliseconds: 400));
+  });
+
+  test('seek reverts the optimistic position when the engine fails', () async {
+    final engine = _FakeAudioEngine()..seekError = Exception('seek broke');
+    final controller = PlayerController.forTest(engine: engine);
+    addTearDown(controller.dispose);
+
+    await controller.playQueue([_track(1)], 0);
+    engine.emitPosition(const Duration(milliseconds: 200));
+
+    await expectLater(
+      controller.seek(const Duration(milliseconds: 500)),
+      throwsA(isA<Exception>()),
+    );
+    expect(controller.position, const Duration(milliseconds: 200));
+  });
 }
 
 Future<void> _settle() async {
@@ -102,6 +129,8 @@ class _FakeAudioEngine implements AudioEngine {
   final _position = StreamController<Duration>.broadcast(sync: true);
   final _playing = StreamController<bool>.broadcast(sync: true);
   final List<String> playedPaths = [];
+  final List<Duration> seekedPositions = [];
+  Object? seekError;
   Duration _pos = Duration.zero;
   bool _isPlaying = false;
 
@@ -136,7 +165,12 @@ class _FakeAudioEngine implements AudioEngine {
   Future<void> stop() async => emitPlaying(false);
 
   @override
-  Future<void> seek(Duration position) async => emitPosition(position);
+  Future<void> seek(Duration position) async {
+    seekedPositions.add(position);
+    final error = seekError;
+    if (error != null) throw error;
+    emitPosition(position);
+  }
 
   @override
   Future<void> setVolume(double volume) async {}

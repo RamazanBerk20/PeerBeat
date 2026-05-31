@@ -415,6 +415,28 @@ fn with_dsp(
     ))
 }
 
+fn open_seeked_source(
+    path: &str,
+    target: Duration,
+    eq: EqHandle,
+    widen: StereoWidenHandle,
+    ended: Arc<AtomicBool>,
+) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, String> {
+    use rodio::Source;
+
+    let mut source = open_source(path)?;
+    match source.try_seek(target) {
+        Ok(()) => Ok(with_dsp(source, eq, widen, ended)),
+        Err(e) if e.source_intact() => Ok(with_dsp(
+            Box::new(source.skip_duration(target)),
+            eq,
+            widen,
+            ended,
+        )),
+        Err(e) => Err(format!("seek failed: {e}")),
+    }
+}
+
 struct EndNotifySource<S> {
     inner: S,
     ended: Arc<AtomicBool>,
@@ -623,7 +645,10 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 shared.playing.store(false, Ordering::Relaxed);
             }
             Ok(Cmd::Seek(ms, reply)) => {
-                let result = (|| {
+                let result: Result<(), String> = (|| {
+                    let path = current_path
+                        .as_deref()
+                        .ok_or_else(|| "no track loaded".to_string())?;
                     let requested = Duration::from_millis(ms);
                     let target = clamp_seek_position(
                         requested,
@@ -636,46 +661,31 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     };
                     let visible_ms = visible.as_millis() as u64;
                     let target_ms = target.as_millis() as u64;
-                    match sink.try_seek(target) {
-                        Ok(()) => {
-                            base_position_ms = 0;
-                            shared.ended.store(false, Ordering::Release);
-                            shared.position_ms.store(visible_ms, Ordering::Relaxed);
-                            force_position_ms = Some(visible_ms);
-                            set_last_error(&last_error, None);
-                            Ok(())
-                        }
-                        Err(e) if e.source_intact() => {
-                            let path = current_path
-                                .as_deref()
-                                .ok_or_else(|| "no track loaded".to_string())?;
-                            let was_playing = !sink.is_paused() && !sink.empty();
-                            shared.ended.store(false, Ordering::Release);
-                            let source = with_dsp(
-                                open_source(path)?,
-                                eq.clone(),
-                                widen.clone(),
-                                shared.ended.clone(),
-                            );
-                            let s = Sink::try_new(&handle)
-                                .map_err(|e| format!("cannot create audio sink: {e}"))?;
-                            sink = s;
-                            sink.set_volume(volume);
-                            sink.set_speed(speed);
-                            sink.append(source.skip_duration(target));
-                            if was_playing {
-                                sink.play();
-                            } else {
-                                sink.pause();
-                            }
-                            base_position_ms = target_ms;
-                            shared.position_ms.store(visible_ms, Ordering::Relaxed);
-                            force_position_ms = Some(visible_ms);
-                            set_last_error(&last_error, None);
-                            Ok(())
-                        }
-                        Err(e) => Err(format!("seek failed: {e}")),
+                    let was_playing = !sink.is_paused() && !sink.empty();
+                    shared.ended.store(false, Ordering::Release);
+                    let source = open_seeked_source(
+                        path,
+                        target,
+                        eq.clone(),
+                        widen.clone(),
+                        shared.ended.clone(),
+                    )?;
+                    let s = Sink::try_new(&handle)
+                        .map_err(|e| format!("cannot create audio sink: {e}"))?;
+                    sink = s;
+                    sink.set_volume(volume);
+                    sink.set_speed(speed);
+                    sink.append(source);
+                    if was_playing {
+                        sink.play();
+                    } else {
+                        sink.pause();
                     }
+                    base_position_ms = target_ms;
+                    shared.position_ms.store(visible_ms, Ordering::Relaxed);
+                    force_position_ms = Some(visible_ms);
+                    set_last_error(&last_error, None);
+                    Ok(())
                 })();
                 if let Err(e) = &result {
                     set_last_error(&last_error, Some(e.clone()));
@@ -711,13 +721,14 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                             (current_duration != Duration::ZERO).then_some(current_duration),
                         );
                         shared.ended.store(false, Ordering::Release);
-                        let source = with_dsp(
-                            open_source(path)?,
+                        let source = open_seeked_source(
+                            path,
+                            target,
                             eq.clone(),
                             widen.clone(),
                             shared.ended.clone(),
-                        );
-                        sink.append(source.skip_duration(target));
+                        )?;
+                        sink.append(source);
                         base_position_ms = target.as_millis() as u64;
                         force_position_ms = Some(base_position_ms);
                         if was_playing {
