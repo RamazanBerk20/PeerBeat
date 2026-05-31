@@ -45,15 +45,22 @@ class PlayerController extends ChangeNotifier {
       // resume bookmark to 0:00 and then persist that 0.
       if (!_engineLoaded) return;
       _position = p;
-      _maybeAdvance();
+      _scheduleMaybeAdvance();
       _persistResume();
       notifyListeners();
     });
     _playSub = _engine.playingStream.listen((p) {
+      if (!p && !_userPaused && current != null) {
+        final d = duration;
+        final nearEnd =
+            d != Duration.zero &&
+            _position >= d - const Duration(milliseconds: 500);
+        if (!nearEnd) return;
+      }
       final wasPlaying = _playing;
       _playing = p;
       if (wasPlaying && !p) {
-        _maybeAdvance();
+        _scheduleMaybeAdvance();
       }
       notifyListeners();
     });
@@ -89,6 +96,8 @@ class PlayerController extends ChangeNotifier {
   bool _engineLoaded = false;
   Duration? _resumeFrom;
   DateTime _lastPersist = DateTime.fromMillisecondsSinceEpoch(0);
+  int _generation = 0;
+  int? _pendingAdvanceGeneration;
 
   TrackRow? get current =>
       (_pos >= 0 && _pos < _order.length) ? _queue[_order[_pos]] : null;
@@ -399,6 +408,7 @@ class PlayerController extends ChangeNotifier {
   Future<void> _playCurrent() async {
     final t = current;
     if (t == null) return;
+    _generation++;
     final resume = _resumeFrom;
     _position = resume ?? Duration.zero;
     _playing = true;
@@ -520,7 +530,19 @@ class PlayerController extends ChangeNotifier {
   // Auto-advance when the current track ends. Honors repeat mode and guards
   // against a user pause near the end and re-entrancy while advancing.
   bool _advancing = false;
-  Future<void> _maybeAdvance() async {
+  void _scheduleMaybeAdvance() {
+    final generation = _generation;
+    if (_pendingAdvanceGeneration == generation) return;
+    _pendingAdvanceGeneration = generation;
+    scheduleMicrotask(() {
+      if (_pendingAdvanceGeneration != generation) return;
+      _pendingAdvanceGeneration = null;
+      _maybeAdvance(generation);
+    });
+  }
+
+  Future<void> _maybeAdvance(int generation) async {
+    if (generation != _generation) return;
     final d = duration;
     if (_advancing || _userPaused || current == null || d == Duration.zero) {
       return;
@@ -530,6 +552,7 @@ class PlayerController extends ChangeNotifier {
     if (!ended) return;
     _advancing = true;
     try {
+      if (generation != _generation) return;
       if (_repeat == RepeatMode.one) {
         _position = Duration.zero;
         await _playCurrent();
