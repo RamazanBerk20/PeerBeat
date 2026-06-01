@@ -451,7 +451,8 @@ class PlayerController extends ChangeNotifier {
       _persistResume(force: true);
     } else if (!_engineLoaded) {
       // Restored session: load the track (seeks to the saved position).
-      _playCurrent();
+      // Fire-and-forget — _playCurrent sets _lastError on failure.
+      unawaited(_playCurrent());
     } else {
       _userPaused = false;
       _engine.resume();

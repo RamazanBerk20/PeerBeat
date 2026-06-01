@@ -276,10 +276,12 @@ pub fn search_tracks(
             rows.collect()
         }
         None => {
-            let like = format!("%{}%", query.to_lowercase());
+            // Escape `%`/`_` so a query like "AC_DC" matches literally.
+            let like = format!("%{}%", super::escape_like(&query.to_lowercase()));
             let sql = format!(
                 "{SELECT_ROW} tracks t LEFT JOIN albums al ON al.id = t.album_id \
-                 WHERE lower(t.title) LIKE ?1 OR lower(COALESCE(al.title,'')) LIKE ?1 \
+                 WHERE lower(t.title) LIKE ?1 ESCAPE '\\' \
+                    OR lower(COALESCE(al.title,'')) LIKE ?1 ESCAPE '\\' \
                  ORDER BY t.title COLLATE NOCASE LIMIT ?2"
             );
             let mut stmt = conn.prepare(&sql)?;

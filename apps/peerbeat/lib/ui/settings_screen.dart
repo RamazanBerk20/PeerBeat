@@ -99,7 +99,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         bands: player.eqGains,
         preamp: player.eqPreampDb,
       );
-      _reloadPresets();
+      if (mounted) _reloadPresets();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

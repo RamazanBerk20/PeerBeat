@@ -74,14 +74,29 @@ fn rule_sql(rule: &Rule, now_ms: i64) -> Result<(String, Value), String> {
         field_expr(&rule.field).ok_or_else(|| format!("unknown field '{}'", rule.field))?;
     match kind {
         Kind::Text => {
-            let v = Value::Text(rule.value.clone());
-            let sql = match rule.op.as_str() {
-                "is" => format!("lower({expr}) = lower(?)"),
-                "isNot" => format!("lower({expr}) <> lower(?)"),
-                "contains" => format!("lower({expr}) LIKE '%'||lower(?)||'%'"),
-                "notContains" => format!("lower({expr}) NOT LIKE '%'||lower(?)||'%'"),
-                "startsWith" => format!("lower({expr}) LIKE lower(?)||'%'"),
-                "endsWith" => format!("lower({expr}) LIKE '%'||lower(?)"),
+            // Bind the raw value for equality, but the LIKE-escaped value for
+            // wildcard ops (so `_`/`%` in the value match literally).
+            let raw = || Value::Text(rule.value.clone());
+            let esc = || Value::Text(super::escape_like(&rule.value));
+            let (sql, v) = match rule.op.as_str() {
+                "is" => (format!("lower({expr}) = lower(?)"), raw()),
+                "isNot" => (format!("lower({expr}) <> lower(?)"), raw()),
+                "contains" => (
+                    format!("lower({expr}) LIKE '%'||lower(?)||'%' ESCAPE '\\'"),
+                    esc(),
+                ),
+                "notContains" => (
+                    format!("lower({expr}) NOT LIKE '%'||lower(?)||'%' ESCAPE '\\'"),
+                    esc(),
+                ),
+                "startsWith" => (
+                    format!("lower({expr}) LIKE lower(?)||'%' ESCAPE '\\'"),
+                    esc(),
+                ),
+                "endsWith" => (
+                    format!("lower({expr}) LIKE '%'||lower(?) ESCAPE '\\'"),
+                    esc(),
+                ),
                 other => return Err(format!("unknown text op '{other}'")),
             };
             Ok((sql, v))

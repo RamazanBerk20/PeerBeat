@@ -5,8 +5,8 @@
 
 use crate::db::tracks;
 use axum::{
-    extract::{Path, State},
-    http::{header, StatusCode},
+    extract::{Path, Request, State},
+    http::StatusCode,
     response::IntoResponse,
     routing::get,
     Json, Router,
@@ -15,6 +15,8 @@ use rusqlite::Connection;
 use serde::Serialize;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
+use tower::ServiceExt;
+use tower_http::services::ServeFile;
 
 #[derive(Clone)]
 pub struct ServerConfig {
@@ -92,7 +94,16 @@ async fn list_tracks(State(cfg): State<ServerConfig>) -> impl IntoResponse {
     Json(rows)
 }
 
-async fn stream(State(cfg): State<ServerConfig>, Path(id): Path<i64>) -> impl IntoResponse {
+/// Stream a track's original bytes. Delegates to `ServeFile`, which honors HTTP
+/// Range (206 Partial Content for seeking), streams the body in chunks (no
+/// whole-file buffering), and sets Content-Type/Length/Accept-Ranges. The path
+/// is resolved from the scanned library by id (never from the request), so
+/// there is no path traversal.
+async fn stream(
+    State(cfg): State<ServerConfig>,
+    Path(id): Path<i64>,
+    request: Request,
+) -> impl IntoResponse {
     let file_path = blocking_db(cfg.db_path.clone(), move |c| {
         c.query_row("SELECT path FROM tracks WHERE id = ?1", [id], |r| {
             r.get::<_, String>(0)
@@ -102,30 +113,10 @@ async fn stream(State(cfg): State<ServerConfig>, Path(id): Path<i64>) -> impl In
     let Some(file_path) = file_path else {
         return (StatusCode::NOT_FOUND, "no such track").into_response();
     };
-    match tokio::fs::read(&file_path).await {
-        Ok(bytes) => (
-            [
-                (header::CONTENT_TYPE, content_type(&file_path)),
-                (header::ACCEPT_RANGES, "bytes".to_string()),
-            ],
-            bytes,
-        )
-            .into_response(),
+    match ServeFile::new(&file_path).oneshot(request).await {
+        Ok(resp) => resp.into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "file missing").into_response(),
     }
-}
-
-fn content_type(path: &str) -> String {
-    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    match ext.as_str() {
-        "mp3" => "audio/mpeg",
-        "flac" => "audio/flac",
-        "wav" => "audio/wav",
-        "ogg" | "oga" => "audio/ogg",
-        "m4a" | "aac" => "audio/mp4",
-        _ => "application/octet-stream",
-    }
-    .to_string()
 }
 
 /// Bind `0.0.0.0:0` and return the listener + chosen port.

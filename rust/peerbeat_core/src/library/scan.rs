@@ -118,11 +118,15 @@ pub fn scan_folder(
     Ok(stats)
 }
 
-/// A `LIKE` pattern matching exactly the tracks whose files live under `root`
-/// (with a trailing `/` so `/m/Music` doesn't also match `/m/MusicVideos`).
+/// A `LIKE` pattern (for use with `ESCAPE '\'`) matching exactly the tracks
+/// whose files live under `root`. The root is LIKE-escaped so that `_`/`%` in
+/// the path are literal — otherwise removing a folder `test_1` could also match
+/// (and delete) tracks under a sibling `testX1`. The trailing `/` ensures
+/// `/m/Music` doesn't also match `/m/MusicVideos`.
 fn under_root_like(root: &Path) -> String {
     let norm = normalize_path(root);
-    format!("{}/%", norm.trim_end_matches('/'))
+    let escaped = crate::db::escape_like(norm.trim_end_matches('/'));
+    format!("{escaped}/%")
 }
 
 fn delete_track(conn: &Connection, id: i64) -> rusqlite::Result<()> {
@@ -137,7 +141,8 @@ fn delete_track(conn: &Connection, id: i64) -> rusqlite::Result<()> {
 pub fn delete_under_root(conn: &Connection, root: &Path) -> rusqlite::Result<usize> {
     let like = under_root_like(root);
     let ids: Vec<i64> = {
-        let mut stmt = conn.prepare("SELECT id FROM tracks WHERE normalized_path LIKE ?1")?;
+        let mut stmt =
+            conn.prepare("SELECT id FROM tracks WHERE normalized_path LIKE ?1 ESCAPE '\\'")?;
         let rows = stmt.query_map([&like], |r| r.get(0))?;
         rows.collect::<rusqlite::Result<_>>()?
     };
@@ -167,8 +172,9 @@ pub fn prune_missing(conn: &Connection, root: &Path) -> rusqlite::Result<usize> 
     }
     let like = under_root_like(root);
     let candidates: Vec<(i64, String)> = {
-        let mut stmt =
-            conn.prepare("SELECT id, normalized_path FROM tracks WHERE normalized_path LIKE ?1")?;
+        let mut stmt = conn.prepare(
+            "SELECT id, normalized_path FROM tracks WHERE normalized_path LIKE ?1 ESCAPE '\\'",
+        )?;
         let rows = stmt.query_map([&like], |r| Ok((r.get(0)?, r.get(1)?)))?;
         rows.collect::<rusqlite::Result<_>>()?
     };
@@ -318,6 +324,39 @@ mod tests {
             1,
             "must not prune when the root yields no audio files"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn prune_does_not_match_underscore_sibling() {
+        // A folder named `test_1` must not LIKE-match a sibling `testX1`
+        // (underscore is a wildcard unless escaped) — else pruning one folder
+        // would delete another's tracks.
+        let dir = unique_tmp();
+        let a = dir.join("test_1");
+        let b = dir.join("testX1");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        write_wav(&a.join("a.wav"), 1);
+        write_wav(&a.join("b.wav"), 1);
+        write_wav(&b.join("c.wav"), 1);
+
+        let db = Db::open_in_memory().unwrap();
+        scan_folder(db.conn(), &dir, 1, db.art_dir()).unwrap();
+
+        std::fs::remove_file(a.join("b.wav")).unwrap();
+        let removed = prune_missing(db.conn(), &a).unwrap();
+        assert_eq!(removed, 1, "only test_1/b.wav should be pruned");
+
+        let sibling: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM tracks WHERE normalized_path LIKE '%testX1/c.wav'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(sibling, 1, "sibling folder track must survive");
         std::fs::remove_dir_all(&dir).ok();
     }
 

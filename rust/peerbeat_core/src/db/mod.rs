@@ -21,6 +21,21 @@ pub use schema::SCHEMA_VERSION;
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 
+/// Escape `%`, `_`, and `\` so a value can be embedded as a literal inside a
+/// `LIKE` pattern used with `ESCAPE '\'`. Without this, `_`/`%` in user input
+/// (or a folder path) act as wildcards — e.g. a folder `test_1` would match
+/// `testX1`, and removing it could delete another folder's tracks.
+pub(crate) fn escape_like(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 4);
+    for c in s.chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// A handle to the PeerBeat database. Wraps a single rusqlite [`Connection`];
 /// the FRB layer owns one of these on a dedicated worker thread.
 pub struct Db {

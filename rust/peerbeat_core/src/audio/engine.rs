@@ -523,7 +523,7 @@ fn open_output_stream(
 
 fn spawn_worker(shared: Arc<Shared>, last_error: Arc<Mutex<Option<String>>>) -> Sender<Cmd> {
     let (tx, rx) = channel();
-    std::thread::Builder::new()
+    let spawned = std::thread::Builder::new()
         .name("peerbeat-audio".into())
         .spawn({
             let shared = shared.clone();
@@ -540,8 +540,15 @@ fn spawn_worker(shared: Arc<Shared>, last_error: Arc<Mutex<Option<String>>>) -> 
                     set_last_error(&last_error, Some(msg));
                 }
             }
-        })
-        .expect("spawn audio thread");
+        });
+    if let Err(e) = spawned {
+        // Don't panic across the FFI boundary. `rx` was dropped with the
+        // closure, so `tx.send()` will return Err and the engine surfaces
+        // `last_error` instead of crashing the app.
+        let msg = format!("cannot spawn audio thread: {e}");
+        eprintln!("peerbeat: {msg}");
+        set_last_error(&last_error, Some(msg));
+    }
     tx
 }
 
@@ -605,6 +612,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     current_path = Some(path.clone());
                     current_duration = dur;
                     base_position_ms = 0;
+                    force_position_ms = None; // drop any pending seek from a prior track
                     sink.set_volume(volume);
                     sink.set_speed(speed);
                     sink.append(source);
@@ -639,6 +647,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 current_path = None;
                 current_duration = Duration::ZERO;
                 base_position_ms = 0;
+                force_position_ms = None;
                 shared.ended.store(false, Ordering::Release);
                 shared.duration_ms.store(0, Ordering::Relaxed);
                 shared.position_ms.store(0, Ordering::Relaxed);

@@ -30,6 +30,7 @@ axum = "0.8.9"
 tower-http = { version = "0.6.11", features = ["fs"] }
 mdns-sd = "0.20.0"
 local-ip-address = "0.6.13"
+tower = { version = "0.5.3", features = ["util"] }
 
 # Heavier subsystem deps (tokio, rusqlite, lofty, symphonia, cpal, rustls,
 # mdns-sd, ...) are added milestone-by-milestone as each module is implemented,

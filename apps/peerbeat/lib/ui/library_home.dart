@@ -252,6 +252,7 @@ class _FoldersDialogState extends State<_FoldersDialog> {
     setState(() => _busy = true);
     try {
       final r = await libraryRescanAll();
+      if (!mounted) return;
       _changed = true;
       _reload();
       if (mounted) {
@@ -298,6 +299,7 @@ class _FoldersDialogState extends State<_FoldersDialog> {
     );
     if (ok != true) return;
     await libraryRemoveFolder(folderId: f.id);
+    if (!mounted) return;
     _changed = true;
     _reload();
   }
@@ -870,6 +872,7 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
       playlistId: widget.playlist.id,
       position: index,
     );
+    if (!mounted) return;
     _reload();
   }
 
@@ -882,6 +885,7 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
       playlistId: widget.playlist.id,
       trackIds: Int64List.fromList(next.map((t) => t.id).toList()),
     );
+    if (!mounted) return;
     _reload();
   }
 
@@ -914,7 +918,10 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
             itemBuilder: (_, i) {
               final t = _tracks[i];
               return ListTile(
-                key: ValueKey('${t.id}-$i'),
+                // ObjectKey (per-row instance) is unique even if the playlist
+                // holds the same track twice, and stable across a reorder —
+                // unlike a key containing the index.
+                key: ObjectKey(t),
                 leading: const Icon(Icons.drag_handle),
                 title: Text(
                   t.title,
