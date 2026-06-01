@@ -9,8 +9,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Host`
 
-/// Start sharing the library over the LAN: bind the HTTP server and advertise
-/// via mDNS. Returns the port. Idempotent (returns the existing port).
+/// Start sharing the library over the LAN: bind the **HTTPS** server (per-host
+/// self-signed cert) and advertise it (name + stable id + fingerprint) via
+/// mDNS. Returns the port. Idempotent (returns the existing port).
 Future<int> netStartHost({
   required String dbPath,
   required String displayName,

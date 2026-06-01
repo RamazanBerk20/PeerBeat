@@ -271,6 +271,31 @@ Future<List<TrackRow>> smartPlaylistPreview({
   limitN: limitN,
 );
 
+/// The pinned certificate fingerprint for `host_id`, or `None` if never seen.
+Future<String?> netKnownHostFingerprint({required String hostId}) =>
+    RustLib.instance.api.crateApiLibraryNetKnownHostFingerprint(hostId: hostId);
+
+/// TOFU-remember a host's certificate fingerprint. First sight pins it; a
+/// later, different fingerprint is rejected (possible MITM).
+Future<void> netRememberHost({
+  required String hostId,
+  required String name,
+  required String fingerprint,
+}) => RustLib.instance.api.crateApiLibraryNetRememberHost(
+  hostId: hostId,
+  name: name,
+  fingerprint: fingerprint,
+);
+
+/// Every pinned fingerprint — the streaming client (which only has a URL) uses
+/// this to accept a self-signed cert that belongs to an already-trusted host.
+Future<List<String>> netKnownFingerprints() =>
+    RustLib.instance.api.crateApiLibraryNetKnownFingerprints();
+
+/// Forget a host's TOFU pin (so the next connection re-pins).
+Future<void> netForgetHost({required String hostId}) =>
+    RustLib.instance.api.crateApiLibraryNetForgetHost(hostId: hostId);
+
 /// Outcome of importing a playlist file.
 class PlaylistImportReport {
   final PlatformInt64 playlistId;

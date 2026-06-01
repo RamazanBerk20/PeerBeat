@@ -6,6 +6,7 @@
 use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
 use crate::db::eq_presets::{self, EqPresetRow};
 use crate::db::folders::{self, FolderRow};
+use crate::db::known_hosts;
 use crate::db::playlists::{self, PlaylistRow};
 use crate::db::smart::{self, SmartPlaylistRow};
 use crate::db::tracks::{self, TrackRow};
@@ -473,4 +474,28 @@ fn export_playlist_file(db: &Db, playlist_id: i64, file_path: &str) -> anyhow::R
     };
     std::fs::write(&path, text)?;
     Ok(())
+}
+
+// ── LAN TOFU pins (remembered host certificate fingerprints) ────────────────
+
+/// The pinned certificate fingerprint for `host_id`, or `None` if never seen.
+pub fn net_known_host_fingerprint(host_id: String) -> Result<Option<String>, String> {
+    with_db(|db| known_hosts::fingerprint(db.conn(), &host_id))
+}
+
+/// TOFU-remember a host's certificate fingerprint. First sight pins it; a
+/// later, different fingerprint is rejected (possible MITM).
+pub fn net_remember_host(host_id: String, name: String, fingerprint: String) -> Result<(), String> {
+    with_db(|db| known_hosts::remember(db.conn(), &host_id, &name, &fingerprint, now_ms()))
+}
+
+/// Every pinned fingerprint — the streaming client (which only has a URL) uses
+/// this to accept a self-signed cert that belongs to an already-trusted host.
+pub fn net_known_fingerprints() -> Result<Vec<String>, String> {
+    with_db(|db| known_hosts::all_fingerprints(db.conn()))
+}
+
+/// Forget a host's TOFU pin (so the next connection re-pins).
+pub fn net_forget_host(host_id: String) -> Result<(), String> {
+    with_db(|db| known_hosts::forget(db.conn(), &host_id))
 }

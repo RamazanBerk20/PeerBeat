@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../app_config.dart';
+import '../net/tofu.dart';
 import '../src/rust/api/network.dart';
 import '../src/rust/db/tracks.dart';
 import '../src/rust/net/discovery.dart';
@@ -93,15 +93,17 @@ class _NetworkPanelState extends State<NetworkPanel> {
   }
 
   Future<void> _openHost(HostInfo h) async {
-    final base = 'http://${h.address}:${h.port}';
-    final client = HttpClient();
+    final base = 'https://${h.address}:${h.port}';
+    final key = h.hostId.isEmpty ? '${h.address}:${h.port}' : h.hostId;
+    final tc = await TofuHostClient.forHost(key, h.name);
     try {
-      final resp = await (await client.getUrl(
+      final resp = await (await tc.client.getUrl(
         Uri.parse('$base/v1/tracks'),
       )).close();
       if (resp.statusCode != 200) {
         throw Exception('HTTP ${resp.statusCode}');
       }
+      await tc.confirmPin(); // connection verified → remember the TOFU pin
       final body = await resp.transform(utf8.decoder).join();
       final decoded = jsonDecode(body);
       if (decoded is! List) {
@@ -140,7 +142,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
         );
       }
     } finally {
-      client.close();
+      tc.close();
     }
   }
 

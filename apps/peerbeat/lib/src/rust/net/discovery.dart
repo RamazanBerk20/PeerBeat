@@ -12,14 +12,28 @@ class HostInfo {
   final String address;
   final int port;
 
+  /// Stable host id (TXT `id`) — the TOFU pin key.
+  final String hostId;
+
+  /// Advertised certificate fingerprint (TXT `fp`); the live cert is the
+  /// authority, this is only a UX hint / short-fp source.
+  final String fingerprint;
+
   const HostInfo({
     required this.name,
     required this.address,
     required this.port,
+    required this.hostId,
+    required this.fingerprint,
   });
 
   @override
-  int get hashCode => name.hashCode ^ address.hashCode ^ port.hashCode;
+  int get hashCode =>
+      name.hashCode ^
+      address.hashCode ^
+      port.hashCode ^
+      hostId.hashCode ^
+      fingerprint.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -28,5 +42,7 @@ class HostInfo {
           runtimeType == other.runtimeType &&
           name == other.name &&
           address == other.address &&
-          port == other.port;
+          port == other.port &&
+          hostId == other.hostId &&
+          fingerprint == other.fingerprint;
 }

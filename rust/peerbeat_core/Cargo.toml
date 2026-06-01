@@ -31,6 +31,14 @@ tower-http = { version = "0.6.11", features = ["fs"] }
 mdns-sd = "0.20.0"
 local-ip-address = "0.6.13"
 tower = { version = "0.5.3", features = ["util"] }
+rcgen = "0.14.8"
+sha2 = "0.11.0"
+uuid = { version = "1.23.2", features = ["v4"] }
+# `-no-provider` so we use the pure-Rust `ring` provider (installed at startup),
+# not the heavy aws-lc-sys C build that `tls-rustls` would force in.
+axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
+rustls = { version = "0.23.40", default-features = false, features = ["ring"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
 
 # Heavier subsystem deps (tokio, rusqlite, lofty, symphonia, cpal, rustls,
 # mdns-sd, ...) are added milestone-by-milestone as each module is implemented,

@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1378737270;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -489867;
 
 // Section: executor
 
@@ -1520,6 +1520,39 @@ fn wire__crate__api__network__net_discover_impl(
         },
     )
 }
+fn wire__crate__api__library__net_forget_host_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "net_forget_host",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_host_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::library::net_forget_host(api_host_id)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__network__net_host_port_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1578,6 +1611,110 @@ fn wire__crate__api__network__net_is_hosting_impl(
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(crate::api::network::net_is_hosting())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__library__net_known_fingerprints_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "net_known_fingerprints",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::library::net_known_fingerprints()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__library__net_known_host_fingerprint_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "net_known_host_fingerprint",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_host_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::library::net_known_host_fingerprint(api_host_id)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__library__net_remember_host_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "net_remember_host",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_host_id = <String>::sse_decode(&mut deserializer);
+            let api_name = <String>::sse_decode(&mut deserializer);
+            let api_fingerprint = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::library::net_remember_host(
+                        api_host_id,
+                        api_name,
+                        api_fingerprint,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2457,10 +2594,14 @@ impl SseDecode for crate::net::discovery::HostInfo {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_address = <String>::sse_decode(deserializer);
         let mut var_port = <u16>::sse_decode(deserializer);
+        let mut var_hostId = <String>::sse_decode(deserializer);
+        let mut var_fingerprint = <String>::sse_decode(deserializer);
         return crate::net::discovery::HostInfo {
             name: var_name,
             address: var_address,
             port: var_port,
+            host_id: var_hostId,
+            fingerprint: var_fingerprint,
         };
     }
 }
@@ -2469,6 +2610,18 @@ impl SseDecode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_i64::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
     }
 }
 
@@ -2967,55 +3120,69 @@ fn pde_ffi_dispatcher_primary_impl(
             wire__crate__api__library__library_update_tags_impl(port, ptr, rust_vec_len, data_len)
         }
         45 => wire__crate__api__network__net_discover_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__network__net_host_port_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__network__net_is_hosting_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__network__net_start_host_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__network__net_stop_host_impl(port, ptr, rust_vec_len, data_len),
-        50 => {
+        46 => wire__crate__api__library__net_forget_host_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__network__net_host_port_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__network__net_is_hosting_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__library__net_known_fingerprints_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        50 => wire__crate__api__library__net_known_host_fingerprint_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        51 => wire__crate__api__library__net_remember_host_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__network__net_start_host_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__network__net_stop_host_impl(port, ptr, rust_vec_len, data_len),
+        54 => {
             wire__crate__api__library__playlist_add_tracks_impl(port, ptr, rust_vec_len, data_len)
         }
-        51 => wire__crate__api__library__playlist_create_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__library__playlist_delete_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__library__playlist_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__library__playlist_export_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__library__playlist_import_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__library__playlist_list_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__library__playlist_remove_position_impl(
+        55 => wire__crate__api__library__playlist_create_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__library__playlist_delete_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__library__playlist_duplicate_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__library__playlist_export_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__library__playlist_import_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__library__playlist_list_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__library__playlist_remove_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__library__playlist_rename_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__library__playlist_reorder_tracks_impl(
+        62 => wire__crate__api__library__playlist_rename_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__library__playlist_reorder_tracks_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__library__playlist_tracks_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__library__settings_delete_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__library__settings_get_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__library__settings_set_impl(port, ptr, rust_vec_len, data_len),
-        64 => {
+        64 => wire__crate__api__library__playlist_tracks_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__library__settings_delete_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__library__settings_get_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__library__settings_set_impl(port, ptr, rust_vec_len, data_len),
+        68 => {
             wire__crate__api__library__smart_playlist_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        65 => {
+        69 => {
             wire__crate__api__library__smart_playlist_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        66 => {
+        70 => {
             wire__crate__api__library__smart_playlist_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        67 => wire__crate__api__library__smart_playlist_preview_impl(
+        71 => wire__crate__api__library__smart_playlist_preview_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => {
+        72 => {
             wire__crate__api__library__smart_playlist_tracks_impl(port, ptr, rust_vec_len, data_len)
         }
-        69 => {
+        73 => {
             wire__crate__api__library__smart_playlist_update_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -3161,6 +3328,8 @@ impl flutter_rust_bridge::IntoDart for crate::net::discovery::HostInfo {
             self.name.into_into_dart().into_dart(),
             self.address.into_into_dart().into_dart(),
             self.port.into_into_dart().into_dart(),
+            self.host_id.into_into_dart().into_dart(),
+            self.fingerprint.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3443,6 +3612,8 @@ impl SseEncode for crate::net::discovery::HostInfo {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.address, serializer);
         <u16>::sse_encode(self.port, serializer);
+        <String>::sse_encode(self.host_id, serializer);
+        <String>::sse_encode(self.fingerprint, serializer);
     }
 }
 
@@ -3450,6 +3621,16 @@ impl SseEncode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_i64::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <String>::sse_encode(item, serializer);
+        }
     }
 }
 

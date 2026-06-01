@@ -1,61 +1,93 @@
-//! FRB LAN API: host (advertise + serve) and discover peers.
+//! FRB LAN API: host (advertise + serve over TLS) and discover peers.
 
 use crate::net::discovery::{self, HostInfo};
 use crate::net::server::{self, ServerConfig};
+use crate::net::tls;
+use axum_server::tls_rustls::RustlsConfig;
+use axum_server::Handle;
 use mdns_sd::ServiceDaemon;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use tokio::sync::Notify;
 
 struct Host {
     daemon: ServiceDaemon,
-    shutdown: Arc<Notify>,
+    handle: Handle<std::net::SocketAddr>,
     thread: Option<JoinHandle<()>>,
     port: u16,
 }
 
 static HOST: Mutex<Option<Host>> = Mutex::new(None);
 
-/// Start sharing the library over the LAN: bind the HTTP server and advertise
-/// via mDNS. Returns the port. Idempotent (returns the existing port).
+/// Start sharing the library over the LAN: bind the **HTTPS** server (per-host
+/// self-signed cert) and advertise it (name + stable id + fingerprint) via
+/// mDNS. Returns the port. Idempotent (returns the existing port).
 pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, String> {
     let mut guard = HOST.lock().map_err(|_| "host lock poisoned".to_string())?;
     if let Some(h) = guard.as_ref() {
         return Ok(h.port);
     }
 
+    tls::ensure_provider();
+    // Certs live next to the database file.
+    let dir = Path::new(&db_path)
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let identity = tls::load_or_create(&dir).map_err(|e| e.to_string())?;
+
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(|e| e.to_string())?;
-    let (listener, port) = rt.block_on(server::bind()).map_err(|e| e.to_string())?;
+    let tls_config = rt
+        .block_on(RustlsConfig::from_pem(
+            identity.cert_pem.clone().into_bytes(),
+            identity.key_pem.clone().into_bytes(),
+        ))
+        .map_err(|e| format!("tls config: {e}"))?;
+    let (listener, port) = server::bind_std().map_err(|e| e.to_string())?;
 
     let daemon = ServiceDaemon::new().map_err(|e| e.to_string())?;
-    discovery::register(&daemon, &display_name, port).map_err(|e| e.to_string())?;
+    discovery::register(
+        &daemon,
+        &display_name,
+        port,
+        &identity.host_id,
+        &identity.fingerprint,
+    )
+    .map_err(|e| e.to_string())?;
 
     let cfg = ServerConfig {
         db_path: PathBuf::from(&db_path),
         name: display_name,
+        host_id: identity.host_id,
+        fingerprint: identity.fingerprint,
     };
-    let shutdown = Arc::new(Notify::new());
-    let shutdown_thread = shutdown.clone();
+    let handle: Handle<std::net::SocketAddr> = Handle::new();
+    let handle_thread = handle.clone();
     let thread = std::thread::Builder::new()
         .name("peerbeat-host".into())
         .spawn(move || {
             rt.block_on(async move {
                 let app = server::router(cfg);
-                let _ = axum::serve(listener, app)
-                    .with_graceful_shutdown(async move { shutdown_thread.notified().await })
-                    .await;
+                match axum_server::from_tcp_rustls(listener, tls_config) {
+                    Ok(server) => {
+                        let _ = server
+                            .handle(handle_thread)
+                            .serve(app.into_make_service())
+                            .await;
+                    }
+                    Err(e) => eprintln!("peerbeat: tls server failed: {e}"),
+                }
             });
         })
         .map_err(|e| e.to_string())?;
 
     *guard = Some(Host {
         daemon,
-        shutdown,
+        handle,
         thread: Some(thread),
         port,
     });
@@ -66,7 +98,7 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
 pub fn net_stop_host() {
     if let Ok(mut guard) = HOST.lock() {
         if let Some(mut h) = guard.take() {
-            h.shutdown.notify_one();
+            h.handle.graceful_shutdown(Some(Duration::from_millis(500)));
             let _ = h.daemon.shutdown();
             if let Some(t) = h.thread.take() {
                 let _ = t.join();

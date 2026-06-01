@@ -13,10 +13,22 @@ pub struct HostInfo {
     pub name: String,
     pub address: String,
     pub port: u16,
+    /// Stable host id (TXT `id`) — the TOFU pin key.
+    pub host_id: String,
+    /// Advertised certificate fingerprint (TXT `fp`); the live cert is the
+    /// authority, this is only a UX hint / short-fp source.
+    pub fingerprint: String,
 }
 
-/// Advertise this host under `_peerbeat._tcp` with a `name` TXT property.
-pub fn register(daemon: &ServiceDaemon, name: &str, port: u16) -> anyhow::Result<()> {
+/// Advertise this host under `_peerbeat._tcp` with `name`, stable `id`, and
+/// certificate `fp` TXT properties.
+pub fn register(
+    daemon: &ServiceDaemon,
+    name: &str,
+    port: u16,
+    host_id: &str,
+    fingerprint: &str,
+) -> anyhow::Result<()> {
     let ip = local_ip_address::local_ip()
         .map(|i| i.to_string())
         .unwrap_or_default();
@@ -24,6 +36,8 @@ pub fn register(daemon: &ServiceDaemon, name: &str, port: u16) -> anyhow::Result
     let instance = format!("PeerBeat-{port}");
     let mut props = HashMap::new();
     props.insert("name".to_string(), name.to_string());
+    props.insert("id".to_string(), host_id.to_string());
+    props.insert("fp".to_string(), fingerprint.to_string());
     let info = ServiceInfo::new(SERVICE, &instance, &host_name, ip.as_str(), port, props)?
         .enable_addr_auto();
     daemon.register(info)?;
@@ -48,11 +62,14 @@ pub fn browse(timeout: Duration) -> Vec<HostInfo> {
         match rx.recv_timeout(remaining) {
             Ok(ServiceEvent::ServiceResolved(info)) => {
                 if let Some(addr) = info.get_addresses_v4().into_iter().next() {
-                    let name = info
-                        .txt_properties
-                        .get_property_val_str("name")
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| info.fullname.clone());
+                    let txt = |k| {
+                        info.txt_properties
+                            .get_property_val_str(k)
+                            .map(|s| s.to_string())
+                    };
+                    let name = txt("name").unwrap_or_else(|| info.fullname.clone());
+                    let host_id = txt("id").unwrap_or_default();
+                    let fingerprint = txt("fp").unwrap_or_default();
                     let address = addr.to_string();
                     if !hosts
                         .iter()
@@ -62,6 +79,8 @@ pub fn browse(timeout: Duration) -> Vec<HostInfo> {
                             name,
                             address,
                             port: info.get_port(),
+                            host_id,
+                            fingerprint,
                         });
                     }
                 }

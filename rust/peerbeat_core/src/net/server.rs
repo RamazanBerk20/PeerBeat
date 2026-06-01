@@ -14,7 +14,6 @@ use axum::{
 use rusqlite::Connection;
 use serde::Serialize;
 use std::path::PathBuf;
-use tokio::net::TcpListener;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
@@ -22,11 +21,15 @@ use tower_http::services::ServeFile;
 pub struct ServerConfig {
     pub db_path: PathBuf,
     pub name: String,
+    pub host_id: String,
+    pub fingerprint: String,
 }
 
 #[derive(Serialize)]
 struct InfoResp {
     name: String,
+    host_id: String,
+    fingerprint: String,
     track_count: i64,
     proto: u32,
 }
@@ -70,6 +73,8 @@ async fn info(State(cfg): State<ServerConfig>) -> impl IntoResponse {
     .unwrap_or(0);
     Json(InfoResp {
         name: cfg.name.clone(),
+        host_id: cfg.host_id.clone(),
+        fingerprint: cfg.fingerprint.clone(),
         track_count: count,
         proto: 1,
     })
@@ -119,9 +124,11 @@ async fn stream(
     }
 }
 
-/// Bind `0.0.0.0:0` and return the listener + chosen port.
-pub async fn bind() -> std::io::Result<(TcpListener, u16)> {
-    let listener = TcpListener::bind(("0.0.0.0", 0)).await?;
+/// Bind `0.0.0.0:0` and return a non-blocking std listener (for `axum_server`)
+/// + the chosen port.
+pub fn bind_std() -> std::io::Result<(std::net::TcpListener, u16)> {
+    let listener = std::net::TcpListener::bind(("0.0.0.0", 0))?;
     let port = listener.local_addr()?.port();
+    listener.set_nonblocking(true)?;
     Ok((listener, port))
 }

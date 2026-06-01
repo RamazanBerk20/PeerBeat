@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:just_audio/just_audio.dart' as ja;
 
+import '../net/tofu.dart';
 import '../src/rust/api/audio.dart' as rust;
 
 /// Platform-agnostic audio transport.
@@ -88,7 +89,9 @@ class RustDesktopEngine implements AudioEngine {
       final file = File('${dir.path}/${url.hashCode}.audio');
       if (!await file.exists() || await file.length() == 0) {
         final part = File('${file.path}.part');
-        final client = HttpClient();
+        // TOFU client: trusts a self-signed cert only if its fingerprint
+        // belongs to a host we've already pinned (via the Network screen).
+        final client = await tofuStreamClient();
         try {
           final resp = await (await client.getUrl(Uri.parse(url))).close();
           if (resp.statusCode != 200) {

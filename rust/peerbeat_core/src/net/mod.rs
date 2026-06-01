@@ -20,8 +20,8 @@
 
 pub mod discovery;
 pub mod server;
+pub mod tls;
 
 // Further slices:
-// mod tls;          // rcgen self-signed cert + rustls config + TOFU pinning
 // mod control;      // websocket control channel
 // mod party;        // clock-sync + synchronized playback
