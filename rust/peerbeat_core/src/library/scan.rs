@@ -32,10 +32,14 @@ fn mtime_ns(md: &Metadata) -> i64 {
 }
 
 /// `xxh3_64` of `[first 64 KiB ‖ last 64 KiB ‖ size]`, hex. Cheap + robust to
-/// metadata-only edits and moves.
-fn content_hash(path: &Path, size: u64) -> std::io::Result<String> {
+/// metadata-only edits and moves. The size is re-read from the open handle (not
+/// trusted from the caller) so a concurrent truncation in the window between the
+/// caller's `stat` and here can't make `read_exact` overshoot and silently drop
+/// the hash via `.ok()`.
+fn content_hash(path: &Path) -> std::io::Result<String> {
     const CHUNK: u64 = 64 * 1024;
     let mut f = File::open(path)?;
+    let size = f.metadata()?.len();
     let mut h = Xxh3::new();
     if size <= 2 * CHUNK {
         let mut buf = Vec::with_capacity(size as usize);
@@ -106,7 +110,7 @@ pub fn scan_folder(
                 continue;
             }
         };
-        nt.content_hash = content_hash(path, size).ok();
+        nt.content_hash = content_hash(path).ok();
         let id = upsert_track(conn, &nt)?;
         super::art::link_album_art(conn, id, path, art_dir)?;
         if was_new {
@@ -210,7 +214,7 @@ pub fn rescan_file(
         .optional()?
         .unwrap_or(now_ms);
     let mut nt = read_tags(path, size as i64, mt, added_at)?;
-    nt.content_hash = content_hash(path, size).ok();
+    nt.content_hash = content_hash(path).ok();
     let id = upsert_track(conn, &nt)?;
     super::art::link_album_art(conn, id, path, art_dir)?;
     Ok(())
@@ -406,6 +410,21 @@ mod tests {
             .unwrap();
         assert_eq!(artist, "New Artist");
 
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn content_hash_handles_large_files() {
+        // A file larger than 2*CHUNK (128 KiB) exercises the head+tail+seek path;
+        // the hash must be a stable 16-char hex digest.
+        let dir = unique_tmp();
+        let f = dir.join("big.wav");
+        write_wav(&f, 12); // ~192 KiB of PCM + header, well over 128 KiB
+        assert!(std::fs::metadata(&f).unwrap().len() > 2 * 64 * 1024);
+        let h1 = content_hash(&f).unwrap();
+        let h2 = content_hash(&f).unwrap();
+        assert_eq!(h1.len(), 16);
+        assert_eq!(h1, h2);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

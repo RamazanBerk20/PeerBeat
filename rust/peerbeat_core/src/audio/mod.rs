@@ -1,25 +1,26 @@
 //! Desktop audio engine (Windows/Linux).
 //!
-//! `symphonia` decode → DSP graph → `rubato` resample → `cpal` output.
-//! The DSP graph provides: a 10-band biquad EQ, ReplayGain pre-amp, optional
-//! stereo widening, a dual-decoder equal-power mixer for gapless + configurable
-//! crossfade (0–12 s), and pitch-preserving variable speed (0.5–2×).
+//! **Current implementation** ([`engine`]): a `rodio`-based transport on a
+//! dedicated audio thread driven by a serialized command channel (a fresh symphonia
+//! reader handles AAC/M4A; rodio's decoders handle the rest). A real-time DSP chain
+//! applies a 10-band biquad EQ ([`eq`]), a ReplayGain pre-amp, and optional stereo
+//! widening ([`widen`]). Position is published via shared atomics the FRB layer
+//! polls; transport mutations are last-write-wins on the command channel.
 //!
-//! All transport mutations go through one serialized, coalescing command queue
-//! (last-write-wins on seek/volume); position is interpolated locally between
-//! decoder ticks and streamed to Dart, meeting the < 50 ms scrub target.
+//! **Not yet built here** (see the roadmap / `docs/STATUS.md`): gapless, configurable
+//! crossfade (0–12 s), and *pitch-preserving* variable speed. rodio's `set_speed`
+//! currently shifts pitch with speed; the planned `symphonia → DSP → rubato → cpal`
+//! pipeline (dual-decoder crossfade mixer + a time-stretch stage) replaces this engine
+//! to deliver those.
 //!
 //! On Android this module is unused — playback there is ExoPlayer (Dart side).
-//!
-//! Implemented in **M1** (transport + gapless/crossfade + speed) and extended in
-//! **M2** (EQ, ReplayGain, output-device selection, stereo widening).
 
 mod engine;
 mod eq;
 mod widen;
 pub use engine::AudioEngine;
 
-// M2 replaces the rodio engine with a custom symphonia→cpal pipeline:
+// Planned: replace the rodio engine with a custom symphonia→cpal pipeline:
 // mod decoder;      // symphonia source + dual-decoder crossfade mixer
 // mod dsp;          // biquad EQ, replaygain, widener, time-stretch
 // mod devices;      // output-device enumeration + selection

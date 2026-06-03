@@ -63,8 +63,10 @@ class MprisController implements OsMediaController {
       player.addListener(_onPlayerChanged);
       _onPlayerChanged(); // push initial state
     } catch (e) {
-      // No session bus (headless/CI) or registration failed — degrade silently.
+      // No session bus (headless/CI) or registration failed — degrade silently,
+      // and make sure a listener added before the failure doesn't leak.
       debugPrint('MPRIS unavailable: $e');
+      player.removeListener(_onPlayerChanged);
       _client = null;
       _object = null;
     }

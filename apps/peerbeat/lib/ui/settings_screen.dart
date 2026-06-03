@@ -113,7 +113,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _deletePreset(EqPresetRow preset) async {
     try {
       await eqPresetDelete(presetId: preset.id);
-      _reloadPresets();
+      if (mounted) _reloadPresets();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

@@ -49,7 +49,11 @@ pub fn load_or_create(dir: &Path) -> anyhow::Result<Identity> {
         fs::read_to_string(&id_p),
         fs::read_to_string(&fp_p),
     ) {
-        if !cert_pem.is_empty() && !host_id.trim().is_empty() && !fp.trim().is_empty() {
+        if !cert_pem.is_empty()
+            && !key_pem.is_empty()
+            && !host_id.trim().is_empty()
+            && !fp.trim().is_empty()
+        {
             return Ok(Identity {
                 host_id: host_id.trim().to_string(),
                 cert_pem,

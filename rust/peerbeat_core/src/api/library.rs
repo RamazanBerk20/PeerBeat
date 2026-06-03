@@ -96,11 +96,11 @@ pub fn library_rescan_all() -> Result<ScanReport, String> {
             let root = PathBuf::from(&f.path);
             let s = library::scan_folder(db.conn(), &root, now, db.art_dir())?;
             let pruned = library::scan::prune_missing(db.conn(), &root)?;
-            rep.added += s.added as u32;
-            rep.updated += s.updated as u32;
-            rep.skipped += s.skipped as u32;
-            rep.errors += s.errors as u32;
-            rep.removed += pruned as u32;
+            rep.added = rep.added.saturating_add(s.added as u32);
+            rep.updated = rep.updated.saturating_add(s.updated as u32);
+            rep.skipped = rep.skipped.saturating_add(s.skipped as u32);
+            rep.errors = rep.errors.saturating_add(s.errors as u32);
+            rep.removed = rep.removed.saturating_add(pruned as u32);
         }
         Ok(rep)
     })

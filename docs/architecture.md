@@ -4,6 +4,12 @@ PeerBeat is a **Flutter UI** over a **shared Rust core** (`peerbeat_core`), targ
 **Windows, Linux, and Android**. The Rust core owns the heavy, cross-platform
 logic; Flutter owns the UI and the per-OS integration shell.
 
+> **Status:** this document describes the *intended* architecture, and the diagram
+> below names some components (custom audio engine, LAN auth/sharing/party, DB
+> change-broadcaster, Riverpod/go_router) that are still on the roadmap. See
+> [`STATUS.md`](STATUS.md) for what is actually built today; the prose flags the
+> notable gaps inline.
+
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                         Flutter app (Dart)                             │
@@ -38,9 +44,10 @@ logic; Flutter owns the UI and the per-OS integration shell.
   the SQLite store, and the desktop DSP are written once in Rust and behave
   identically on every platform.
 - **Native TLS pinning on both ends.** Because the Rust core is both the host
-  server and the streaming client, a pinned self-signed stream is fed straight
-  to the decoder — no localhost-proxy workaround (which an all-Dart design needs
-  because ExoPlayer/libmpv ignore Dart's certificate callback).
+  server and the streaming client, a pinned self-signed host can be trusted
+  without a CA. *(Today the desktop client caches the pinned stream to a temp file
+  before playback; feeding bytes straight to the decoder — avoiding the
+  localhost-proxy workaround an all-Dart design needs — is a roadmap item.)*
 - **No fragile platform deps.** `mdns-sd` removes the Avahi-daemon dependency a
   Dart mDNS plugin (`bonsoir`/`nsd`) would impose; the Rust cpal engine removes
   the libmpv runtime dependency on desktop.
@@ -63,15 +70,15 @@ future stretch.) **Networking, library, and the DB are uniform Rust everywhere.*
 
 ## Threading & data flow
 
-- The Rust core runs a **Tokio runtime** (networking) and a dedicated **DB worker
-  thread**; the desktop audio engine owns a real-time **cpal** callback thread fed
-  by a lock-free ring buffer from a decode thread.
-- Dart calls cross the FRB boundary as `async` futures; long-lived updates
-  (playback position, scan progress, DB change notifications, incoming-transfer
-  events) are delivered as **FRB streams** the Riverpod layer subscribes to.
-- The DB is the source of truth. Writers (scanner) and readers (UI, LAN server)
-  coordinate through SQLite WAL + an in-process change broadcaster that fans out
-  to FRB streams.
+- The Rust core spins up a **Tokio runtime** for the LAN host server. The desktop
+  audio engine runs on a **dedicated thread** driven by a serialized command channel
+  (rodio today; the planned symphonia→cpal engine adds a decode thread + ring buffer
+  feeding the cpal callback).
+- Dart calls cross the FRB boundary as `async` futures; playback position is
+  **polled** into Dart streams the UI subscribes to. *(A push-based DB
+  change-broadcaster and incoming-transfer event streams are planned.)*
+- The DB is the source of truth, opened in **WAL** mode. The UI re-queries after
+  mutations today; a fan-out change broadcaster is a roadmap item.
 
 ## Module ownership
 

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -76,15 +77,54 @@ String _deviceName() {
   }
 }
 
-class PeerBeatApp extends StatelessWidget {
+class PeerBeatApp extends StatefulWidget {
   const PeerBeatApp({super.key});
 
   static const _seed = Color(0xFF2BD9C6); // neon teal from the PeerBeat icon
 
   @override
+  State<PeerBeatApp> createState() => _PeerBeatAppState();
+}
+
+class _PeerBeatAppState extends State<PeerBeatApp> {
+  late final AppLifecycleListener _lifecycle;
+  bool _cleaned = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Release the OS media controller (D-Bus connection + player listener) and
+    // the audio engine on shutdown so nothing is left dangling on quit.
+    _lifecycle = AppLifecycleListener(
+      onExitRequested: () async {
+        await _cleanup();
+        return AppExitResponse.exit;
+      },
+      onDetach: _cleanup,
+    );
+  }
+
+  Future<void> _cleanup() async {
+    if (_cleaned) return;
+    _cleaned = true;
+    try {
+      await osMedia.dispose();
+    } catch (_) {}
+    try {
+      player.dispose(); // ChangeNotifier.dispose is synchronous (returns void)
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     ColorScheme scheme(Brightness b) =>
-        ColorScheme.fromSeed(seedColor: _seed, brightness: b);
+        ColorScheme.fromSeed(seedColor: PeerBeatApp._seed, brightness: b);
     return MaterialApp(
       title: 'PeerBeat',
       debugShowCheckedModeBanner: false,

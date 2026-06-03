@@ -21,20 +21,40 @@ controls, or download them — encrypted, and never touching the internet. Start
 
 ## Features
 
-- **Playback** — gapless, configurable crossfade (0–12 s), pitch-preserving speed
-  (0.5–2×), shuffle, repeat, resume-on-restart.
-- **Library** — MP3/FLAC/WAV/AAC/OGG/M4A; read & edit tags; album art; browse by
-  Songs/Albums/Artists/Genres/Years/Recently-Added; fast fuzzy search; watch-folders.
-- **Playlists & queue** — drag-and-drop queue, Play-Next/Add-to-Queue, smart
-  playlists from rules, auto-lists, M3U/PLS import-export.
-- **LAN sharing** — mDNS discovery, TLS-encrypted streaming with cert pinning,
-  Open/PIN/Approved access modes, per-playlist stream-or-download permissions,
-  a host dashboard with one-tap revoke, and synchronized **party mode**.
-- **Audio quality** — 10-band EQ + presets, ReplayGain, output-device selection,
-  stereo widening.
-- **Polish** — Now Playing with synced lyrics, persistent mini-player, dynamic
-  theming from album art, light/dark, responsive desktop/phone/tablet layouts,
-  WCAG 2.1 AA, OS media controls (MPRIS/SMTC/MediaSession), tray + media keys.
+What works today:
+
+- **Playback** — play/pause/seek/prev/next, shuffle, repeat (off/all/one), volume +
+  mute, variable speed, resume-on-restart.
+- **Library** — MP3/FLAC/WAV/AAC/OGG/M4A; read & edit tags; album art with fallback;
+  browse by Songs/Albums/Artists/Genres/Years/Recently-Added; fast FTS5 fuzzy search;
+  add folders + on-demand rescan.
+- **Playlists & queue** — full playlist CRUD + duplicate + drag-and-drop reorder,
+  Play-Next/Add-to-Queue, rule-based smart playlists, M3U/PLS import-export.
+- **LAN sharing** — mDNS discovery (+ manual IP), per-host self-signed **TLS with
+  TOFU certificate pinning**, and HTTP-Range streaming of a host's library; the UI
+  makes it explicit that nothing leaves the local network.
+- **Audio quality** — 10-band graphic EQ + built-in & custom presets, ReplayGain
+  normalization, output-device selection, stereo widening.
+- **Now Playing & UI** — large artwork, scrubber, up-next, persistent mini-player,
+  light/dark Material 3, responsive desktop/phone/tablet layouts.
+- **OS integration** — MPRIS media controls + media keys on Linux; Android playback
+  via ExoPlayer (lockscreen / notification / background).
+
+## Roadmap
+
+Targeted next — see [`docs/STATUS.md`](docs/STATUS.md) for the full done/partial/planned matrix:
+
+- **Audio engine** — gapless, configurable crossfade (0–12 s), and *pitch-preserving*
+  speed (the current desktop engine shifts pitch with speed).
+- **LAN sharing** — mark playlists shareable, Open/PIN/Approved access modes,
+  per-playlist stream-or-download permissions, track/playlist **downloads**, a host
+  dashboard of active transfers with one-tap revoke, and synchronized **party mode**
+  over a WebSocket control channel.
+- **Library/UX** — active watch-folders, auto-lists (Recently/Most/Never-Played,
+  Favorites), a synced **lyrics** panel (`.lrc` / embedded), dynamic theming from
+  album art, keyboard shortcuts + gestures, and a full WCAG 2.1 AA pass.
+- **OS integration** — Windows SMTC, a tray mini-player + custom sliding notification
+  (with a Wayland fallback to system notifications), close-to-tray, and Android Auto.
 
 ## Architecture
 

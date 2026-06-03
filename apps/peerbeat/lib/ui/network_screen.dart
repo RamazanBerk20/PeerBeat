@@ -103,12 +103,15 @@ class _NetworkPanelState extends State<NetworkPanel> {
       if (resp.statusCode != 200) {
         throw Exception('HTTP ${resp.statusCode}');
       }
-      await tc.confirmPin(); // connection verified → remember the TOFU pin
       final body = await resp.transform(utf8.decoder).join();
       final decoded = jsonDecode(body);
       if (decoded is! List) {
         throw Exception('unexpected response from host');
       }
+      // Pin the cert only after the whole response validates as a genuine
+      // PeerBeat reply — a first-use MITM returning 200 + garbage must not get
+      // its certificate permanently trusted (TOFU lock-in).
+      await tc.confirmPin();
       final tracks = <TrackRow>[
         for (final raw in decoded)
           if (raw is Map<String, dynamic>)

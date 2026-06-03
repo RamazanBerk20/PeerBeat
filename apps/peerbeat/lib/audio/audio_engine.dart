@@ -54,7 +54,8 @@ abstract class AudioEngine {
 /// Desktop: wraps the synchronous FRB audio API, polling it into streams.
 class RustDesktopEngine implements AudioEngine {
   RustDesktopEngine() {
-    _sweepStreamCache(); // best-effort: clear the previous session's stream cache
+    // best-effort: clear the previous session's stream cache (fire-and-forget).
+    unawaited(_sweepStreamCache());
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (_) => _poll());
   }
 
@@ -216,13 +217,13 @@ class ExoPlayerEngine implements AudioEngine {
   @override
   Future<void> playPath(String path, {Duration? duration}) async {
     await _player.setFilePath(path);
-    _player.play(); // do not await: completes only when playback ends
+    unawaited(_player.play()); // do not await: completes only when playback ends
   }
 
   @override
   Future<void> playUrl(String url, {Duration? duration}) async {
     await _player.setUrl(url);
-    _player.play();
+    unawaited(_player.play()); // do not await: completes only when playback ends
   }
 
   @override

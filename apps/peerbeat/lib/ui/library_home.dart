@@ -98,31 +98,35 @@ class _LibraryHomeState extends State<LibraryHome> {
       final controller = TextEditingController(
         text: Platform.environment['HOME'] ?? '',
       );
-      return showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Scan a music folder'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Folder path',
-              hintText: '/home/you/Music',
+      try {
+        return await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Scan a music folder'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Folder path',
+                hintText: '/home/you/Music',
+              ),
+              onSubmitted: (v) => Navigator.pop(ctx, v),
             ),
-            onSubmitted: (v) => Navigator.pop(ctx, v),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, controller.text),
+                child: const Text('Scan'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('Scan'),
-            ),
-          ],
-        ),
-      );
+        );
+      } finally {
+        controller.dispose();
+      }
     }
   }
 
@@ -868,23 +872,42 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
   }
 
   Future<void> _removeAt(int index) async {
-    await playlistRemovePosition(
-      playlistId: widget.playlist.id,
-      position: index,
-    );
+    try {
+      await playlistRemovePosition(
+        playlistId: widget.playlist.id,
+        position: index,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not remove track: $e')));
+      return;
+    }
     if (!mounted) return;
     _reload();
   }
 
   Future<void> _reorderTo(int oldIndex, int newIndex) async {
+    final previous = _tracks;
     final next = [..._tracks];
     final item = next.removeAt(oldIndex);
     next.insert(newIndex, item);
-    setState(() => _tracks = next);
-    await playlistReorderTracks(
-      playlistId: widget.playlist.id,
-      trackIds: Int64List.fromList(next.map((t) => t.id).toList()),
-    );
+    setState(() => _tracks = next); // optimistic — instant drag feedback
+    try {
+      await playlistReorderTracks(
+        playlistId: widget.playlist.id,
+        trackIds: Int64List.fromList(next.map((t) => t.id).toList()),
+      );
+    } catch (e) {
+      // Roll the optimistic reorder back so the UI matches the DB, and report.
+      if (!mounted) return;
+      setState(() => _tracks = previous);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not reorder playlist: $e')));
+      return;
+    }
     if (!mounted) return;
     _reload();
   }

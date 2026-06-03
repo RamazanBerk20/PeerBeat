@@ -1,7 +1,15 @@
 //! LAN host HTTP server (axum). Serves library metadata + audio bytes to peers.
 //!
-//! M2 slice: plain HTTP, full-file streaming, no auth. TLS (rustls+rcgen TOFU),
-//! HTTP Range, and the auth modes layer on next.
+//! Endpoints today: `/v1/info`, `/v1/tracks`, and `/v1/stream/{id}` (the stream
+//! route honors HTTP Range via `ServeFile`, so peers can seek). The listener is
+//! wrapped in TLS with a per-host self-signed cert in [`crate::api::network`];
+//! peers pin that cert via TOFU.
+//!
+//! Not yet built (roadmap, see `docs/STATUS.md`): the access modes (Open / PIN /
+//! Approved), per-playlist share scoping + permissions, download endpoints, and the
+//! WebSocket control / party channel. Until then every endpoint is unauthenticated —
+//! any LAN peer can list and stream the whole library — so hosting is opt-in and off
+//! by default.
 
 use crate::db::tracks;
 use axum::{

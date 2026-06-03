@@ -160,10 +160,16 @@ pub fn tracks_for_rules(
     now_ms: i64,
 ) -> anyhow::Result<Vec<TrackRow>> {
     let q: SmartQuery = serde_json::from_str(rule_json)?;
-    let (where_sql, params) = compile(&q, now_ms).map_err(|e| anyhow::anyhow!(e))?;
+    let (where_sql, mut params) = compile(&q, now_ms).map_err(|e| anyhow::anyhow!(e))?;
+    // Bind LIMIT as a parameter (appended after the WHERE params) instead of
+    // interpolating it, so the module's "every value is bound" contract holds for
+    // the whole statement, not just the WHERE clause.
     let limit_clause = match limit {
-        Some(n) if n > 0 => format!(" LIMIT {n}"),
-        _ => String::new(),
+        Some(n) if n > 0 => {
+            params.push(Value::Integer(n));
+            " LIMIT ?"
+        }
+        _ => "",
     };
     let sql = format!(
         "{} tracks t LEFT JOIN albums al ON al.id = t.album_id \
@@ -373,5 +379,30 @@ mod tests {
         .unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].title, "Midnight City");
+    }
+
+    #[test]
+    fn limit_is_parameterized_and_applied() {
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        for i in 0..3 {
+            upsert_track(
+                c,
+                &NewTrack {
+                    path: format!("/m/{i}.flac"),
+                    normalized_path: format!("/m/{i}.flac"),
+                    title: format!("Song {i}"),
+                    added_at: 1,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+        // Empty rule set matches everything; the parameter-bound LIMIT must cap
+        // the result count and None must return all rows.
+        let two = tracks_for_rules(c, r#"{"rules":[]}"#, Some(2), 0).unwrap();
+        assert_eq!(two.len(), 2);
+        let all = tracks_for_rules(c, r#"{"rules":[]}"#, None, 0).unwrap();
+        assert_eq!(all.len(), 3);
     }
 }

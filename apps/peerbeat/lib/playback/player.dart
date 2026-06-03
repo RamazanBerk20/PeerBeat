@@ -167,7 +167,8 @@ class PlayerController extends ChangeNotifier {
     _order = [..._order]..insert(insertAt, newIndex);
     if (_pos < 0) {
       _pos = 0;
-      _playCurrent();
+      // Fire-and-forget — _playCurrent sets _lastError on failure (mirrors toggle()).
+      unawaited(_playCurrent());
     } else {
       notifyListeners();
     }
@@ -176,7 +177,7 @@ class PlayerController extends ChangeNotifier {
   void setShuffle(bool on) {
     if (on == _shuffle) return;
     _shuffle = on;
-    if (_order.isNotEmpty) {
+    if (_order.isNotEmpty && _pos >= 0 && _pos < _order.length) {
       final currentTrack = _order[_pos];
       if (on) {
         _shuffleKeepingCurrent();
@@ -189,7 +190,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   void _shuffleKeepingCurrent() {
-    if (_order.isEmpty) return;
+    if (_order.isEmpty || _pos < 0 || _pos >= _order.length) return;
     final currentTrack = _order[_pos];
     final rest = [..._order]..removeAt(_pos);
     rest.shuffle(Random());
