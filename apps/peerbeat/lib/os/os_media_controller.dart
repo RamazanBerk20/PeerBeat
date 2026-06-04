@@ -51,13 +51,26 @@ class MprisController implements OsMediaController {
   Future<void> start() async {
     try {
       final client = DBusClient.session();
-      final reply = await client.requestName('org.mpris.MediaPlayer2.peerbeat');
-      if (reply == DBusRequestNameReply.exists) {
-        await client.close();
-        return; // another instance owns the name
-      }
+      // Register the object *before* claiming the name so a desktop that reacts
+      // to the name appearing can introspect /org/mpris/MediaPlayer2 immediately.
       final object = _MprisObject();
       await client.registerObject(object);
+      // Take the name even from a stale (hidden/close-to-tray) instance, and let
+      // a future instance take it from us, so the *live* player is the one KDE
+      // and GNOME show.
+      final reply = await client.requestName(
+        'org.mpris.MediaPlayer2.peerbeat',
+        flags: {
+          DBusRequestNameFlag.allowReplacement,
+          DBusRequestNameFlag.replaceExisting,
+        },
+      );
+      if (reply == DBusRequestNameReply.exists ||
+          reply == DBusRequestNameReply.inQueue) {
+        // A non-replaceable owner holds the name — don't shadow it.
+        await client.close();
+        return;
+      }
       _client = client;
       _object = object;
       player.addListener(_onPlayerChanged);
