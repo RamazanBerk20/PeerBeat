@@ -52,8 +52,9 @@ build-out is tracked in the project plan.
 | Download tracks (tags + art) | ✅ | per-track download + import into a local folder (playlist ZIP pending) |
 | See connected peers (peer↔peer) | ⛔ | needs the WebSocket control channel |
 | Host activity dashboard + revoke | ✅ | active peers + recent stream/download log; per-peer **and** revoke-all |
-| WebSocket control channel | 🟡 | host party WS (state broadcast + clock-sync pong) built; peer client in progress |
-| Party mode (sync ≤100 ms, host control) | 🟡 | clock-sync core + transport + host API (start/update/stop) done; host/peer sync UI in progress |
+| WebSocket control channel | ✅ | host `/v1/party` WS (state broadcast + clock-sync pong) + Dart peer client |
+| Party mode (sync ≤100 ms, host control) | 🟡 | full host broadcast + peer clock-sync/follow built — **experimental**, needs 2-device verification |
+| Party: peer track requests | ⛔ | optional per spec; not built |
 
 > Note: the desktop "stream" path currently downloads the TOFU-verified stream to a
 > temp cache file and plays that; true incremental Range streaming straight to the

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../net/party.dart';
 import '../net/tofu.dart';
 import '../playback/player.dart';
 import '../src/rust/api/library.dart';
@@ -92,10 +93,45 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
   String _sanitize(String s) =>
       s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
 
+  Future<void> _joinParty() async {
+    try {
+      await party.joinParty(widget.base, widget.token, widget.title);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Joined party — following the host')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not join party: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [
+          ListenableBuilder(
+            listenable: party,
+            builder: (context, _) => party.joined
+                ? IconButton(
+                    tooltip: 'Leave party',
+                    icon: const Icon(Icons.exit_to_app),
+                    onPressed: () => party.leaveParty(),
+                  )
+                : IconButton(
+                    tooltip: 'Join party (sync to host)',
+                    icon: const Icon(Icons.celebration_outlined),
+                    onPressed: _joinParty,
+                  ),
+          ),
+        ],
+      ),
       bottomNavigationBar: const MiniPlayer(),
       body: widget.tracks.isEmpty
           ? const Center(child: Text('Nothing shared here'))

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../app_config.dart';
+import '../net/party.dart';
 import '../net/tofu.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/api/network.dart';
@@ -357,6 +358,22 @@ class _NetworkPanelState extends State<NetworkPanel> {
                 );
               }
             },
+          ),
+        if (_hosting)
+          ListenableBuilder(
+            listenable: party,
+            builder: (context, _) => SwitchListTile(
+              secondary: const Icon(Icons.celebration_outlined),
+              title: const Text('Party mode'),
+              subtitle: Text(
+                party.hosting
+                    ? 'Connected peers follow your playback in sync'
+                    : 'Start a synchronized session for peers',
+              ),
+              value: party.hosting,
+              onChanged: (on) =>
+                  on ? party.startHosting() : party.stopHosting(),
+            ),
           ),
         if (_hosting) const _ConnectionsSection(),
         const Divider(),
