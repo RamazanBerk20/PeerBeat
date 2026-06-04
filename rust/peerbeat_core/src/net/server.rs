@@ -15,7 +15,11 @@
 use crate::db::{shares, tracks};
 use axum::{
     extract::{FromRequestParts, Path, Request, State},
-    http::{header::AUTHORIZATION, request::Parts, StatusCode},
+    http::{
+        header::{AUTHORIZATION, CONTENT_DISPOSITION},
+        request::Parts,
+        HeaderValue, StatusCode,
+    },
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -128,6 +132,9 @@ pub fn router(cfg: ServerConfig) -> Router {
         .route("/v1/playlists", get(list_playlists))
         .route("/v1/playlists/{id}", get(playlist_tracks))
         .route("/v1/stream/{id}", get(stream))
+        .route("/v1/tracks/{id}/download", get(download))
+        .route("/v1/tracks/{id}/meta", get(track_meta))
+        .route("/v1/tracks/{id}/art", get(track_art))
         .with_state(cfg)
 }
 
@@ -369,31 +376,139 @@ async fn stream(
     auth: Auth,
     request: Request,
 ) -> impl IntoResponse {
-    let scope = auth.0.scope.clone();
-    let allowed = blocking_db(cfg.db_path.clone(), move |c| {
-        Ok(match scope {
-            Scope::Library => shares::library_access(c)?.is_some(),
-            Scope::Playlist(pid) => shares::track_in_playlist(c, pid, id)?,
-        })
-    })
-    .await
-    .unwrap_or(false);
-    if !allowed {
+    if !track_in_scope(&cfg, auth.0.scope.clone(), id).await {
         return (StatusCode::FORBIDDEN, "track not in your shared scope").into_response();
     }
-
-    let file_path = blocking_db(cfg.db_path.clone(), move |c| {
-        c.query_row("SELECT path FROM tracks WHERE id = ?1", [id], |r| {
-            r.get::<_, String>(0)
-        })
-    })
-    .await;
-    let Some(file_path) = file_path else {
+    let Some(file_path) = track_path(&cfg, id).await else {
         return (StatusCode::NOT_FOUND, "no such track").into_response();
     };
     match ServeFile::new(&file_path).oneshot(request).await {
         Ok(resp) => resp.into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "file missing").into_response(),
+    }
+}
+
+/// Whether the token's scope reaches `track_id` (library share → any track;
+/// playlist scope → the track must belong to that playlist).
+async fn track_in_scope(cfg: &ServerConfig, scope: Scope, track_id: i64) -> bool {
+    blocking_db(cfg.db_path.clone(), move |c| {
+        Ok(match scope {
+            Scope::Library => shares::library_access(c)?.is_some(),
+            Scope::Playlist(pid) => shares::track_in_playlist(c, pid, track_id)?,
+        })
+    })
+    .await
+    .unwrap_or(false)
+}
+
+async fn track_path(cfg: &ServerConfig, id: i64) -> Option<String> {
+    blocking_db(cfg.db_path.clone(), move |c| {
+        c.query_row("SELECT path FROM tracks WHERE id = ?1", [id], |r| {
+            r.get::<_, String>(0)
+        })
+    })
+    .await
+}
+
+/// Download a track's original file (gated on the share's download permission).
+async fn download(
+    State(cfg): State<ServerConfig>,
+    Path(id): Path<i64>,
+    auth: Auth,
+    request: Request,
+) -> impl IntoResponse {
+    if !auth.0.can_download {
+        return (
+            StatusCode::FORBIDDEN,
+            "downloads are not permitted for this share",
+        )
+            .into_response();
+    }
+    if !track_in_scope(&cfg, auth.0.scope.clone(), id).await {
+        return (StatusCode::FORBIDDEN, "track not in your shared scope").into_response();
+    }
+    let Some(file_path) = track_path(&cfg, id).await else {
+        return (StatusCode::NOT_FOUND, "no such track").into_response();
+    };
+    let filename = std::path::Path::new(&file_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("track")
+        .replace(['"', '\\'], "");
+    match ServeFile::new(&file_path).oneshot(request).await {
+        Ok(mut resp) => {
+            if let Ok(v) = HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")) {
+                resp.headers_mut().insert(CONTENT_DISPOSITION, v);
+            }
+            resp.into_response()
+        }
+        Err(_) => (StatusCode::NOT_FOUND, "file missing").into_response(),
+    }
+}
+
+#[derive(Serialize)]
+struct MetaDto {
+    id: i64,
+    title: String,
+    artist: String,
+    album: String,
+    duration_ms: i64,
+    year: Option<i64>,
+    has_art: bool,
+    can_download: bool,
+}
+
+/// Full metadata for a single in-scope track (preview before streaming).
+async fn track_meta(
+    State(cfg): State<ServerConfig>,
+    Path(id): Path<i64>,
+    auth: Auth,
+) -> impl IntoResponse {
+    if !track_in_scope(&cfg, auth.0.scope.clone(), id).await {
+        return (StatusCode::FORBIDDEN, "track not in your shared scope").into_response();
+    }
+    let can_download = auth.0.can_download;
+    let meta = blocking_db(cfg.db_path.clone(), move |c| {
+        Ok(tracks::track_by_id(c, id)?.map(|t| MetaDto {
+            id: t.id,
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            duration_ms: t.duration_ms,
+            year: t.year,
+            has_art: t.art_path.is_some(),
+            can_download,
+        }))
+    })
+    .await
+    .flatten();
+    match meta {
+        Some(m) => Json(m).into_response(),
+        None => (StatusCode::NOT_FOUND, "no such track").into_response(),
+    }
+}
+
+/// The album art bytes for an in-scope track (404 when the album has no art).
+async fn track_art(
+    State(cfg): State<ServerConfig>,
+    Path(id): Path<i64>,
+    auth: Auth,
+    request: Request,
+) -> impl IntoResponse {
+    if !track_in_scope(&cfg, auth.0.scope.clone(), id).await {
+        return (StatusCode::FORBIDDEN, "track not in your shared scope").into_response();
+    }
+    let art = blocking_db(cfg.db_path.clone(), move |c| {
+        Ok(tracks::track_by_id(c, id)?.and_then(|t| t.art_path))
+    })
+    .await
+    .flatten();
+    let Some(art_path) = art else {
+        return (StatusCode::NOT_FOUND, "no art").into_response();
+    };
+    match ServeFile::new(&art_path).oneshot(request).await {
+        Ok(resp) => resp.into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "art missing").into_response(),
     }
 }
 
@@ -593,6 +708,54 @@ mod tests {
             )
             .await;
             assert_eq!(out_scope, StatusCode::FORBIDDEN);
+        });
+    }
+
+    #[test]
+    fn download_requires_download_permission_and_meta_works() {
+        run(async {
+            let (path, ids) = seed_db(1);
+            let cfg = ServerConfig::new(path, "Host".into(), "h".into(), "fp".into());
+            let c = Connection::open(&cfg.db_path).unwrap();
+
+            // stream-only library share
+            shares::set_share(&c, None, "stream", "open", None, true).unwrap();
+            let token = token_for(&cfg, r#"{"scope":"library"}"#).await.unwrap();
+
+            // metadata preview works for an in-scope track
+            let meta = status_of(
+                &cfg,
+                HttpRequest::get(format!("/v1/tracks/{}/meta", ids[0]))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(meta, StatusCode::OK);
+
+            // download is forbidden under a stream-only share
+            let dl = status_of(
+                &cfg,
+                HttpRequest::get(format!("/v1/tracks/{}/download", ids[0]))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(dl, StatusCode::FORBIDDEN);
+
+            // upgrading the share to stream+download lets a fresh token download
+            shares::set_share(&c, None, "stream_download", "open", None, true).unwrap();
+            let token2 = token_for(&cfg, r#"{"scope":"library"}"#).await.unwrap();
+            let dl2 = status_of(
+                &cfg,
+                HttpRequest::get(format!("/v1/tracks/{}/download", ids[0]))
+                    .header("authorization", format!("Bearer {token2}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(dl2, StatusCode::OK);
         });
     }
 }
