@@ -74,8 +74,10 @@ class DesktopShell with TrayListener, WindowListener {
   Menu _menu() => Menu(
     items: [
       MenuItem(key: 'playpause', label: player.playing ? 'Pause' : 'Play'),
-      MenuItem(key: 'next', label: 'Next'),
-      MenuItem(key: 'prev', label: 'Previous'),
+      // Mirror the in-app transport: Next/Previous are disabled when the queue
+      // has nowhere to go (otherwise Next looks broken at the end of the queue).
+      MenuItem(key: 'next', label: 'Next', disabled: !player.hasNext),
+      MenuItem(key: 'prev', label: 'Previous', disabled: !player.hasPrevious),
       MenuItem.separator(),
       MenuItem(key: 'show', label: 'Show PeerBeat'),
       MenuItem(key: 'quit', label: 'Quit'),
