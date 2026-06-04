@@ -15,6 +15,7 @@ import 'db/browse.dart';
 import 'db/eq_presets.dart';
 import 'db/folders.dart';
 import 'db/playlists.dart';
+import 'db/shares.dart';
 import 'db/smart.dart';
 import 'db/tracks.dart';
 import 'frb_generated.dart';
@@ -111,6 +112,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<ShareRow> dco_decode_list_share_row(dynamic raw);
+
+  @protected
   List<SmartPlaylistRow> dco_decode_list_smart_playlist_row(dynamic raw);
 
   @protected
@@ -145,6 +149,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScanReport dco_decode_scan_report(dynamic raw);
+
+  @protected
+  ShareRow dco_decode_share_row(dynamic raw);
 
   @protected
   SmartPlaylistRow dco_decode_smart_playlist_row(dynamic raw);
@@ -254,6 +261,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<ShareRow> sse_decode_list_share_row(SseDeserializer deserializer);
+
+  @protected
   List<SmartPlaylistRow> sse_decode_list_smart_playlist_row(
     SseDeserializer deserializer,
   );
@@ -292,6 +302,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScanReport sse_decode_scan_report(SseDeserializer deserializer);
+
+  @protected
+  ShareRow sse_decode_share_row(SseDeserializer deserializer);
 
   @protected
   SmartPlaylistRow sse_decode_smart_playlist_row(SseDeserializer deserializer);
@@ -435,6 +448,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_share_row(List<ShareRow> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_smart_playlist_row(
     List<SmartPlaylistRow> self,
     SseSerializer serializer,
@@ -484,6 +500,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_scan_report(ScanReport self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_share_row(ShareRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_smart_playlist_row(

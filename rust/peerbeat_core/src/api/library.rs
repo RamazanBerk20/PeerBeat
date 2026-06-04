@@ -8,6 +8,7 @@ use crate::db::eq_presets::{self, EqPresetRow};
 use crate::db::folders::{self, FolderRow};
 use crate::db::known_hosts;
 use crate::db::playlists::{self, PlaylistRow};
+use crate::db::shares::{self, ShareRow};
 use crate::db::smart::{self, SmartPlaylistRow};
 use crate::db::tracks::{self, TrackRow};
 use crate::db::{settings, Db};
@@ -104,6 +105,45 @@ pub fn library_rescan_all() -> Result<ScanReport, String> {
         }
         Ok(rep)
     })
+}
+
+// ── LAN sharing config (host side) ───────────────────────────────────────────
+
+/// Every configured share (for the host's sharing screen).
+pub fn share_list() -> Result<Vec<ShareRow>, String> {
+    with_db(|db| shares::list(db.conn()))
+}
+
+/// Mark a scope shareable (create or update). `playlist_id == None` shares the
+/// whole library. `permission`: "stream" | "stream_download"; `mode`: "open" |
+/// "pin" | "approved". A `Some(pin)` (re)sets the PIN.
+pub fn share_set(
+    playlist_id: Option<i64>,
+    permission: String,
+    mode: String,
+    pin: Option<String>,
+    enabled: bool,
+) -> Result<i64, String> {
+    with_db(|db| {
+        shares::set_share(
+            db.conn(),
+            playlist_id,
+            &permission,
+            &mode,
+            pin.as_deref(),
+            enabled,
+        )
+    })
+}
+
+/// Enable/disable a share without losing its config.
+pub fn share_set_enabled(playlist_id: Option<i64>, enabled: bool) -> Result<(), String> {
+    with_db(|db| shares::set_enabled(db.conn(), playlist_id, enabled))
+}
+
+/// Stop sharing a scope entirely.
+pub fn share_remove(playlist_id: Option<i64>) -> Result<(), String> {
+    with_db(|db| shares::remove(db.conn(), playlist_id))
 }
 
 /// Browse all songs ordered by title, paginated.

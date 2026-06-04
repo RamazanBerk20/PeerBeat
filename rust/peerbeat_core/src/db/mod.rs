@@ -14,6 +14,7 @@ pub mod known_hosts;
 pub mod playlists;
 mod schema;
 pub mod settings;
+pub mod shares;
 pub mod smart;
 pub mod tracks;
 

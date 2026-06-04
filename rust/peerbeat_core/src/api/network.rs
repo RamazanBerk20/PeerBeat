@@ -16,6 +16,7 @@ struct Host {
     handle: Handle<std::net::SocketAddr>,
     thread: Option<JoinHandle<()>>,
     port: u16,
+    sessions: server::Sessions,
 }
 
 static HOST: Mutex<Option<Host>> = Mutex::new(None);
@@ -59,12 +60,13 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
     )
     .map_err(|e| e.to_string())?;
 
-    let cfg = ServerConfig {
-        db_path: PathBuf::from(&db_path),
-        name: display_name,
-        host_id: identity.host_id,
-        fingerprint: identity.fingerprint,
-    };
+    let cfg = ServerConfig::new(
+        PathBuf::from(&db_path),
+        display_name,
+        identity.host_id,
+        identity.fingerprint,
+    );
+    let sessions = cfg.sessions.clone();
     let handle: Handle<std::net::SocketAddr> = Handle::new();
     let handle_thread = handle.clone();
     let thread = std::thread::Builder::new()
@@ -90,8 +92,23 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
         handle,
         thread: Some(thread),
         port,
+        sessions,
     });
     Ok(port)
+}
+
+/// Revoke every peer session token (they must re-authenticate). Used by the
+/// host's "revoke all access" control. Returns false if not currently hosting.
+pub fn net_revoke_all() -> bool {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            if let Ok(mut s) = h.sessions.lock() {
+                s.clear();
+            }
+            return true;
+        }
+    }
+    false
 }
 
 /// Stop hosting (unadvertise + shut the server down).

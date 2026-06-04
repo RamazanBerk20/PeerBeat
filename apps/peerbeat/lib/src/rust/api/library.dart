@@ -7,6 +7,7 @@ import '../db/browse.dart';
 import '../db/eq_presets.dart';
 import '../db/folders.dart';
 import '../db/playlists.dart';
+import '../db/shares.dart';
 import '../db/smart.dart';
 import '../db/tracks.dart';
 import '../frb_generated.dart';
@@ -35,6 +36,40 @@ Future<void> libraryRemoveFolder({required PlatformInt64 folderId}) =>
 /// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
 Future<ScanReport> libraryRescanAll() =>
     RustLib.instance.api.crateApiLibraryLibraryRescanAll();
+
+/// Every configured share (for the host's sharing screen).
+Future<List<ShareRow>> shareList() =>
+    RustLib.instance.api.crateApiLibraryShareList();
+
+/// Mark a scope shareable (create or update). `playlist_id == None` shares the
+/// whole library. `permission`: "stream" | "stream_download"; `mode`: "open" |
+/// "pin" | "approved". A `Some(pin)` (re)sets the PIN.
+Future<PlatformInt64> shareSet({
+  PlatformInt64? playlistId,
+  required String permission,
+  required String mode,
+  String? pin,
+  required bool enabled,
+}) => RustLib.instance.api.crateApiLibraryShareSet(
+  playlistId: playlistId,
+  permission: permission,
+  mode: mode,
+  pin: pin,
+  enabled: enabled,
+);
+
+/// Enable/disable a share without losing its config.
+Future<void> shareSetEnabled({
+  PlatformInt64? playlistId,
+  required bool enabled,
+}) => RustLib.instance.api.crateApiLibraryShareSetEnabled(
+  playlistId: playlistId,
+  enabled: enabled,
+);
+
+/// Stop sharing a scope entirely.
+Future<void> shareRemove({PlatformInt64? playlistId}) =>
+    RustLib.instance.api.crateApiLibraryShareRemove(playlistId: playlistId);
 
 /// Browse all songs ordered by title, paginated.
 Future<List<TrackRow>> libraryBrowseSongs({

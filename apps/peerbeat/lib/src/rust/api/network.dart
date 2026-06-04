@@ -20,6 +20,11 @@ Future<int> netStartHost({
   displayName: displayName,
 );
 
+/// Revoke every peer session token (they must re-authenticate). Used by the
+/// host's "revoke all access" control. Returns false if not currently hosting.
+Future<bool> netRevokeAll() =>
+    RustLib.instance.api.crateApiNetworkNetRevokeAll();
+
 /// Stop hosting (unadvertise + shut the server down).
 Future<void> netStopHost() => RustLib.instance.api.crateApiNetworkNetStopHost();
 
