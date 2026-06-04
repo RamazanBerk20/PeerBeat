@@ -7,8 +7,8 @@ import '../net/tofu.dart';
 import '../src/rust/api/network.dart';
 import '../src/rust/db/tracks.dart';
 import '../src/rust/net/discovery.dart';
-import 'library_home.dart' show TrackListView;
 import 'mini_player.dart';
+import 'remote_library.dart';
 import 'sharing_screen.dart';
 
 class NetworkScreen extends StatelessWidget {
@@ -203,10 +203,12 @@ class _NetworkPanelState extends State<NetworkPanel> {
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: Text('${h.name} · ${chosen.label}')),
-            body: TrackListView(tracks: tracks),
-            bottomNavigationBar: const MiniPlayer(),
+          builder: (_) => RemoteLibraryView(
+            title: '${h.name} · ${chosen.label}',
+            tracks: tracks,
+            base: base,
+            token: token,
+            canDownload: chosen.permission == 'stream_download',
           ),
         ),
       );

@@ -380,7 +380,7 @@ fn open_source(path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, 
         "aac" | "m4a" | "m4b" | "m4p" | "m4r" | "m4v" | "mov" | "mp4" => {
             Ok(Box::new(SymphoniaFileSource::open(path)?))
         }
-        _ => {
+        "mp3" | "flac" | "ogg" | "oga" | "wav" => {
             let file = std::fs::File::open(path)
                 .map_err(|e| format!("cannot open audio file '{path}': {e}"))?;
             let dec = catch_unwind(AssertUnwindSafe(|| {
@@ -389,8 +389,7 @@ fn open_source(path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, 
                     "mp3" => Decoder::new_mp3(reader),
                     "flac" => Decoder::new_flac(reader),
                     "ogg" | "oga" => Decoder::new_vorbis(reader),
-                    "wav" => Decoder::new_wav(reader),
-                    _ => Decoder::new(reader),
+                    _ => Decoder::new_wav(reader),
                 }
             }))
             .map_err(|payload| {
@@ -399,6 +398,13 @@ fn open_source(path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, 
             })?
             .map_err(|e| format!("cannot decode audio file '{path}': {e}"))?;
             Ok(Box::new(dec))
+        }
+        _ => {
+            // Unknown/missing extension (e.g. a LAN stream cached as ".audio"):
+            // probe the container by content with symphonia rather than rodio's
+            // generic `Decoder::new`, which panics ("unreachable: Seek errors
+            // should not occur during initialization") on some MP3/streamed inputs.
+            Ok(Box::new(SymphoniaFileSource::open(path)?))
         }
     }
 }
@@ -797,5 +803,42 @@ mod tests {
         assert!(!ended.load(Ordering::Acquire));
         assert_eq!(wrapped.next(), None);
         assert!(ended.load(Ordering::Acquire));
+    }
+
+    fn write_min_wav(path: &std::path::Path) {
+        use std::io::Write;
+        let sample_rate: u32 = 8000;
+        let data_len: u32 = sample_rate * 2; // ~1s, mono 16-bit
+        let mut f = std::fs::File::create(path).unwrap();
+        f.write_all(b"RIFF").unwrap();
+        f.write_all(&(36 + data_len).to_le_bytes()).unwrap();
+        f.write_all(b"WAVE").unwrap();
+        f.write_all(b"fmt ").unwrap();
+        f.write_all(&16u32.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // PCM
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // mono
+        f.write_all(&sample_rate.to_le_bytes()).unwrap();
+        f.write_all(&(sample_rate * 2).to_le_bytes()).unwrap();
+        f.write_all(&2u16.to_le_bytes()).unwrap();
+        f.write_all(&16u16.to_le_bytes()).unwrap();
+        f.write_all(b"data").unwrap();
+        f.write_all(&data_len.to_le_bytes()).unwrap();
+        f.write_all(&vec![0u8; data_len as usize]).unwrap();
+    }
+
+    #[test]
+    fn open_source_decodes_unknown_extension_via_symphonia() {
+        // A LAN stream cached without a codec extension (".audio") must still
+        // decode by content-probing with symphonia — not fall into rodio's
+        // generic decoder, which panics on some streamed inputs.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("peerbeat_eng_{nanos}.audio"));
+        write_min_wav(&path);
+        let src = open_source(path.to_str().unwrap());
+        assert!(src.is_ok(), "unknown-ext source should open: {:?}", src.err());
+        std::fs::remove_file(&path).ok();
     }
 }
