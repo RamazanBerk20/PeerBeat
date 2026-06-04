@@ -129,6 +129,10 @@ Future<List<TrackRow>> librarySearch({
 Future<TrackRow?> libraryTrackById({required PlatformInt64 trackId}) =>
     RustLib.instance.api.crateApiLibraryLibraryTrackById(trackId: trackId);
 
+/// Lyrics for a track — a sidecar `.lrc` or the embedded tag, or `None`.
+Future<String?> libraryTrackLyrics({required PlatformInt64 trackId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryTrackLyrics(trackId: trackId);
+
 /// Read the current tag fields from a track's file (for the metadata editor).
 Future<TrackTags> libraryTrackTags({required PlatformInt64 trackId}) =>
     RustLib.instance.api.crateApiLibraryLibraryTrackTags(trackId: trackId);

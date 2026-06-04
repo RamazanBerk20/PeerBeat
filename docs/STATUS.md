@@ -74,9 +74,10 @@ build-out is tracked in the project plan.
 | Persistent mini-player | ✅ | |
 | Light/dark Material 3 | ✅ | |
 | Responsive desktop/phone/tablet | ✅ | |
-| Lyrics panel (`.lrc` / embedded) | ⛔ | `has_lyrics` flag only |
-| Dynamic theming from album art | ⛔ | static seed today |
-| Keyboard shortcuts + gestures | ⛔ | |
+| Lyrics panel (`.lrc` / embedded) | ✅ | sidecar `.lrc` + embedded tag; synced highlighting in Now Playing |
+| Dynamic theming from album art | ✅ | `ColorScheme.fromImageProvider` per track |
+| Keyboard shortcuts | ✅ | global play/pause, seek, prev/next, volume, mute, shuffle, repeat |
+| Gestures (mobile) | ⛔ | |
 | WCAG 2.1 AA (screen-reader/keyboard) | 🟡 | tooltips + Material defaults; no `Semantics` pass |
 
 ## 7. OS integration

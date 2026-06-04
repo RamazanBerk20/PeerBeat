@@ -60,6 +60,20 @@ fn parse_db(s: &str) -> Option<f64> {
         .ok()
 }
 
+/// Lyrics for a track: a sidecar `.lrc` next to the file (preferred — it may be
+/// time-synced) or the embedded lyrics tag. `None` when neither exists.
+pub fn read_lyrics(path: &Path) -> Option<String> {
+    let lrc = path.with_extension("lrc");
+    if let Ok(text) = std::fs::read_to_string(&lrc) {
+        if !text.trim().is_empty() {
+            return Some(text);
+        }
+    }
+    let tagged = lofty::read_from_path(path).ok()?;
+    let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
+    tag.get_string(ItemKey::Lyrics).map(|s| s.to_string())
+}
+
 /// Read tags + audio properties into a [`NewTrack`]. Falls back to the filename
 /// for the title when untagged.
 pub fn read_tags(

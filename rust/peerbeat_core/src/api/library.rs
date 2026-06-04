@@ -206,6 +206,14 @@ pub fn library_track_by_id(track_id: i64) -> Result<Option<TrackRow>, String> {
     with_db(|db| tracks::track_by_id(db.conn(), track_id))
 }
 
+/// Lyrics for a track — a sidecar `.lrc` or the embedded tag, or `None`.
+pub fn library_track_lyrics(track_id: i64) -> Result<Option<String>, String> {
+    with_db(|db| -> anyhow::Result<Option<String>> {
+        let row = tracks::track_by_id(db.conn(), track_id)?;
+        Ok(row.and_then(|t| metadata::read_lyrics(Path::new(&t.path))))
+    })
+}
+
 /// All editable tag fields for a track (read fresh from the file, so the editor
 /// can prefill every field and not clobber ones absent from [`TrackRow`]).
 pub struct TrackTags {

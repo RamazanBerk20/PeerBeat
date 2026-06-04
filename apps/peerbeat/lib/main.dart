@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:path_provider/path_provider.dart';
 
 import 'app_config.dart';
@@ -180,7 +181,49 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.dark,
+      builder: (context, child) =>
+          _GlobalPlaybackShortcuts(child: child ?? const SizedBox.shrink()),
       home: const LibraryHome(),
+    );
+  }
+}
+
+/// App-wide desktop keyboard shortcuts for playback. Wrapped via MaterialApp's
+/// builder so they work on every route. Keys consumed by a focused text field
+/// (typing, cursor movement) or button (space/enter) take precedence, so these
+/// don't interfere with editing.
+class _GlobalPlaybackShortcuts extends StatelessWidget {
+  const _GlobalPlaybackShortcuts({required this.child});
+  final Widget child;
+
+  void _seekBy(Duration delta) {
+    final p = player.position + delta;
+    player.seek(p < Duration.zero ? Duration.zero : p);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.space): player.toggle,
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+            _seekBy(const Duration(seconds: 5)),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+            _seekBy(const Duration(seconds: -5)),
+        const SingleActivator(LogicalKeyboardKey.arrowRight, control: true): () =>
+            player.next(),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true): () =>
+            player.previous(),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+            player.setVolume((player.volume + 0.05).clamp(0.0, 1.0)),
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+            player.setVolume((player.volume - 0.05).clamp(0.0, 1.0)),
+        const SingleActivator(LogicalKeyboardKey.keyM): player.toggleMute,
+        const SingleActivator(LogicalKeyboardKey.keyS): () =>
+            player.setShuffle(!player.shuffle),
+        const SingleActivator(LogicalKeyboardKey.keyR): player.cycleRepeat,
+      },
+      child: Focus(autofocus: true, child: child),
     );
   }
 }

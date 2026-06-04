@@ -19,6 +19,21 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   static const _endSeekEpsilon = Duration(milliseconds: 250);
   double? _dragMs;
 
+  void _showLyrics(BuildContext context, int trackId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        builder: (_, controller) =>
+            _LyricsPanel(trackId: trackId, scrollController: controller),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -43,6 +58,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             ),
             title: const Text('Now Playing'),
             centerTitle: true,
+            actions: [
+              if (!t.path.startsWith('http'))
+                IconButton(
+                  tooltip: 'Lyrics',
+                  icon: const Icon(Icons.lyrics_outlined),
+                  onPressed: () => _showLyrics(context, t.id),
+                ),
+            ],
           ),
           body: SafeArea(
             child: LayoutBuilder(
@@ -382,6 +405,129 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
         fav ? Icons.favorite : Icons.favorite_border,
         color: fav ? cs.primary : null,
       ),
+    );
+  }
+}
+
+typedef _LrcLine = ({Duration t, String text});
+
+/// Parse `[mm:ss.xx]` LRC timestamps into sorted timed lines. Returns empty if
+/// the text has no timestamps (caller then shows it as plain lyrics).
+List<_LrcLine> _parseLrc(String raw) {
+  final out = <_LrcLine>[];
+  final tagRe = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
+  for (final line in raw.split('\n')) {
+    final matches = tagRe.allMatches(line).toList();
+    if (matches.isEmpty) continue;
+    final text = line.replaceAll(tagRe, '').trim();
+    for (final m in matches) {
+      final min = int.parse(m.group(1)!);
+      final sec = int.parse(m.group(2)!);
+      final frac = m.group(3);
+      final ms = frac == null
+          ? 0
+          : int.parse(frac.padRight(3, '0').substring(0, 3));
+      out.add((
+        t: Duration(minutes: min, seconds: sec, milliseconds: ms),
+        text: text,
+      ));
+    }
+  }
+  out.sort((a, b) => a.t.compareTo(b.t));
+  return out;
+}
+
+/// Lyrics view: synced highlighting for `.lrc`-style timestamps, else plain text.
+class _LyricsPanel extends StatefulWidget {
+  const _LyricsPanel({required this.trackId, this.scrollController});
+  final int trackId;
+  final ScrollController? scrollController;
+
+  @override
+  State<_LyricsPanel> createState() => _LyricsPanelState();
+}
+
+class _LyricsPanelState extends State<_LyricsPanel> {
+  String? _raw;
+  List<_LrcLine>? _synced;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final text = await libraryTrackLyrics(trackId: widget.trackId);
+      if (!mounted) return;
+      setState(() {
+        _raw = text;
+        _synced = (text == null) ? null : _parseLrc(text);
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final raw = _raw;
+    if (raw == null || raw.trim().isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('No lyrics found'),
+        ),
+      );
+    }
+    final synced = _synced;
+    if (synced == null || synced.isEmpty) {
+      return SingleChildScrollView(
+        controller: widget.scrollController,
+        padding: const EdgeInsets.all(20),
+        child: Text(raw, style: Theme.of(context).textTheme.bodyLarge),
+      );
+    }
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        final pos = player.position;
+        var active = 0;
+        for (var i = 0; i < synced.length; i++) {
+          if (synced[i].t <= pos) {
+            active = i;
+          } else {
+            break;
+          }
+        }
+        final cs = Theme.of(context).colorScheme;
+        return ListView.builder(
+          controller: widget.scrollController,
+          padding: const EdgeInsets.all(20),
+          itemCount: synced.length,
+          itemBuilder: (context, i) {
+            final on = i == active;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                synced[i].text.isEmpty ? '♪' : synced[i].text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: on ? 18 : 15,
+                  fontWeight: on ? FontWeight.bold : FontWeight.normal,
+                  color: on ? cs.primary : null,
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
