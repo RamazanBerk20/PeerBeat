@@ -21,6 +21,7 @@
 //! per-playlist permissions, downloads, the WebSocket control channel, and party mode.
 
 pub mod discovery;
+pub mod party;
 pub mod server;
 pub mod tls;
 
