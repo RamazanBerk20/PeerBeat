@@ -465,6 +465,8 @@ class TrackArt extends StatelessWidget {
           height: size,
           fit: BoxFit.cover,
           gaplessPlayback: true,
+          // Decorative: every use sits beside the track's title/artist text.
+          excludeFromSemantics: true,
           errorBuilder: (_, _, _) => _placeholder(cs, radius),
         ),
       );

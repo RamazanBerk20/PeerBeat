@@ -78,7 +78,7 @@ build-out is tracked in the project plan.
 | Dynamic theming from album art | ✅ | `ColorScheme.fromImageProvider` per track |
 | Keyboard shortcuts | ✅ | global play/pause, seek, prev/next, volume, mute, shuffle, repeat |
 | Gestures (mobile) | ⛔ | |
-| WCAG 2.1 AA (screen-reader/keyboard) | 🟡 | tooltips + Material defaults; no `Semantics` pass |
+| WCAG 2.1 AA (screen-reader/keyboard) | 🟡 | tooltips + keyboard nav + slider value announcements + decorative-art exclusion; full audit still pending |
 
 ## 7. OS integration
 | Feature | Status | Notes |
