@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -35,12 +37,17 @@ class DesktopShell with TrayListener, WindowListener {
   Future<void> start() async {
     if (_started || !isDesktop) return;
     _started = true;
-    // Bring up the tray first; only arm close-to-tray if it succeeded.
     try {
       trayManager.addListener(this);
-      await trayManager.setIcon('assets/icon/app_icon.png');
-      await trayManager.setToolTip('PeerBeat');
-      await _rebuildMenu();
+      // Icon is best-effort: a missing icon must not disable close-to-tray (the
+      // desktop shows a placeholder and the menu still restores the window).
+      try {
+        await trayManager.setIcon(await _trayIconPath());
+      } catch (_) {}
+      try {
+        await trayManager.setToolTip('PeerBeat');
+      } catch (_) {}
+      await trayManager.setContextMenu(_menu());
       _trayOk = true;
     } catch (_) {
       _trayOk = false;
@@ -54,22 +61,32 @@ class DesktopShell with TrayListener, WindowListener {
     }
   }
 
+  /// Extract the bundled tray icon to a real file path (appindicator needs one,
+  /// not a bundle-relative asset key).
+  Future<String> _trayIconPath() async {
+    final data = await rootBundle.load('assets/icon/app_icon.png');
+    final dir = await getTemporaryDirectory();
+    final f = File('${dir.path}/peerbeat_tray.png');
+    await f.writeAsBytes(data.buffer.asUint8List(), flush: true);
+    return f.path;
+  }
+
+  Menu _menu() => Menu(
+    items: [
+      MenuItem(key: 'playpause', label: player.playing ? 'Pause' : 'Play'),
+      MenuItem(key: 'next', label: 'Next'),
+      MenuItem(key: 'prev', label: 'Previous'),
+      MenuItem.separator(),
+      MenuItem(key: 'show', label: 'Show PeerBeat'),
+      MenuItem(key: 'quit', label: 'Quit'),
+    ],
+  );
+
   void _onPlayerChanged() => unawaited(_rebuildMenu());
 
   Future<void> _rebuildMenu() async {
     try {
-      await trayManager.setContextMenu(
-        Menu(
-          items: [
-            MenuItem(key: 'playpause', label: player.playing ? 'Pause' : 'Play'),
-            MenuItem(key: 'next', label: 'Next'),
-            MenuItem(key: 'prev', label: 'Previous'),
-            MenuItem.separator(),
-            MenuItem(key: 'show', label: 'Show PeerBeat'),
-            MenuItem(key: 'quit', label: 'Quit'),
-          ],
-        ),
-      );
+      await trayManager.setContextMenu(_menu());
     } catch (_) {}
   }
 

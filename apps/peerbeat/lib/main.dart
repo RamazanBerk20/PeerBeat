@@ -104,12 +104,6 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
   late final AppLifecycleListener _lifecycle;
   bool _cleaned = false;
 
-  // Dynamic theming from album art: recomputed whenever the current artwork
-  // changes; null falls back to the neon-teal seed.
-  ColorScheme? _lightScheme;
-  ColorScheme? _darkScheme;
-  String? _schemeArtPath;
-
   @override
   void initState() {
     super.initState();
@@ -122,42 +116,6 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
       },
       onDetach: _cleanup,
     );
-    player.addListener(_onTrackChanged);
-    _onTrackChanged();
-  }
-
-  /// Derive light/dark colour schemes from the current track's cover. Guarded on
-  /// the art path so it only runs when the artwork actually changes (not on every
-  /// position tick), and keeps the seed scheme when there is no art.
-  Future<void> _onTrackChanged() async {
-    final art = player.current?.artPath;
-    if (art == _schemeArtPath) return;
-    _schemeArtPath = art;
-    if (art == null || art.isEmpty || !File(art).existsSync()) {
-      if (_lightScheme != null || _darkScheme != null) {
-        setState(() {
-          _lightScheme = null;
-          _darkScheme = null;
-        });
-      }
-      return;
-    }
-    try {
-      final provider = FileImage(File(art));
-      final light = await ColorScheme.fromImageProvider(provider: provider);
-      final dark = await ColorScheme.fromImageProvider(
-        provider: provider,
-        brightness: Brightness.dark,
-      );
-      if (mounted && _schemeArtPath == art) {
-        setState(() {
-          _lightScheme = light;
-          _darkScheme = dark;
-        });
-      }
-    } catch (_) {
-      // keep the seed scheme if palette extraction fails
-    }
   }
 
   Future<void> _cleanup() async {
@@ -176,7 +134,6 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
 
   @override
   void dispose() {
-    player.removeListener(_onTrackChanged);
     _lifecycle.dispose();
     super.dispose();
   }
@@ -189,11 +146,11 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
       title: 'PeerBeat',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: _lightScheme ?? scheme(Brightness.light),
+        colorScheme: scheme(Brightness.light),
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
-        colorScheme: _darkScheme ?? scheme(Brightness.dark),
+        colorScheme: scheme(Brightness.dark),
         useMaterial3: true,
       ),
       themeMode: ThemeMode.dark,

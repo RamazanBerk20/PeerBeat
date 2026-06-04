@@ -76,7 +76,7 @@ build-out is tracked in the project plan.
 | Light/dark Material 3 | ✅ | |
 | Responsive desktop/phone/tablet | ✅ | |
 | Lyrics panel (`.lrc` / embedded) | ✅ | sidecar `.lrc` + embedded tag; synced highlighting in Now Playing |
-| Dynamic theming from album art | ✅ | `ColorScheme.fromImageProvider` per track |
+| Dynamic theming from album art | ⛔ | reverted — the async per-track root-`MaterialApp` rebuild reparented overlay render objects mid-transition (red-screen crash); needs a non-root-rebuild approach (e.g. theme a region below the Navigator) |
 | Keyboard shortcuts | ✅ | global play/pause, seek, prev/next, volume, mute, shuffle, repeat |
 | Gestures (mobile) | ⛔ | |
 | WCAG 2.1 AA (screen-reader/keyboard) | 🟡 | tooltips + keyboard nav + slider value announcements + decorative-art exclusion; full audit still pending |
