@@ -11,6 +11,7 @@ use crate::db::playlists::{self, PlaylistRow};
 use crate::db::shares::{self, ShareRow};
 use crate::db::smart::{self, SmartPlaylistRow};
 use crate::db::tracks::{self, TrackRow};
+use crate::db::transfer_log::{self, TransferRow};
 use crate::db::{settings, Db};
 use crate::library::{self, metadata, playlist_io};
 use std::path::{Path, PathBuf};
@@ -144,6 +145,16 @@ pub fn share_set_enabled(playlist_id: Option<i64>, enabled: bool) -> Result<(), 
 /// Stop sharing a scope entirely.
 pub fn share_remove(playlist_id: Option<i64>) -> Result<(), String> {
     with_db(|db| shares::remove(db.conn(), playlist_id))
+}
+
+/// Recent stream/download activity by peers (for the host connections dashboard).
+pub fn net_recent_transfers(limit: i64) -> Result<Vec<TransferRow>, String> {
+    with_db(|db| transfer_log::recent(db.conn(), limit))
+}
+
+/// Clear the recorded peer-activity log.
+pub fn net_clear_activity() -> Result<(), String> {
+    with_db(|db| transfer_log::clear(db.conn()))
 }
 
 /// Browse all songs ordered by title, paginated.

@@ -25,6 +25,14 @@ Future<int> netStartHost({
 Future<bool> netRevokeAll() =>
     RustLib.instance.api.crateApiNetworkNetRevokeAll();
 
+/// Revoke every session belonging to one peer IP. Returns false if not hosting.
+Future<bool> netRevokePeer({required String peer}) =>
+    RustLib.instance.api.crateApiNetworkNetRevokePeer(peer: peer);
+
+/// The distinct peer IPs that currently hold a valid session token.
+Future<List<String>> netActivePeers() =>
+    RustLib.instance.api.crateApiNetworkNetActivePeers();
+
 /// Stop hosting (unadvertise + shut the server down).
 Future<void> netStopHost() => RustLib.instance.api.crateApiNetworkNetStopHost();
 

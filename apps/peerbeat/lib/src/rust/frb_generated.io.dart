@@ -18,6 +18,7 @@ import 'db/playlists.dart';
 import 'db/shares.dart';
 import 'db/smart.dart';
 import 'db/tracks.dart';
+import 'db/transfer_log.dart';
 import 'frb_generated.dart';
 import 'net/discovery.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
@@ -121,6 +122,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TrackRow> dco_decode_list_track_row(dynamic raw);
 
   @protected
+  List<TransferRow> dco_decode_list_transfer_row(dynamic raw);
+
+  @protected
   List<YearRow> dco_decode_list_year_row(dynamic raw);
 
   @protected
@@ -161,6 +165,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TrackTags dco_decode_track_tags(dynamic raw);
+
+  @protected
+  TransferRow dco_decode_transfer_row(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -272,6 +279,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TrackRow> sse_decode_list_track_row(SseDeserializer deserializer);
 
   @protected
+  List<TransferRow> sse_decode_list_transfer_row(SseDeserializer deserializer);
+
+  @protected
   List<YearRow> sse_decode_list_year_row(SseDeserializer deserializer);
 
   @protected
@@ -314,6 +324,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TrackTags sse_decode_track_tags(SseDeserializer deserializer);
+
+  @protected
+  TransferRow sse_decode_transfer_row(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -460,6 +473,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_track_row(List<TrackRow> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_transfer_row(
+    List<TransferRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_year_row(List<YearRow> self, SseSerializer serializer);
 
   @protected
@@ -515,6 +534,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_track_tags(TrackTags self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_transfer_row(TransferRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_16(int self, SseSerializer serializer);

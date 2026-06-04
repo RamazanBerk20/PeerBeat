@@ -17,6 +17,7 @@ pub mod settings;
 pub mod shares;
 pub mod smart;
 pub mod tracks;
+pub mod transfer_log;
 
 pub use schema::SCHEMA_VERSION;
 

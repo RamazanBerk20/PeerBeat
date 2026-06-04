@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../app_config.dart';
 import '../net/tofu.dart';
+import '../src/rust/api/library.dart';
 import '../src/rust/api/network.dart';
 import '../src/rust/db/tracks.dart';
+import '../src/rust/db/transfer_log.dart';
 import '../src/rust/net/discovery.dart';
 import 'mini_player.dart';
 import 'remote_library.dart';
@@ -356,6 +358,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
               }
             },
           ),
+        if (_hosting) const _ConnectionsSection(),
         const Divider(),
         ListTile(
           title: const Text('Discovered hosts'),
@@ -414,4 +417,116 @@ class _ShareDesc {
     permission: (j['permission'] as String?) ?? 'stream',
     requiresPin: (j['requires_pin'] as bool?) ?? false,
   );
+}
+
+/// Host dashboard: who currently has a session (with per-peer revoke) and a log
+/// of recent streams/downloads. Shown only while hosting.
+class _ConnectionsSection extends StatefulWidget {
+  const _ConnectionsSection();
+
+  @override
+  State<_ConnectionsSection> createState() => _ConnectionsSectionState();
+}
+
+class _ConnectionsSectionState extends State<_ConnectionsSection> {
+  List<String> _peers = const [];
+  List<TransferRow> _activity = const [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _loading = true);
+    try {
+      final peers = await netActivePeers();
+      final activity = await netRecentTransfers(limit: 25);
+      if (mounted) {
+        setState(() {
+          _peers = peers;
+          _activity = activity;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          title: const Text('Connections & activity'),
+          trailing: _loading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _refresh,
+                ),
+        ),
+        if (_peers.isEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text('No peers connected'),
+          )
+        else
+          for (final p in _peers)
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.person_outline),
+              title: Text(p),
+              subtitle: const Text('Active session'),
+              trailing: TextButton(
+                onPressed: () async {
+                  await netRevokePeer(peer: p);
+                  await _refresh();
+                },
+                child: const Text('Revoke'),
+              ),
+            ),
+        if (_activity.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              'Recent activity',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          for (final a in _activity)
+            ListTile(
+              dense: true,
+              leading: Icon(
+                a.kind == 'download' ? Icons.download : Icons.play_arrow,
+                size: 18,
+              ),
+              title: Text(
+                a.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text('${a.peer} • ${a.kind}'),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () async {
+                await netClearActivity();
+                await _refresh();
+              },
+              child: const Text('Clear activity'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }

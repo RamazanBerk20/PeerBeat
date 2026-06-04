@@ -10,6 +10,7 @@ import '../db/playlists.dart';
 import '../db/shares.dart';
 import '../db/smart.dart';
 import '../db/tracks.dart';
+import '../db/transfer_log.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
@@ -70,6 +71,14 @@ Future<void> shareSetEnabled({
 /// Stop sharing a scope entirely.
 Future<void> shareRemove({PlatformInt64? playlistId}) =>
     RustLib.instance.api.crateApiLibraryShareRemove(playlistId: playlistId);
+
+/// Recent stream/download activity by peers (for the host connections dashboard).
+Future<List<TransferRow>> netRecentTransfers({required PlatformInt64 limit}) =>
+    RustLib.instance.api.crateApiLibraryNetRecentTransfers(limit: limit);
+
+/// Clear the recorded peer-activity log.
+Future<void> netClearActivity() =>
+    RustLib.instance.api.crateApiLibraryNetClearActivity();
 
 /// Browse all songs ordered by title, paginated.
 Future<List<TrackRow>> libraryBrowseSongs({

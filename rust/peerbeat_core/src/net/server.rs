@@ -12,9 +12,9 @@
 //! Not yet built (roadmap, see `docs/STATUS.md`): download endpoints, the
 //! transfer-log dashboard, and the WebSocket control / party channel.
 
-use crate::db::{shares, tracks};
+use crate::db::{shares, tracks, transfer_log};
 use axum::{
-    extract::{FromRequestParts, Path, Request, State},
+    extract::{ConnectInfo, FromRequestParts, Path, Request, State},
     http::{
         header::{AUTHORIZATION, CONTENT_DISPOSITION},
         request::Parts,
@@ -27,6 +27,7 @@ use axum::{
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
@@ -45,6 +46,8 @@ pub struct Session {
     pub scope: Scope,
     pub can_download: bool,
     pub created_at_ms: i64,
+    /// Peer IP (stable per device; revoke-by-peer keys on this).
+    pub peer: String,
 }
 
 /// Host-side token store (token → grant). Cleared by a host "revoke all".
@@ -245,6 +248,7 @@ struct AuthResp {
 
 async fn auth_session(
     State(cfg): State<ServerConfig>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(req): Json<AuthReq>,
 ) -> impl IntoResponse {
     let pid = if req.scope == "playlist" {
@@ -293,6 +297,7 @@ async fn auth_session(
                 scope,
                 can_download: access.allows_download(),
                 created_at_ms: now_ms(),
+                peer: addr.ip().to_string(),
             },
         );
     }
@@ -382,6 +387,7 @@ async fn stream(
     let Some(file_path) = track_path(&cfg, id).await else {
         return (StatusCode::NOT_FOUND, "no such track").into_response();
     };
+    log_transfer(&cfg, &auth.0.peer, id, "stream");
     match ServeFile::new(&file_path).oneshot(request).await {
         Ok(resp) => resp.into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "file missing").into_response(),
@@ -410,6 +416,19 @@ async fn track_path(cfg: &ServerConfig, id: i64) -> Option<String> {
     .await
 }
 
+/// Fire-and-forget activity log of a stream/download by `peer` (for the host's
+/// connections dashboard). Best-effort: failures are ignored.
+fn log_transfer(cfg: &ServerConfig, peer: &str, track_id: i64, kind: &'static str) {
+    let db = cfg.db_path.clone();
+    let peer = peer.to_string();
+    tokio::spawn(async move {
+        let _ = blocking_db(db, move |c| {
+            transfer_log::record(c, &peer, track_id, kind, now_ms())
+        })
+        .await;
+    });
+}
+
 /// Download a track's original file (gated on the share's download permission).
 async fn download(
     State(cfg): State<ServerConfig>,
@@ -430,6 +449,7 @@ async fn download(
     let Some(file_path) = track_path(&cfg, id).await else {
         return (StatusCode::NOT_FOUND, "no such track").into_response();
     };
+    log_transfer(&cfg, &auth.0.peer, id, "download");
     let filename = std::path::Path::new(&file_path)
         .file_name()
         .and_then(|s| s.to_str())
@@ -574,6 +594,7 @@ mod tests {
     async fn token_for(cfg: &ServerConfig, body: &str) -> Option<String> {
         let req = HttpRequest::post("/v1/auth/session")
             .header("content-type", "application/json")
+            .extension(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 9999))))
             .body(Body::from(body.to_string()))
             .unwrap();
         let resp = router(cfg.clone()).oneshot(req).await.unwrap();

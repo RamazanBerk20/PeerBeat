@@ -78,7 +78,9 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
                     Ok(server) => {
                         let _ = server
                             .handle(handle_thread)
-                            .serve(app.into_make_service())
+                            .serve(
+                                app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                            )
                             .await;
                     }
                     Err(e) => eprintln!("peerbeat: tls server failed: {e}"),
@@ -109,6 +111,34 @@ pub fn net_revoke_all() -> bool {
         }
     }
     false
+}
+
+/// Revoke every session belonging to one peer IP. Returns false if not hosting.
+pub fn net_revoke_peer(peer: String) -> bool {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            if let Ok(mut s) = h.sessions.lock() {
+                s.retain(|_, sess| sess.peer != peer);
+            }
+            return true;
+        }
+    }
+    false
+}
+
+/// The distinct peer IPs that currently hold a valid session token.
+pub fn net_active_peers() -> Vec<String> {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            if let Ok(s) = h.sessions.lock() {
+                let mut peers: Vec<String> = s.values().map(|x| x.peer.clone()).collect();
+                peers.sort();
+                peers.dedup();
+                return peers;
+            }
+        }
+    }
+    Vec::new()
 }
 
 /// Stop hosting (unadvertise + shut the server down).

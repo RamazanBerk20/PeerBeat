@@ -48,10 +48,10 @@ build-out is tracked in the project plan.
 | Approved-peer access mode | ⛔ | pends the WebSocket control channel |
 | Per-playlist stream-vs-download permissions | ✅ | enforced server-side per token scope |
 | List shared playlists / pick a scope | ✅ | `/v1/shares` + `/v1/playlists` + peer picker |
-| Pre-stream metadata / art preview | ⛔ | Phase 3 (`/v1/tracks/{id}/meta` + `/art`) |
-| Download tracks/playlist (tags + art) | ⛔ | Phase 3 |
-| See connected peers | ⛔ | needs the control channel |
-| Host revoke | 🟡 | revoke-**all** done (`net_revoke_all`); per-peer + active-transfer dashboard ⛔ (Phase 3) |
+| Pre-stream metadata / art preview | 🟡 | `/v1/tracks/{id}/meta` + `/art` endpoints; dedicated preview UI pending |
+| Download tracks (tags + art) | ✅ | per-track download + import into a local folder (playlist ZIP pending) |
+| See connected peers (peer↔peer) | ⛔ | needs the WebSocket control channel |
+| Host activity dashboard + revoke | ✅ | active peers + recent stream/download log; per-peer **and** revoke-all |
 | Party mode (sync ≤100 ms, host control, requests) | ⛔ | `control`/`party` modules stubbed out |
 | WebSocket control channel | ⛔ | |
 
