@@ -20,6 +20,8 @@ dependencies:
   file_picker: ^10.3.7
   dbus: ^0.7.10 # MPRIS media-key/lockscreen integration on Linux
   crypto: ^3.0.7
+  window_manager: ^0.4.3 # desktop close-to-tray (hide on close)
+  tray_manager: ^0.3.2 # desktop system-tray icon + menu
 
 dev_dependencies:
   flutter_test:

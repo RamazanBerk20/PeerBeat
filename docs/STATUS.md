@@ -87,8 +87,8 @@ build-out is tracked in the project plan.
 | MPRIS media controls + media keys (Linux) | ✅ | `os/os_media_controller.dart` |
 | Android lockscreen/notification/background | 🟡 | just_audio/ExoPlayer baseline |
 | Windows SMTC | ⛔ | |
-| Tray mini-player + custom sliding notification | ⛔ | + Wayland fallback to system notifications |
-| Close-to-tray | ⛔ | |
+| System tray menu + close-to-tray (Win/Linux) | ✅ | tray icon + Play/Pause/Next/Prev/Show/Quit; close hides to tray (armed only if the tray initializes, so a tray-less compositor isn't stranded) |
+| Custom sliding notification + positioned mini-player popup | ⛔ | X11-only by nature; intentionally omitted on Wayland (the compositor controls window position) — tray menu + system notifications used instead |
 | Bluetooth / wired headset controls | 🟡 | via platform defaults (MPRIS / ExoPlayer) |
 | Android Auto | ⛔ | |
 

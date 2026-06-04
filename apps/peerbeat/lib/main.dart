@@ -4,8 +4,10 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:path_provider/path_provider.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'app_config.dart';
+import 'os/desktop_shell.dart';
 import 'os/os_media_controller.dart';
 import 'playback/player.dart';
 import 'src/rust/api/library.dart';
@@ -14,6 +16,11 @@ import 'ui/library_home.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (DesktopShell.isDesktop) {
+    try {
+      await windowManager.ensureInitialized();
+    } catch (_) {}
+  }
   try {
     await RustLib.init();
     final dir = await getApplicationSupportDirectory();
@@ -25,6 +32,9 @@ Future<void> main() async {
     await osMedia.start(); // best-effort: MPRIS media-key/lockscreen on Linux
     try {
       await libraryStartWatching(); // best-effort: auto-import on folder changes
+    } catch (_) {}
+    try {
+      await desktopShell.start(); // best-effort: system tray + close-to-tray
     } catch (_) {}
   } catch (e, st) {
     debugPrintStack(label: 'PeerBeat startup failed', stackTrace: st);
@@ -158,6 +168,9 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
     } catch (_) {}
     try {
       player.dispose(); // ChangeNotifier.dispose is synchronous (returns void)
+    } catch (_) {}
+    try {
+      await desktopShell.dispose();
     } catch (_) {}
   }
 
