@@ -43,13 +43,15 @@ build-out is tracked in the project plan.
 | HTTP-Range streaming of host library | ✅ | `net/server.rs` `/v1/stream/{id}` |
 | LAN-only made explicit in UI | ✅ | network screen banner |
 | Display name in discovery | ✅ | (avatar/color advertised: ⛔) |
-| Mark playlists/library shareable | ⛔ | `shares` table only |
-| Open / PIN / Approved access modes | ⛔ | no auth layer yet |
-| Per-playlist stream-vs-download permissions | ⛔ | |
-| List/preview shared playlists; metadata/art preview | ⛔ | only a flat `/v1/tracks` today |
-| Download tracks/playlist (tags + art) | ⛔ | |
+| Mark playlists/library shareable | ✅ | `db/shares.rs` + Sharing screen |
+| Open / PIN access modes | ✅ | token-scoped server auth (`net/server.rs`) |
+| Approved-peer access mode | ⛔ | pends the WebSocket control channel |
+| Per-playlist stream-vs-download permissions | ✅ | enforced server-side per token scope |
+| List shared playlists / pick a scope | ✅ | `/v1/shares` + `/v1/playlists` + peer picker |
+| Pre-stream metadata / art preview | ⛔ | Phase 3 (`/v1/tracks/{id}/meta` + `/art`) |
+| Download tracks/playlist (tags + art) | ⛔ | Phase 3 |
 | See connected peers | ⛔ | needs the control channel |
-| Host dashboard of active transfers + one-tap revoke | ⛔ | `transfer_log` table only |
+| Host revoke | 🟡 | revoke-**all** done (`net_revoke_all`); per-peer + active-transfer dashboard ⛔ (Phase 3) |
 | Party mode (sync ≤100 ms, host control, requests) | ⛔ | `control`/`party` modules stubbed out |
 | WebSocket control channel | ⛔ | |
 
