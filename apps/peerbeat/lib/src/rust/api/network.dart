@@ -7,6 +7,7 @@ import '../frb_generated.dart';
 import '../net/discovery.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `unix_ms`, `with_host`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Host`
 
 /// Start sharing the library over the LAN: bind the **HTTPS** server (per-host
@@ -32,6 +33,30 @@ Future<bool> netRevokePeer({required String peer}) =>
 /// The distinct peer IPs that currently hold a valid session token.
 Future<List<String>> netActivePeers() =>
     RustLib.instance.api.crateApiNetworkNetActivePeers();
+
+/// Begin a synchronized party session (requires hosting). Returns false if not hosting.
+Future<bool> netPartyStart() =>
+    RustLib.instance.api.crateApiNetworkNetPartyStart();
+
+/// Broadcast the host's current playback snapshot to all party peers. `track_key`
+/// is the track's content hash so peers resolve it locally or stream it.
+Future<bool> netPartyUpdate({
+  required String trackKey,
+  required PlatformInt64 positionMs,
+  required bool playing,
+}) => RustLib.instance.api.crateApiNetworkNetPartyUpdate(
+  trackKey: trackKey,
+  positionMs: positionMs,
+  playing: playing,
+);
+
+/// End the party session (peers get an `ended` message).
+Future<bool> netPartyStop() =>
+    RustLib.instance.api.crateApiNetworkNetPartyStop();
+
+/// Whether a party session is currently active on this host.
+Future<bool> netPartyActive() =>
+    RustLib.instance.api.crateApiNetworkNetPartyActive();
 
 /// Stop hosting (unadvertise + shut the server down).
 Future<void> netStopHost() => RustLib.instance.api.crateApiNetworkNetStopHost();

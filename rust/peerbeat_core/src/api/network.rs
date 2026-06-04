@@ -1,6 +1,7 @@
 //! FRB LAN API: host (advertise + serve over TLS) and discover peers.
 
 use crate::net::discovery::{self, HostInfo};
+use crate::net::party::PartyState;
 use crate::net::server::{self, ServerConfig};
 use crate::net::tls;
 use axum_server::tls_rustls::RustlsConfig;
@@ -17,6 +18,7 @@ struct Host {
     thread: Option<JoinHandle<()>>,
     port: u16,
     sessions: server::Sessions,
+    party: server::PartyHub,
 }
 
 static HOST: Mutex<Option<Host>> = Mutex::new(None);
@@ -67,6 +69,7 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
         identity.fingerprint,
     );
     let sessions = cfg.sessions.clone();
+    let party = cfg.party.clone();
     let handle: Handle<std::net::SocketAddr> = Handle::new();
     let handle_thread = handle.clone();
     let thread = std::thread::Builder::new()
@@ -95,6 +98,7 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
         thread: Some(thread),
         port,
         sessions,
+        party,
     });
     Ok(port)
 }
@@ -139,6 +143,56 @@ pub fn net_active_peers() -> Vec<String> {
         }
     }
     Vec::new()
+}
+
+// ── Party mode (host side) ───────────────────────────────────────────────────
+
+fn with_host(f: impl FnOnce(&Host)) -> bool {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            f(h);
+            return true;
+        }
+    }
+    false
+}
+
+fn unix_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Begin a synchronized party session (requires hosting). Returns false if not hosting.
+pub fn net_party_start() -> bool {
+    with_host(|h| h.party.start())
+}
+
+/// Broadcast the host's current playback snapshot to all party peers. `track_key`
+/// is the track's content hash so peers resolve it locally or stream it.
+pub fn net_party_update(track_key: String, position_ms: i64, playing: bool) -> bool {
+    with_host(|h| {
+        h.party.broadcast_state(&PartyState {
+            track_key,
+            position_ms,
+            playing,
+            host_time_ms: unix_ms(),
+        });
+    })
+}
+
+/// End the party session (peers get an `ended` message).
+pub fn net_party_stop() -> bool {
+    with_host(|h| h.party.stop())
+}
+
+/// Whether a party session is currently active on this host.
+pub fn net_party_active() -> bool {
+    HOST.lock()
+        .ok()
+        .and_then(|g| g.as_ref().map(|h| h.party.is_active()))
+        .unwrap_or(false)
 }
 
 /// Stop hosting (unadvertise + shut the server down).

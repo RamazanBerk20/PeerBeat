@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 68140893;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1642800107;
 
 // Section: executor
 
@@ -2078,6 +2078,141 @@ fn wire__crate__api__library__net_known_host_fingerprint_impl(
         },
     )
 }
+fn wire__crate__api__network__net_party_active_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "net_party_active",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::network::net_party_active())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__network__net_party_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "net_party_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::network::net_party_start())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__network__net_party_stop_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "net_party_stop",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::network::net_party_stop())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__network__net_party_update_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "net_party_update",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_track_key = <String>::sse_decode(&mut deserializer);
+            let api_position_ms = <i64>::sse_decode(&mut deserializer);
+            let api_playing = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::network::net_party_update(
+                        api_track_key,
+                        api_position_ms,
+                        api_playing,
+                    ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__library__net_recent_transfers_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3875,63 +4010,67 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        63 => {
+        63 => wire__crate__api__network__net_party_active_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__network__net_party_start_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__network__net_party_stop_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__network__net_party_update_impl(port, ptr, rust_vec_len, data_len),
+        67 => {
             wire__crate__api__library__net_recent_transfers_impl(port, ptr, rust_vec_len, data_len)
         }
-        64 => wire__crate__api__library__net_remember_host_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__network__net_revoke_all_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__network__net_revoke_peer_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__network__net_start_host_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__network__net_stop_host_impl(port, ptr, rust_vec_len, data_len),
-        69 => {
+        68 => wire__crate__api__library__net_remember_host_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__network__net_revoke_all_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__network__net_revoke_peer_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__network__net_start_host_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__network__net_stop_host_impl(port, ptr, rust_vec_len, data_len),
+        73 => {
             wire__crate__api__library__playlist_add_tracks_impl(port, ptr, rust_vec_len, data_len)
         }
-        70 => wire__crate__api__library__playlist_create_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__library__playlist_delete_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__library__playlist_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__library__playlist_export_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__library__playlist_import_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__library__playlist_list_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__library__playlist_remove_position_impl(
+        74 => wire__crate__api__library__playlist_create_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__library__playlist_delete_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__library__playlist_duplicate_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__library__playlist_export_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__library__playlist_import_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__library__playlist_list_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__crate__api__library__playlist_remove_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__library__playlist_rename_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__library__playlist_reorder_tracks_impl(
+        81 => wire__crate__api__library__playlist_rename_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__library__playlist_reorder_tracks_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        79 => wire__crate__api__library__playlist_tracks_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__library__settings_delete_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__library__settings_get_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__library__settings_set_impl(port, ptr, rust_vec_len, data_len),
-        83 => wire__crate__api__library__share_list_impl(port, ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__library__share_remove_impl(port, ptr, rust_vec_len, data_len),
-        85 => wire__crate__api__library__share_set_impl(port, ptr, rust_vec_len, data_len),
-        86 => wire__crate__api__library__share_set_enabled_impl(port, ptr, rust_vec_len, data_len),
-        87 => {
+        83 => wire__crate__api__library__playlist_tracks_impl(port, ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__library__settings_delete_impl(port, ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__library__settings_get_impl(port, ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__library__settings_set_impl(port, ptr, rust_vec_len, data_len),
+        87 => wire__crate__api__library__share_list_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__library__share_remove_impl(port, ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__library__share_set_impl(port, ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__library__share_set_enabled_impl(port, ptr, rust_vec_len, data_len),
+        91 => {
             wire__crate__api__library__smart_playlist_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        88 => {
+        92 => {
             wire__crate__api__library__smart_playlist_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        89 => {
+        93 => {
             wire__crate__api__library__smart_playlist_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        90 => wire__crate__api__library__smart_playlist_preview_impl(
+        94 => wire__crate__api__library__smart_playlist_preview_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => {
+        95 => {
             wire__crate__api__library__smart_playlist_tracks_impl(port, ptr, rust_vec_len, data_len)
         }
-        92 => {
+        96 => {
             wire__crate__api__library__smart_playlist_update_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),

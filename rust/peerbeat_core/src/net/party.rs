@@ -81,7 +81,11 @@ mod tests {
         // Peer clock is 1000 ms behind the host; one-way latency 20 ms.
         // peer sends at t0=0 (host time 1000); host stamps th at 1000+20=1020;
         // peer receives at t1=40 (40 ms RTT).
-        let s = SyncSample { t0: 0, th: 1020, t1: 40 };
+        let s = SyncSample {
+            t0: 0,
+            th: 1020,
+            t1: 40,
+        };
         assert_eq!(s.rtt(), 40);
         // offset = 1020 - (0+40)/2 = 1000  → peer + 1000 = host
         assert_eq!(s.offset(), 1000);
@@ -90,8 +94,16 @@ mod tests {
     #[test]
     fn best_offset_prefers_lowest_rtt() {
         let samples = [
-            SyncSample { t0: 0, th: 1100, t1: 200 }, // rtt 200, noisy
-            SyncSample { t0: 0, th: 1020, t1: 40 },  // rtt 40, clean → offset 1000
+            SyncSample {
+                t0: 0,
+                th: 1100,
+                t1: 200,
+            }, // rtt 200, noisy
+            SyncSample {
+                t0: 0,
+                th: 1020,
+                t1: 40,
+            }, // rtt 40, clean → offset 1000
         ];
         assert_eq!(best_offset(&samples), 1000);
         assert_eq!(best_offset(&[]), 0);
@@ -109,7 +121,10 @@ mod tests {
         // Peer clock at 4200 with offset +1000 → host-now 5200 → 200 ms elapsed.
         assert_eq!(target_position_ms(&state, 4_200, 1_000), 30_200);
 
-        let paused = PartyState { playing: false, ..state.clone() };
+        let paused = PartyState {
+            playing: false,
+            ..state.clone()
+        };
         assert_eq!(target_position_ms(&paused, 9_999, 1_000), 30_000);
     }
 

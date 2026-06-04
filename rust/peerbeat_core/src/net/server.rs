@@ -13,8 +13,12 @@
 //! transfer-log dashboard, and the WebSocket control / party channel.
 
 use crate::db::{shares, tracks, transfer_log};
+use crate::net::party::PartyState;
 use axum::{
-    extract::{ConnectInfo, FromRequestParts, Path, Request, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        ConnectInfo, FromRequestParts, Path, Request, State,
+    },
     http::{
         header::{AUTHORIZATION, CONTENT_DISPOSITION},
         request::Parts,
@@ -29,7 +33,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use tokio::sync::broadcast;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
@@ -53,6 +59,55 @@ pub struct Session {
 /// Host-side token store (token → grant). Cleared by a host "revoke all".
 pub type Sessions = Arc<Mutex<HashMap<String, Session>>>;
 
+/// Party-mode broadcast hub: fans the host's playback state out to connected
+/// WebSocket peers, keeps the latest snapshot for new joiners, and tracks active.
+#[derive(Clone)]
+pub struct PartyHub {
+    tx: broadcast::Sender<String>,
+    latest: Arc<Mutex<Option<String>>>,
+    active: Arc<AtomicBool>,
+}
+
+impl PartyHub {
+    pub fn new() -> Self {
+        let (tx, _rx) = broadcast::channel(16);
+        Self {
+            tx,
+            latest: Arc::new(Mutex::new(None)),
+            active: Arc::new(AtomicBool::new(false)),
+        }
+    }
+    pub fn start(&self) {
+        self.active.store(true, Ordering::Relaxed);
+    }
+    pub fn stop(&self) {
+        self.active.store(false, Ordering::Relaxed);
+        if let Ok(mut l) = self.latest.lock() {
+            *l = None;
+        }
+        let _ = self.tx.send(r#"{"type":"ended"}"#.to_string());
+    }
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::Relaxed)
+    }
+    /// Store + broadcast the latest playback snapshot to all party peers.
+    pub fn broadcast_state(&self, state: &PartyState) {
+        let payload = serde_json::json!({ "type": "state", "state": state });
+        if let Ok(msg) = serde_json::to_string(&payload) {
+            if let Ok(mut l) = self.latest.lock() {
+                *l = Some(msg.clone());
+            }
+            let _ = self.tx.send(msg);
+        }
+    }
+}
+
+impl Default for PartyHub {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone)]
 pub struct ServerConfig {
     pub db_path: PathBuf,
@@ -60,6 +115,7 @@ pub struct ServerConfig {
     pub host_id: String,
     pub fingerprint: String,
     pub sessions: Sessions,
+    pub party: PartyHub,
 }
 
 impl ServerConfig {
@@ -70,6 +126,7 @@ impl ServerConfig {
             host_id,
             fingerprint,
             sessions: Arc::new(Mutex::new(HashMap::new())),
+            party: PartyHub::new(),
         }
     }
 }
@@ -138,6 +195,7 @@ pub fn router(cfg: ServerConfig) -> Router {
         .route("/v1/tracks/{id}/download", get(download))
         .route("/v1/tracks/{id}/meta", get(track_meta))
         .route("/v1/tracks/{id}/art", get(track_art))
+        .route("/v1/party", get(party_ws))
         .with_state(cfg)
 }
 
@@ -530,6 +588,64 @@ async fn track_art(
         Ok(resp) => resp.into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "art missing").into_response(),
     }
+}
+
+// ── Party mode (WebSocket control channel) ───────────────────────────────────
+
+/// Upgrade to a party WebSocket: the host fans its playback state out here and
+/// answers clock-sync pings. No auth gate yet — party membership is open to LAN
+/// peers who know the host (a session-token gate is a follow-up).
+async fn party_ws(State(cfg): State<ServerConfig>, ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_party(socket, cfg))
+}
+
+async fn handle_party(mut socket: WebSocket, cfg: ServerConfig) {
+    // Send the current snapshot immediately so a joiner can sync at once.
+    if let Some(latest) = cfg.party.latest.lock().ok().and_then(|l| l.clone()) {
+        if socket.send(Message::Text(latest.into())).await.is_err() {
+            return;
+        }
+    }
+    let mut rx = cfg.party.tx.subscribe();
+    loop {
+        tokio::select! {
+            msg = rx.recv() => match msg {
+                Ok(text) => {
+                    if socket.send(Message::Text(text.into())).await.is_err() {
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => break,
+            },
+            incoming = socket.recv() => match incoming {
+                Some(Ok(Message::Text(t))) => {
+                    if let Some(reply) = party_reply(t.as_str()) {
+                        if socket.send(Message::Text(reply.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+                Some(Ok(Message::Close(_))) | None => break,
+                Some(Err(_)) => break,
+                _ => {}
+            },
+        }
+    }
+}
+
+/// Answer a peer control message. Currently only clock-sync pings: echo `t0` and
+/// stamp the host time `th` so the peer can compute its offset (Cristian).
+fn party_reply(text: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    if v.get("type").and_then(|t| t.as_str()) == Some("ping") {
+        let t0 = v.get("t0").and_then(|x| x.as_i64()).unwrap_or(0);
+        return serde_json::to_string(
+            &serde_json::json!({ "type": "pong", "t0": t0, "th": now_ms() }),
+        )
+        .ok();
+    }
+    None
 }
 
 /// Bind `0.0.0.0:0` and return a non-blocking std listener (for `axum_server`)
