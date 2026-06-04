@@ -10,6 +10,7 @@
 pub mod browse;
 pub mod eq_presets;
 pub mod folders;
+pub mod history;
 pub mod known_hosts;
 pub mod playlists;
 mod schema;

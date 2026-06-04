@@ -33,7 +33,7 @@ build-out is tracked in the project plan.
 | Drag-drop queue, Play-Next, Add-to-Queue | ✅ | |
 | Smart playlists (rules → parameterized SQL) | ✅ | `db/smart.rs` |
 | M3U/PLS import-export | ✅ | `library/playlist_io.rs` |
-| Auto-lists (Recently/Most/Never-Played, Favorites) | ⛔ | tables exist; no API/UI |
+| Auto-lists (Recently/Most/Never-Played, Favorites) | ✅ | play tracking + favorites DAO/API + browse tiles + heart toggle |
 
 ## 4. LAN sharing (the differentiator)
 | Feature | Status | Notes |

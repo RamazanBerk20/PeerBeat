@@ -745,6 +745,27 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     return (manual, smart);
   }
 
+  /// An auto-generated list tile that opens its tracks in a full-screen list.
+  Widget _autoTile(
+    IconData icon,
+    String name,
+    Future<List<TrackRow>> Function() load,
+  ) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(name),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: Text(name)),
+            body: _TracksFuture(load),
+            bottomNavigationBar: const MiniPlayer(),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<(List<PlaylistRow>, List<SmartPlaylistRow>)>(
@@ -782,19 +803,46 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ),
             ),
             Expanded(
-              child: (playlists.isEmpty && smarts.isEmpty)
-                  ? const Center(child: Text('No playlists yet'))
-                  : ListView(
-                      children: [
-                        for (final p in playlists) _manualTile(p),
-                        if (smarts.isNotEmpty)
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                            child: Text('Smart playlists'),
-                          ),
-                        for (final s in smarts) _smartTile(s),
-                      ],
+              child: ListView(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Text('Auto playlists'),
+                  ),
+                  _autoTile(
+                    Icons.history,
+                    'Recently Played',
+                    () => libraryRecentlyPlayed(limit: 200),
+                  ),
+                  _autoTile(
+                    Icons.local_fire_department,
+                    'Most Played',
+                    () => libraryMostPlayed(limit: 200),
+                  ),
+                  _autoTile(
+                    Icons.fiber_new,
+                    'Never Played',
+                    () => libraryNeverPlayed(limit: 200),
+                  ),
+                  _autoTile(
+                    Icons.favorite,
+                    'Favorites',
+                    () => libraryFavorites(limit: 500),
+                  ),
+                  if (playlists.isNotEmpty)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text('Playlists'),
                     ),
+                  for (final p in playlists) _manualTile(p),
+                  if (smarts.isNotEmpty)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text('Smart playlists'),
+                    ),
+                  for (final s in smarts) _smartTile(s),
+                ],
+              ),
             ),
           ],
         );

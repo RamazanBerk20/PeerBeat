@@ -89,6 +89,33 @@ Future<List<TrackRow>> libraryBrowseSongs({
   offset: offset,
 );
 
+/// Record that a track started playing (feeds Most/Recently-Played + smart rules).
+Future<void> libraryMarkPlayed({required PlatformInt64 trackId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryMarkPlayed(trackId: trackId);
+
+Future<List<TrackRow>> libraryRecentlyPlayed({required PlatformInt64 limit}) =>
+    RustLib.instance.api.crateApiLibraryLibraryRecentlyPlayed(limit: limit);
+
+Future<List<TrackRow>> libraryMostPlayed({required PlatformInt64 limit}) =>
+    RustLib.instance.api.crateApiLibraryLibraryMostPlayed(limit: limit);
+
+Future<List<TrackRow>> libraryNeverPlayed({required PlatformInt64 limit}) =>
+    RustLib.instance.api.crateApiLibraryLibraryNeverPlayed(limit: limit);
+
+Future<void> librarySetFavorite({
+  required PlatformInt64 trackId,
+  required bool on_,
+}) => RustLib.instance.api.crateApiLibraryLibrarySetFavorite(
+  trackId: trackId,
+  on_: on_,
+);
+
+Future<bool> libraryIsFavorite({required PlatformInt64 trackId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryIsFavorite(trackId: trackId);
+
+Future<List<TrackRow>> libraryFavorites({required PlatformInt64 limit}) =>
+    RustLib.instance.api.crateApiLibraryLibraryFavorites(limit: limit);
+
 /// Fuzzy search across title/artist/album/genre.
 Future<List<TrackRow>> librarySearch({
   required String query,

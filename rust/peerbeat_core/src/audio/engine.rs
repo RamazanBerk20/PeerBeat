@@ -838,7 +838,11 @@ mod tests {
         let path = std::env::temp_dir().join(format!("peerbeat_eng_{nanos}.audio"));
         write_min_wav(&path);
         let src = open_source(path.to_str().unwrap());
-        assert!(src.is_ok(), "unknown-ext source should open: {:?}", src.err());
+        assert!(
+            src.is_ok(),
+            "unknown-ext source should open: {:?}",
+            src.err()
+        );
         std::fs::remove_file(&path).ok();
     }
 }

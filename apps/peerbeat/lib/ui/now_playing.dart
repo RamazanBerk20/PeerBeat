@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 
 import '../playback/player.dart';
+import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
 import 'library_home.dart' show TrackArt, fmtDuration;
 
@@ -205,9 +206,13 @@ class _Controls extends StatelessWidget {
   }
 
   Widget _transportRow(ColorScheme cs) {
+    final cur = player.current;
+    final localTrack = cur != null && !cur.path.startsWith('http');
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
+        if (localTrack)
+          _FavoriteButton(key: ValueKey(cur.id), trackId: cur.id),
         IconButton(
           tooltip: 'Shuffle',
           isSelected: player.shuffle,
@@ -324,6 +329,59 @@ class _UpNextList extends StatelessWidget {
           onTap: () => player.playQueueIndex(base + 1 + i),
         );
       },
+    );
+  }
+}
+
+/// Heart toggle for the current local track (keyed by track id so it reloads
+/// when the track changes). Favorites only apply to local library tracks.
+class _FavoriteButton extends StatefulWidget {
+  const _FavoriteButton({super.key, required this.trackId});
+  final int trackId;
+
+  @override
+  State<_FavoriteButton> createState() => _FavoriteButtonState();
+}
+
+class _FavoriteButtonState extends State<_FavoriteButton> {
+  bool? _fav;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final f = await libraryIsFavorite(trackId: widget.trackId);
+      if (mounted) setState(() => _fav = f);
+    } catch (_) {
+      /* leave indeterminate */
+    }
+  }
+
+  Future<void> _toggle() async {
+    final next = !(_fav ?? false);
+    setState(() => _fav = next);
+    try {
+      await librarySetFavorite(trackId: widget.trackId, on_: next);
+    } catch (_) {
+      if (mounted) setState(() => _fav = !next);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final fav = _fav ?? false;
+    return IconButton(
+      tooltip: fav ? 'Remove from Favorites' : 'Add to Favorites',
+      onPressed: _toggle,
+      icon: Icon(
+        fav ? Icons.favorite : Icons.favorite_border,
+        color: fav ? cs.primary : null,
+      ),
     );
   }
 }

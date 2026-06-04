@@ -6,6 +6,7 @@
 use crate::db::browse::{self, AlbumRow, ArtistRow, GenreRow, YearRow};
 use crate::db::eq_presets::{self, EqPresetRow};
 use crate::db::folders::{self, FolderRow};
+use crate::db::history;
 use crate::db::known_hosts;
 use crate::db::playlists::{self, PlaylistRow};
 use crate::db::shares::{self, ShareRow};
@@ -160,6 +161,39 @@ pub fn net_clear_activity() -> Result<(), String> {
 /// Browse all songs ordered by title, paginated.
 pub fn library_browse_songs(limit: i64, offset: i64) -> Result<Vec<TrackRow>, String> {
     with_db(|db| tracks::browse_songs(db.conn(), limit, offset))
+}
+
+// ── Play tracking + auto-lists + favorites ───────────────────────────────────
+
+/// Record that a track started playing (feeds Most/Recently-Played + smart rules).
+pub fn library_mark_played(track_id: i64) -> Result<(), String> {
+    let now = now_ms();
+    with_db(|db| history::mark_played(db.conn(), track_id, now))
+}
+
+pub fn library_recently_played(limit: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| history::recently_played(db.conn(), limit))
+}
+
+pub fn library_most_played(limit: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| history::most_played(db.conn(), limit))
+}
+
+pub fn library_never_played(limit: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| history::never_played(db.conn(), limit))
+}
+
+pub fn library_set_favorite(track_id: i64, on: bool) -> Result<(), String> {
+    let now = now_ms();
+    with_db(|db| history::set_favorite(db.conn(), track_id, on, now))
+}
+
+pub fn library_is_favorite(track_id: i64) -> Result<bool, String> {
+    with_db(|db| history::is_favorite(db.conn(), track_id))
+}
+
+pub fn library_favorites(limit: i64) -> Result<Vec<TrackRow>, String> {
+    with_db(|db| history::favorites(db.conn(), limit))
 }
 
 /// Fuzzy search across title/artist/album/genre.

@@ -424,6 +424,11 @@ class PlayerController extends ChangeNotifier {
         await _engine.playPath(p, duration: duration);
       }
       _engineLoaded = true;
+      if (_persistSettings && !p.startsWith('http')) {
+        // Record a local play (feeds Most/Recently-Played + smart-playlist
+        // played_count rules). Skipped for LAN streams (remote ids aren't local).
+        unawaited(libraryMarkPlayed(trackId: t.id));
+      }
       // Re-apply speed + ReplayGain volume: a fresh source (or a restarted
       // worker) resets them, and the gain is per-track.
       if (_speed != 1.0) await _engine.setSpeed(_speed);
