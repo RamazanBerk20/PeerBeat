@@ -226,7 +226,12 @@ class _GlobalPlaybackShortcuts extends StatelessWidget {
             player.setShuffle(!player.shuffle),
         const SingleActivator(LogicalKeyboardKey.keyR): player.cycleRepeat,
       },
-      child: Focus(autofocus: true, child: child),
+      // CallbackShortcuts already provides its own (non-focusable) Focus that
+      // catches key events bubbling from the focused route, so no extra Focus is
+      // needed here. A wrapping Focus(autofocus: true) re-requested focus on every
+      // MaterialApp rebuild (e.g. dynamic-theme changes), which collided with
+      // route/overlay layout and tripped an overlay assertion.
+      child: child,
     );
   }
 }
