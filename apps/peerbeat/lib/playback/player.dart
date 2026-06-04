@@ -454,7 +454,11 @@ class PlayerController extends ChangeNotifier {
       _applyVolume();
       if (resume != null) {
         _resumeFrom = null;
-        await _engine.seek(resume);
+        // Best-effort: some formats can't seek far enough to a deep bookmark —
+        // don't let that abort playback, just start from the top.
+        try {
+          await _engine.seek(resume);
+        } catch (_) {}
       }
       _persistResume(force: true);
     } catch (e) {

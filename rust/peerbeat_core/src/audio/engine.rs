@@ -435,15 +435,21 @@ fn open_seeked_source(
     use rodio::Source;
 
     let mut source = open_source(path)?;
-    match source.try_seek(target) {
-        Ok(()) => Ok(with_dsp(source, eq, widen, ended)),
-        Err(e) if e.source_intact() => Ok(with_dsp(
-            Box::new(source.skip_duration(target)),
-            eq,
-            widen,
-            ended,
-        )),
-        Err(e) => Err(format!("seek failed: {e}")),
+    if source.try_seek(target).is_ok() {
+        return Ok(with_dsp(source, eq, widen, ended));
+    }
+    // The format can't seek in place (e.g. symphonia `Unseekable` on some
+    // webm/ogg, or a seektable-less FLAC). The only fallback is to decode from
+    // the start and discard up to `target` — but that is eager and synchronous,
+    // so a large jump would peg the CPU and freeze playback. Do it only for short
+    // targets (resume bookmarks, small scrubs); otherwise report a clean error so
+    // the caller keeps playing from where it was.
+    const MAX_SKIP: Duration = Duration::from_secs(10);
+    if target <= MAX_SKIP {
+        let fresh = open_source(path)?;
+        Ok(with_dsp(Box::new(fresh.skip_duration(target)), eq, widen, ended))
+    } else {
+        Err("this track's format doesn't support seeking that far".to_string())
     }
 }
 
