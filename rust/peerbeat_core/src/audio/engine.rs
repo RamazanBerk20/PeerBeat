@@ -30,6 +30,7 @@ enum Cmd {
     Eq([f32; 10], f32),
     Device(Option<String>, Sender<Result<(), String>>),
     StereoWidth(f32),
+    Crossfade(f32),
 }
 
 #[derive(Default)]
@@ -113,6 +114,9 @@ impl AudioEngine {
     }
     pub fn set_speed(&self, s: f32) {
         let _ = self.send(Cmd::Speed(s.clamp(0.25, 4.0)));
+    }
+    pub fn set_crossfade(&self, secs: f32) {
+        let _ = self.send(Cmd::Crossfade(secs.clamp(0.0, 12.0)));
     }
     pub fn set_eq(&self, gains: [f32; 10], preamp_db: f32) {
         let gains = gains.map(|g| g.clamp(-12.0, 12.0));
@@ -598,6 +602,12 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
     let mut base_position_ms = 0u64;
     let mut force_position_ms: Option<u64> = None;
     let mut current_duration = Duration::ZERO;
+    // Crossfade state (inert while `crossfade_secs == 0`, i.e. the default):
+    // `fade_in` ramps the incoming sink up; `fading_out` holds outgoing sinks
+    // ramping down until they finish.
+    let mut crossfade_secs = 0.0f32;
+    let mut fade_in: Option<std::time::Instant> = None;
+    let mut fading_out: Vec<(Sink, std::time::Instant)> = Vec::new();
 
     loop {
         match rx.recv_timeout(Duration::from_millis(150)) {
@@ -614,12 +624,24 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     // A fresh sink avoids rodio 0.19 getting stuck after clear().
                     let s = Sink::try_new(&handle)
                         .map_err(|e| format!("cannot create audio sink: {e}"))?;
-                    sink = s;
+                    // Crossfade: if enabled and a track is currently audible, let the
+                    // old sink fade out under the new one (which fades in). Otherwise
+                    // swap sinks at full volume (the default, unchanged behaviour).
+                    if crossfade_secs > 0.0 && !sink.is_paused() && !sink.empty() {
+                        let now = std::time::Instant::now();
+                        let old = std::mem::replace(&mut sink, s);
+                        fading_out.push((old, now));
+                        sink.set_volume(0.0);
+                        fade_in = Some(now);
+                    } else {
+                        sink = s;
+                        sink.set_volume(volume);
+                        fade_in = None;
+                    }
                     current_path = Some(path.clone());
                     current_duration = dur;
                     base_position_ms = 0;
                     force_position_ms = None; // drop any pending seek from a prior track
-                    sink.set_volume(volume);
                     sink.set_speed(speed);
                     sink.append(source);
                     sink.play();
@@ -642,7 +664,10 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 }
                 let _ = reply.send(result);
             }
-            Ok(Cmd::Pause) => sink.pause(),
+            Ok(Cmd::Pause) => {
+                sink.pause();
+                fading_out.clear(); // don't keep a crossfade tail audible while paused
+            }
             Ok(Cmd::Resume) => sink.play(),
             Ok(Cmd::Stop) => {
                 if let Ok(s) = Sink::try_new(&handle) {
@@ -650,6 +675,8 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     sink.set_volume(volume);
                     sink.set_speed(speed);
                 }
+                fade_in = None;
+                fading_out.clear();
                 current_path = None;
                 current_duration = Duration::ZERO;
                 base_position_ms = 0;
@@ -690,6 +717,8 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     sink = s;
                     sink.set_volume(volume);
                     sink.set_speed(speed);
+                    fade_in = None;
+                    fading_out.clear();
                     sink.append(source);
                     if was_playing {
                         sink.play();
@@ -730,6 +759,9 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     sink = s;
                     sink.set_volume(volume);
                     sink.set_speed(speed);
+                    // Outgoing crossfade sinks belong to the old stream — drop them.
+                    fade_in = None;
+                    fading_out.clear();
                     if let Some(path) = current_path.as_deref() {
                         let target = clamp_seek_position(
                             Duration::from_millis(resume_ms),
@@ -763,8 +795,43 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
             Ok(Cmd::StereoWidth(width)) => {
                 widen.set(width);
             }
+            Ok(Cmd::Crossfade(secs)) => {
+                crossfade_secs = secs;
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
+        }
+        // Advance any active crossfade. No-op while disabled (the default).
+        if crossfade_secs > 0.0 {
+            let now = std::time::Instant::now();
+            if let Some(start) = fade_in {
+                let frac =
+                    (now.duration_since(start).as_secs_f32() / crossfade_secs).clamp(0.0, 1.0);
+                if frac >= 1.0 {
+                    fade_in = None;
+                    sink.set_volume(volume);
+                } else {
+                    sink.set_volume(volume * frac);
+                }
+            }
+            let had_tail = !fading_out.is_empty();
+            fading_out.retain_mut(|(s, start)| {
+                let frac =
+                    (now.duration_since(*start).as_secs_f32() / crossfade_secs).clamp(0.0, 1.0);
+                if frac >= 1.0 {
+                    false // drop → the Sink stops
+                } else {
+                    s.set_volume(volume * (1.0 - frac));
+                    true
+                }
+            });
+            // The outgoing track flips the shared `ended` flag as its tail
+            // finishes; that belongs to the old track, so clear it while a
+            // crossfade is live (and on the tick it completes). The incoming
+            // track sets it again when it genuinely ends, long after the fade.
+            if fade_in.is_some() || !fading_out.is_empty() || had_tail {
+                shared.ended.store(false, Ordering::Release);
+            }
         }
         let ended = shared.ended.load(Ordering::Acquire);
         let pos_ms = if ended && current_duration != Duration::ZERO {

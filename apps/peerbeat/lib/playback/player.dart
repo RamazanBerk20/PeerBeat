@@ -23,6 +23,7 @@ const _kEqGains = 'audio.eq_gains';
 const _kEqPreamp = 'audio.eq_preamp';
 const _kOutputDevice = 'audio.output_device';
 const _kStereoWidth = 'audio.stereo_width';
+const _kCrossfade = 'audio.crossfade';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -89,6 +90,7 @@ class PlayerController extends ChangeNotifier {
   double _eqPreampDb = 0.0;
   String _outputDeviceId = 'default';
   double _stereoWidth = 1.0;
+  double _crossfade = 0.0; // seconds; 0 = off (default)
   Duration _position = Duration.zero;
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
@@ -123,6 +125,7 @@ class PlayerController extends ChangeNotifier {
   double get eqPreampDb => _eqPreampDb;
   String get outputDeviceId => _outputDeviceId;
   double get stereoWidth => _stereoWidth;
+  double get crossfade => _crossfade;
   Duration get position => _position;
   Duration get duration => current == null
       ? Duration.zero
@@ -306,6 +309,14 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Crossfade between tracks, 0–12 s (0 = off). Applies to the next transition.
+  void setCrossfade(double secs) {
+    _crossfade = secs.clamp(0.0, 12.0);
+    unawaited(_engine.setCrossfade(_crossfade));
+    unawaited(settingsSet(key: _kCrossfade, value: '$_crossfade'));
+    notifyListeners();
+  }
+
   void _applyEq() {
     final gains = _eqEnabled ? _eqGains : List<double>.filled(10, 0.0);
     final preamp = _eqEnabled ? _eqPreampDb : 0.0;
@@ -351,10 +362,15 @@ class PlayerController extends ChangeNotifier {
       if (stereoWidth != null) {
         _stereoWidth = (double.tryParse(stereoWidth) ?? 1.0).clamp(0.0, 2.0);
       }
+      final crossfade = await settingsGet(key: _kCrossfade);
+      if (crossfade != null) {
+        _crossfade = (double.tryParse(crossfade) ?? 0.0).clamp(0.0, 12.0);
+      }
       _recomputeRg();
       _applyVolume();
       _applyEq();
       unawaited(_engine.setStereoWidth(_stereoWidth));
+      unawaited(_engine.setCrossfade(_crossfade));
       try {
         await _engine.setOutputDevice(
           _outputDeviceId == 'default' ? null : _outputDeviceId,
@@ -554,8 +570,21 @@ class PlayerController extends ChangeNotifier {
     if (_advancing || _userPaused || current == null || d == Duration.zero) {
       return;
     }
-    final nearEnd = _position >= d - const Duration(milliseconds: 500);
-    final ended = nearEnd && (!_playing || _position >= d);
+    // With crossfade on, pre-advance ~crossfade seconds before the end so the
+    // engine can overlap the outgoing tail with the incoming track. Skipped for
+    // repeat-one (a track can't crossfade into itself) and very short tracks;
+    // otherwise advance only once the track has actually ended.
+    final crossfadeMs = (_crossfade * 1000).round();
+    final crossfading =
+        crossfadeMs >= 500 &&
+        hasNext &&
+        _repeat != RepeatMode.one &&
+        d.inMilliseconds > crossfadeMs + 2000;
+    final lead = crossfading
+        ? Duration(milliseconds: crossfadeMs)
+        : const Duration(milliseconds: 500);
+    final nearEnd = _position >= d - lead;
+    final ended = nearEnd && (crossfading || !_playing || _position >= d);
     if (!ended) return;
     _advancing = true;
     try {

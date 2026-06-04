@@ -30,6 +30,10 @@ void audioSetVolume({required double volume}) =>
 void audioSetSpeed({required double speed}) =>
     RustLib.instance.api.crateApiAudioAudioSetSpeed(speed: speed);
 
+/// Crossfade duration between tracks, in seconds (0–12; 0 disables — the default).
+void audioSetCrossfade({required double secs}) =>
+    RustLib.instance.api.crateApiAudioAudioSetCrossfade(secs: secs);
+
 /// 10-band graphic EQ, using ISO octave centers from 31 Hz to 16 kHz.
 /// `gains` must contain exactly 10 dB values. Values are clamped by the engine
 /// to -12..12 dB; `preamp_db` is clamped to -15..15 dB.

@@ -56,6 +56,12 @@ pub fn audio_set_speed(speed: f64) {
     engine().set_speed(speed as f32);
 }
 
+/// Crossfade duration between tracks, in seconds (0–12; 0 disables — the default).
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_set_crossfade(secs: f64) {
+    engine().set_crossfade(secs as f32);
+}
+
 /// 10-band graphic EQ, using ISO octave centers from 31 Hz to 16 kHz.
 /// `gains` must contain exactly 10 dB values. Values are clamped by the engine
 /// to -12..12 dB; `preamp_db` is clamped to -15..15 dB.

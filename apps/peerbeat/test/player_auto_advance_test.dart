@@ -202,6 +202,9 @@ class _FakeAudioEngine implements AudioEngine {
   Future<void> setSpeed(double speed) async {}
 
   @override
+  Future<void> setCrossfade(double secs) async {}
+
+  @override
   Future<void> setEq(List<double> gains, double preampDb) async {}
 
   @override

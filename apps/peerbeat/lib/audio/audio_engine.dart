@@ -31,6 +31,9 @@ abstract class AudioEngine {
   /// Playback speed (1.0 = normal). Desktop currently shifts pitch with speed.
   Future<void> setSpeed(double speed);
 
+  /// Crossfade between tracks in seconds (0 disables). Desktop only.
+  Future<void> setCrossfade(double secs);
+
   /// 10-band graphic EQ. Gains are dB values for 31 Hz through 16 kHz.
   Future<void> setEq(List<double> gains, double preampDb);
 
@@ -167,6 +170,10 @@ class RustDesktopEngine implements AudioEngine {
   Future<void> setSpeed(double speed) async => rust.audioSetSpeed(speed: speed);
 
   @override
+  Future<void> setCrossfade(double secs) async =>
+      rust.audioSetCrossfade(secs: secs);
+
+  @override
   Future<void> setEq(List<double> gains, double preampDb) async =>
       rust.audioSetEq(gains: gains, preampDb: preampDb);
 
@@ -239,6 +246,11 @@ class ExoPlayerEngine implements AudioEngine {
 
   @override
   Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+
+  @override
+  Future<void> setCrossfade(double secs) async {
+    // just_audio has no built-in crossfade; desktop-only for now.
+  }
 
   @override
   Future<void> setEq(List<double> gains, double preampDb) async {

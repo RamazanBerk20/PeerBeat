@@ -149,6 +149,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 12),
             const _StereoWidthCard(),
+            const SizedBox(height: 12),
+            const _CrossfadeCard(),
             const SizedBox(height: 16),
             Text('About', style: text.titleLarge),
             const Card(
@@ -184,27 +186,86 @@ class _StereoWidthCard extends StatelessWidget {
               style: text.bodySmall,
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                const Text('Width'),
-                Expanded(
-                  child: Slider(
-                    min: 0,
-                    max: 2,
-                    divisions: 40,
-                    value: player.stereoWidth,
-                    label: '${(player.stereoWidth * 100).round()}%',
-                    onChanged: player.setStereoWidth,
+            ListenableBuilder(
+              listenable: player,
+              builder: (context, _) => Row(
+                children: [
+                  const Text('Width'),
+                  Expanded(
+                    child: Slider(
+                      min: 0,
+                      max: 2,
+                      divisions: 40,
+                      value: player.stereoWidth,
+                      label: '${(player.stereoWidth * 100).round()}%',
+                      onChanged: player.setStereoWidth,
+                    ),
                   ),
-                ),
-                SizedBox(
-                  width: 64,
-                  child: Text(
-                    '${(player.stereoWidth * 100).round()}%',
-                    textAlign: TextAlign.end,
+                  SizedBox(
+                    width: 64,
+                    child: Text(
+                      '${(player.stereoWidth * 100).round()}%',
+                      textAlign: TextAlign.end,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CrossfadeCard extends StatelessWidget {
+  const _CrossfadeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Crossfade', style: text.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Overlap the end of one track with the start of the next (desktop). '
+              '0 disables it.',
+              style: text.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            // Own ListenableBuilder so the controlled Slider follows the live
+            // value even though this card itself is const (and so not rebuilt).
+            ListenableBuilder(
+              listenable: player,
+              builder: (context, _) {
+                final secs = player.crossfade;
+                String fmt(double s) =>
+                    s < 0.5 ? 'Off' : '${s.toStringAsFixed(1)} s';
+                return Row(
+                  children: [
+                    const Text('Duration'),
+                    Expanded(
+                      child: Slider(
+                        min: 0,
+                        max: 12,
+                        divisions: 24,
+                        value: secs.clamp(0.0, 12.0),
+                        label: fmt(secs),
+                        onChanged: player.setCrossfade,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 64,
+                      child: Text(fmt(secs), textAlign: TextAlign.end),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
