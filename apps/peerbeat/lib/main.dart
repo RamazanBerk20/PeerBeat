@@ -23,6 +23,9 @@ Future<void> main() async {
     await player.loadAudioSettings(); // ReplayGain mode/preamp
     await player.restoreSession(); // best-effort: restore last track + position
     await osMedia.start(); // best-effort: MPRIS media-key/lockscreen on Linux
+    try {
+      await libraryStartWatching(); // best-effort: auto-import on folder changes
+    } catch (_) {}
   } catch (e, st) {
     debugPrintStack(label: 'PeerBeat startup failed', stackTrace: st);
     runApp(_StartupErrorApp(error: '$e'));

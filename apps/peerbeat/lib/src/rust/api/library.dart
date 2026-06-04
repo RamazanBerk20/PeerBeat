@@ -14,7 +14,8 @@ import '../db/transfer_log.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `export_playlist_file`, `import_playlist_file`, `now_ms`, `with_db`
+// These functions are ignored because they are not marked as `pub`: `export_playlist_file`, `import_playlist_file`, `now_ms`, `restart_watcher`, `watch_loop`, `with_db`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `FolderWatcher`
 
 /// Open (creating if needed) the library database at `db_path`.
 Future<void> libraryOpen({required String dbPath}) =>
@@ -37,6 +38,16 @@ Future<void> libraryRemoveFolder({required PlatformInt64 folderId}) =>
 /// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
 Future<ScanReport> libraryRescanAll() =>
     RustLib.instance.api.crateApiLibraryLibraryRescanAll();
+
+/// Begin watching every library folder; filesystem changes trigger a debounced
+/// incremental rescan + prune of the affected folder. Idempotent. A no-op (not
+/// an error) when there are no folders yet.
+Future<void> libraryStartWatching() =>
+    RustLib.instance.api.crateApiLibraryLibraryStartWatching();
+
+/// Stop watching (best-effort).
+Future<void> libraryStopWatching() =>
+    RustLib.instance.api.crateApiLibraryLibraryStopWatching();
 
 /// Every configured share (for the host's sharing screen).
 Future<List<ShareRow>> shareList() =>

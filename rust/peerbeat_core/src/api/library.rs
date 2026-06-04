@@ -17,7 +17,7 @@ use crate::db::{settings, Db};
 use crate::library::{self, metadata, playlist_io};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 static DB: Mutex<Option<Db>> = Mutex::new(None);
 
@@ -57,7 +57,7 @@ pub fn library_open(db_path: String) -> Result<(), String> {
 /// as a library folder. Returns counts.
 pub fn library_scan(path: String) -> Result<ScanReport, String> {
     let added_at = now_ms();
-    with_db(|db| -> anyhow::Result<ScanReport> {
+    let report = with_db(|db| -> anyhow::Result<ScanReport> {
         let root = PathBuf::from(&path);
         let s = library::scan_folder(db.conn(), &root, added_at, db.art_dir())?;
         folders::add(db.conn(), &path, added_at)?;
@@ -68,7 +68,9 @@ pub fn library_scan(path: String) -> Result<ScanReport, String> {
             errors: s.errors as u32,
             removed: 0,
         })
-    })
+    });
+    restart_watcher(); // (re)start the watcher to include the new folder
+    report
 }
 
 // ── Library folders (sources) ───────────────────────────────────────────────
@@ -80,7 +82,9 @@ pub fn library_folders() -> Result<Vec<FolderRow>, String> {
 
 /// Forget a library folder and remove the tracks under it.
 pub fn library_remove_folder(folder_id: i64) -> Result<(), String> {
-    with_db(|db| folders::remove(db.conn(), folder_id))
+    let r = with_db(|db| folders::remove(db.conn(), folder_id));
+    restart_watcher();
+    r
 }
 
 /// Re-scan every known folder: import new/changed files and prune tracks whose
@@ -107,6 +111,107 @@ pub fn library_rescan_all() -> Result<ScanReport, String> {
         }
         Ok(rep)
     })
+}
+
+// ── Watch-folders (auto-import on filesystem changes) ────────────────────────
+
+struct FolderWatcher {
+    // Dropping the watcher drops its event handler (and the channel sender),
+    // which ends the debounce worker thread.
+    _watcher: notify::RecommendedWatcher,
+}
+
+static WATCHER: Mutex<Option<FolderWatcher>> = Mutex::new(None);
+
+/// Begin watching every library folder; filesystem changes trigger a debounced
+/// incremental rescan + prune of the affected folder. Idempotent. A no-op (not
+/// an error) when there are no folders yet.
+pub fn library_start_watching() -> Result<(), String> {
+    use notify::{RecursiveMode, Watcher};
+    let mut guard = WATCHER
+        .lock()
+        .map_err(|_| "watcher lock poisoned".to_string())?;
+    if guard.is_some() {
+        return Ok(());
+    }
+    let roots: Vec<PathBuf> = with_db(|db| folders::list(db.conn()))?
+        .into_iter()
+        .map(|f| PathBuf::from(f.path))
+        .collect();
+    if roots.is_empty() {
+        return Ok(());
+    }
+
+    let (tx, rx) = std::sync::mpsc::channel::<PathBuf>();
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if let Ok(ev) = res {
+            for p in ev.paths {
+                let _ = tx.send(p);
+            }
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    for root in &roots {
+        let _ = watcher.watch(root, RecursiveMode::Recursive);
+    }
+
+    let worker_roots = roots.clone();
+    std::thread::Builder::new()
+        .name("peerbeat-watch".into())
+        .spawn(move || watch_loop(rx, worker_roots))
+        .map_err(|e| e.to_string())?;
+
+    *guard = Some(FolderWatcher { _watcher: watcher });
+    Ok(())
+}
+
+/// Drain filesystem events, debounce ~800 ms, then incrementally rescan+prune
+/// each affected root. Exits when the watcher (and its sender) is dropped.
+fn watch_loop(rx: std::sync::mpsc::Receiver<PathBuf>, roots: Vec<PathBuf>) {
+    use std::collections::HashSet;
+    use std::sync::mpsc::RecvTimeoutError;
+    loop {
+        let first = match rx.recv() {
+            Ok(p) => p,
+            Err(_) => return, // watcher dropped
+        };
+        let mut changed: HashSet<PathBuf> = HashSet::new();
+        changed.insert(first);
+        loop {
+            match rx.recv_timeout(Duration::from_millis(800)) {
+                Ok(p) => {
+                    changed.insert(p);
+                }
+                Err(RecvTimeoutError::Timeout) => break,
+                Err(RecvTimeoutError::Disconnected) => return,
+            }
+        }
+        let now = now_ms();
+        for root in roots
+            .iter()
+            .filter(|root| changed.iter().any(|p| p.starts_with(root)))
+        {
+            let _ = with_db(|db| -> anyhow::Result<()> {
+                library::scan_folder(db.conn(), root, now, db.art_dir())?;
+                library::scan::prune_missing(db.conn(), root)?;
+                Ok(())
+            });
+        }
+    }
+}
+
+/// Stop watching (best-effort).
+pub fn library_stop_watching() {
+    if let Ok(mut g) = WATCHER.lock() {
+        *g = None;
+    }
+}
+
+/// (Re)start the watcher so it reflects the current folder set. Watching is on by
+/// default for all library folders, so this starts it even if it wasn't running.
+fn restart_watcher() {
+    library_stop_watching();
+    let _ = library_start_watching();
 }
 
 // ── LAN sharing config (host side) ───────────────────────────────────────────

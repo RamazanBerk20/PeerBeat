@@ -24,7 +24,7 @@ build-out is tracked in the project plan.
 | Browse Songs/Albums/Artists/Genres/Years/Recent | ✅ | `db/browse.rs` |
 | Fast fuzzy search | ✅ | FTS5 trigram + bm25 |
 | Manual rescan / prune | ✅ | `library_rescan_all` |
-| Active watch-folders | ⛔ | `is_watched` flag exists; no `notify` watcher |
+| Active watch-folders | ✅ | `notify` watcher: debounced incremental rescan/prune on file changes (UI refreshes on next navigation) |
 
 ## 3. Playlists & queue
 | Feature | Status | Notes |
