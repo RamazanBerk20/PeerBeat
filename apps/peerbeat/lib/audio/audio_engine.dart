@@ -28,7 +28,8 @@ abstract class AudioEngine {
   /// Volume in 0.0–1.0 (1.0 = unity).
   Future<void> setVolume(double volume);
 
-  /// Playback speed (1.0 = normal). Desktop currently shifts pitch with speed.
+  /// Playback speed (0.5–2×, 1.0 = normal). Desktop is pitch-preserving
+  /// (Signalsmith time-stretch); 1.0× is a bit-exact bypass.
   Future<void> setSpeed(double speed);
 
   /// Crossfade between tracks in seconds (0 disables). Desktop only.

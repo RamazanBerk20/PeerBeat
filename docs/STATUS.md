@@ -10,10 +10,9 @@ build-out is tracked in the project plan.
 | Play/pause/prev/next/seek, volume, mute | ✅ | `playback/player.dart`, `audio/engine.rs` |
 | Shuffle, repeat (off/all/one) | ✅ | |
 | Resume from last position | ✅ | persisted track id + position |
-| Variable speed | 🟡 | works, but **shifts pitch**; UI exposes 0.5–2× |
+| Variable speed (pitch-preserving) | ✅ | Signalsmith time-stretch (`audio/timestretch.rs`); UI 0.5–2×; bypassed bit-exact at 1.0× |
 | Gapless playback | ⛔ | rodio interim; fresh sink per track |
-| Configurable crossfade (0–12 s) | ⛔ | no engine support / UI yet |
-| Pitch-preserving speed | ⛔ | needs the planned symphonia→cpal+rubato engine |
+| Configurable crossfade (0–12 s) | ✅ | dual-sink equal-time fade, opt-in (`audio.crossfade`; default 0 = unchanged) |
 
 ## 2. Library
 | Feature | Status | Notes |

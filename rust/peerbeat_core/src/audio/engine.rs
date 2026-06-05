@@ -15,6 +15,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::eq::{EqHandle, EqSource};
+use super::timestretch::{SpeedHandle, MAX_SPEED, MIN_SPEED};
+#[cfg(not(target_os = "android"))]
+use super::timestretch::TimeStretchSource;
 use super::widen::{StereoWidenHandle, StereoWidenSource};
 
 const END_SEEK_EPSILON: Duration = Duration::from_millis(250);
@@ -113,7 +116,9 @@ impl AudioEngine {
         let _ = self.send(Cmd::Volume(v.clamp(0.0, 2.0)));
     }
     pub fn set_speed(&self, s: f32) {
-        let _ = self.send(Cmd::Speed(s.clamp(0.25, 4.0)));
+        // Pitch-preserving time-stretch is usable across 0.5–2× (matches the UI
+        // presets); outside that range Signalsmith Stretch degrades.
+        let _ = self.send(Cmd::Speed(s.clamp(MIN_SPEED, MAX_SPEED)));
     }
     pub fn set_crossfade(&self, secs: f32) {
         let _ = self.send(Cmd::Crossfade(secs.clamp(0.0, 12.0)));
@@ -413,10 +418,34 @@ fn open_source(path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, 
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn with_dsp(
     source: Box<dyn rodio::Source<Item = i16> + Send>,
     eq: EqHandle,
     widen: StereoWidenHandle,
+    speed: SpeedHandle,
+    ended: Arc<AtomicBool>,
+) -> Box<dyn rodio::Source<Item = i16> + Send> {
+    // EQ → stereo widen → pitch-preserving time-stretch → end-notify. The
+    // stretcher is a no-op (pure passthrough) while speed == 1.0.
+    Box::new(EndNotifySource::new(
+        TimeStretchSource::new(
+            StereoWidenSource::new(EqSource::new(source, eq), widen),
+            speed,
+        ),
+        ended,
+    ))
+}
+
+// Android plays via ExoPlayer; this rodio engine (and the Signalsmith time-stretch
+// stage) is unused there, so the desktop-only C++ dep is excluded. The `speed`
+// handle is accepted but ignored to keep the signature identical across targets.
+#[cfg(target_os = "android")]
+fn with_dsp(
+    source: Box<dyn rodio::Source<Item = i16> + Send>,
+    eq: EqHandle,
+    widen: StereoWidenHandle,
+    _speed: SpeedHandle,
     ended: Arc<AtomicBool>,
 ) -> Box<dyn rodio::Source<Item = i16> + Send> {
     Box::new(EndNotifySource::new(
@@ -430,13 +459,14 @@ fn open_seeked_source(
     target: Duration,
     eq: EqHandle,
     widen: StereoWidenHandle,
+    speed: SpeedHandle,
     ended: Arc<AtomicBool>,
 ) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, String> {
     use rodio::Source;
 
     let mut source = open_source(path)?;
     if source.try_seek(target).is_ok() {
-        return Ok(with_dsp(source, eq, widen, ended));
+        return Ok(with_dsp(source, eq, widen, speed, ended));
     }
     // The format can't seek in place (e.g. symphonia `Unseekable` on some
     // webm/ogg, or a seektable-less FLAC). The only fallback is to decode from
@@ -447,7 +477,13 @@ fn open_seeked_source(
     const MAX_SKIP: Duration = Duration::from_secs(10);
     if target <= MAX_SKIP {
         let fresh = open_source(path)?;
-        Ok(with_dsp(Box::new(fresh.skip_duration(target)), eq, widen, ended))
+        Ok(with_dsp(
+            Box::new(fresh.skip_duration(target)),
+            eq,
+            widen,
+            speed,
+            ended,
+        ))
     } else {
         Err("this track's format doesn't support seeking that far".to_string())
     }
@@ -604,6 +640,13 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
     let mut speed = 1.0f32;
     let eq = EqHandle::new();
     let widen = StereoWidenHandle::new();
+    // Live, lock-free speed read by the time-stretch stage inside each sink's
+    // source (no `sink.set_speed`, which would pitch-shift).
+    let speed_handle = SpeedHandle::new();
+    // Output-time anchor for the position calc: content_ms = base +
+    // (sink.get_pos() - speed_anchor) * speed. Reset to ZERO on every fresh sink
+    // (get_pos restarts at 0), and advanced on each speed change.
+    let mut speed_anchor = Duration::ZERO;
     let mut current_path: Option<String> = None;
     let mut base_position_ms = 0u64;
     let mut force_position_ms: Option<u64> = None;
@@ -624,6 +667,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                         open_source(&path)?,
                         eq.clone(),
                         widen.clone(),
+                        speed_handle.clone(),
                         shared.ended.clone(),
                     );
                     let dur = source.total_duration().unwrap_or(Duration::ZERO);
@@ -647,8 +691,8 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     current_path = Some(path.clone());
                     current_duration = dur;
                     base_position_ms = 0;
+                    speed_anchor = Duration::ZERO; // fresh sink: get_pos() restarts at 0
                     force_position_ms = None; // drop any pending seek from a prior track
-                    sink.set_speed(speed);
                     sink.append(source);
                     sink.play();
                     shared
@@ -679,8 +723,8 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 if let Ok(s) = Sink::try_new(&handle) {
                     sink = s;
                     sink.set_volume(volume);
-                    sink.set_speed(speed);
                 }
+                speed_anchor = Duration::ZERO;
                 fade_in = None;
                 fading_out.clear();
                 current_path = None;
@@ -716,13 +760,14 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                         target,
                         eq.clone(),
                         widen.clone(),
+                        speed_handle.clone(),
                         shared.ended.clone(),
                     )?;
                     let s = Sink::try_new(&handle)
                         .map_err(|e| format!("cannot create audio sink: {e}"))?;
                     sink = s;
                     sink.set_volume(volume);
-                    sink.set_speed(speed);
+                    speed_anchor = Duration::ZERO;
                     fade_in = None;
                     fading_out.clear();
                     sink.append(source);
@@ -747,8 +792,15 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 sink.set_volume(v);
             }
             Ok(Cmd::Speed(s)) => {
+                // Rebase the position accumulator with the OLD speed so the
+                // scrubber stays continuous across the change, then engage the new
+                // speed in the time-stretch stage (no pitch-shifting sink.set_speed).
+                let out = sink.get_pos();
+                let since = out.saturating_sub(speed_anchor);
+                base_position_ms += (since.as_secs_f64() * speed as f64 * 1000.0) as u64;
+                speed_anchor = out;
                 speed = s;
-                sink.set_speed(s);
+                speed_handle.set(s);
             }
             Ok(Cmd::Eq(gains, preamp_db)) => {
                 eq.set(gains, preamp_db);
@@ -764,7 +816,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     handle = new_handle;
                     sink = s;
                     sink.set_volume(volume);
-                    sink.set_speed(speed);
+                    speed_anchor = Duration::ZERO;
                     // Outgoing crossfade sinks belong to the old stream — drop them.
                     fade_in = None;
                     fading_out.clear();
@@ -779,6 +831,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                             target,
                             eq.clone(),
                             widen.clone(),
+                            speed_handle.clone(),
                             shared.ended.clone(),
                         )?;
                         sink.append(source);
@@ -844,11 +897,13 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
             current_duration.as_millis() as u64
         } else {
             force_position_ms.take().unwrap_or_else(|| {
-                // rodio's get_pos() is sampled AFTER the speed adapter, so it
-                // reports output (wall-clock) time. Scale it back to source-content
-                // time so the position matches base_position_ms and the duration
-                // regardless of playback speed (no-op at 1.0×).
-                let content_ms = sink.get_pos().as_secs_f64() * speed as f64 * 1000.0;
+                // The time-stretch stage consumes `speed` source-seconds of content
+                // per output (wall-clock) second, so content advances at
+                // (wall-time since the last anchor) × speed. base_position_ms holds
+                // the content position banked at that anchor (track start, seek, or
+                // the last speed change); no-op scaling at 1.0×.
+                let since = sink.get_pos().saturating_sub(speed_anchor);
+                let content_ms = since.as_secs_f64() * speed as f64 * 1000.0;
                 base_position_ms + content_ms as u64
             })
         };
