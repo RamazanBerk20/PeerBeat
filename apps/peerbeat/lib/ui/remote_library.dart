@@ -36,22 +36,31 @@ class RemoteLibraryView extends StatefulWidget {
 
 class _RemoteLibraryViewState extends State<RemoteLibraryView> {
   final _downloading = <int>{};
+  bool _bulkBusy = false; // "Download all" in progress
+  int _bulkDone = 0;
+  int _bulkFailed = 0;
+
+  /// Fetch one track's file into [dir]. Throws on HTTP error. No UI side
+  /// effects, no client lifecycle — shared by single + bulk download.
+  Future<void> _fetchTrack(HttpClient client, TrackRow t, Directory dir) async {
+    final url =
+        '${widget.base}/v1/tracks/${t.id}/download?token=${widget.token}';
+    final resp = await (await client.getUrl(Uri.parse(url))).close();
+    if (resp.statusCode != 200) {
+      throw Exception('HTTP ${resp.statusCode}');
+    }
+    final file = File('${dir.path}/${_fileName(resp, t)}');
+    final part = File('${file.path}.part');
+    await resp.pipe(part.openWrite());
+    await part.rename(file.path); // atomic publish
+  }
 
   Future<void> _download(TrackRow t) async {
     setState(() => _downloading.add(t.id));
     final client = await tofuStreamClient();
     try {
-      final url =
-          '${widget.base}/v1/tracks/${t.id}/download?token=${widget.token}';
-      final resp = await (await client.getUrl(Uri.parse(url))).close();
-      if (resp.statusCode != 200) {
-        throw Exception('HTTP ${resp.statusCode}');
-      }
       final dir = await _downloadsDir();
-      final file = File('${dir.path}/${_fileName(resp, t)}');
-      final part = File('${file.path}.part');
-      await resp.pipe(part.openWrite());
-      await part.rename(file.path); // atomic publish
+      await _fetchTrack(client, t, dir);
       await libraryScan(path: dir.path); // register + import the new file
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -67,6 +76,47 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
     } finally {
       client.close();
       if (mounted) setState(() => _downloading.remove(t.id));
+    }
+  }
+
+  /// Download every shared track into the local library. Sequential and
+  /// error-tolerant: a failed track is counted and skipped, not fatal. One
+  /// library scan at the end registers everything in bulk. (No server zip
+  /// endpoint exists yet, so this loops the per-track download.)
+  Future<void> _downloadAll() async {
+    if (_bulkBusy) return;
+    setState(() {
+      _bulkBusy = true;
+      _bulkDone = 0;
+      _bulkFailed = 0;
+    });
+    final client = await tofuStreamClient();
+    try {
+      final dir = await _downloadsDir();
+      for (final t in widget.tracks) {
+        if (!mounted) return;
+        try {
+          await _fetchTrack(client, t, dir);
+          if (mounted) setState(() => _bulkDone++);
+        } catch (_) {
+          if (mounted) setState(() => _bulkFailed++);
+        }
+      }
+      await libraryScan(path: dir.path); // bulk-register all new files at once
+      if (mounted) {
+        final failed = _bulkFailed > 0 ? ' ($_bulkFailed failed)' : '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Downloaded $_bulkDone of ${widget.tracks.length} tracks'
+              '$failed to your library',
+            ),
+          ),
+        );
+      }
+    } finally {
+      client.close();
+      if (mounted) setState(() => _bulkBusy = false);
     }
   }
 
@@ -116,6 +166,29 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
+          if (widget.canDownload)
+            _bulkBusy
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Center(
+                          child: Text('$_bulkDone/${widget.tracks.length}'),
+                        ),
+                      ],
+                    ),
+                  )
+                : IconButton(
+                    tooltip: 'Download all to my library',
+                    icon: const Icon(Icons.download_for_offline_outlined),
+                    onPressed: widget.tracks.isEmpty ? null : _downloadAll,
+                  ),
           ListenableBuilder(
             listenable: party,
             builder: (context, _) => party.joined
