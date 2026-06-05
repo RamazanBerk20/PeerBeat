@@ -11,7 +11,7 @@ makedepends=('flutter' 'rust' 'cargo' 'cmake' 'ninja' 'clang' 'pkgconf' 'git' 'i
 provides=('peerbeat')
 conflicts=('peerbeat-bin')
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('SKIP')   # replaced with real sum at release time
+sha256sums=('f0149baf16c78df09334e3626ad57464fcd86eebaa1aa392e9cbc0fe69894b5f')
 
 prepare() {
   cd "PeerBeat-${pkgver}"
