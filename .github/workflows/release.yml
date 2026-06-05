@@ -72,7 +72,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: dist/*
+          # Only the finished packages — not the intermediate bundle/AppDir trees
+          # build_linux_packages.sh leaves under dist/ (those polluted the release).
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+            dist/*.AppImage
 
   # ── Windows installer (Inno Setup) — must run on Windows ────────────────────
   windows:
