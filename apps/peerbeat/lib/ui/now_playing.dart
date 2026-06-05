@@ -251,8 +251,7 @@ class _Controls extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        if (localTrack)
-          _FavoriteButton(key: ValueKey(cur.id), trackId: cur.id),
+        if (localTrack) _FavoriteButton(key: ValueKey(cur.id), trackId: cur.id),
         IconButton(
           tooltip: 'Shuffle',
           isSelected: player.shuffle,

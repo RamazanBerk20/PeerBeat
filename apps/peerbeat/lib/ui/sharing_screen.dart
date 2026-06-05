@@ -218,8 +218,7 @@ class _ShareTileState extends State<_ShareTile> {
                       value: _permission,
                       onChanged: _busy
                           ? null
-                          : (v) =>
-                                setState(() => _permission = v ?? 'stream'),
+                          : (v) => setState(() => _permission = v ?? 'stream'),
                       items: const [
                         DropdownMenuItem(
                           value: 'stream',
@@ -267,8 +266,11 @@ class _ShareTileState extends State<_ShareTile> {
   }
 }
 
-String _modeLabel(String m) =>
-    switch (m) { 'pin' => 'PIN', 'approved' => 'Approved', _ => 'Open' };
+String _modeLabel(String m) => switch (m) {
+  'pin' => 'PIN',
+  'approved' => 'Approved',
+  _ => 'Open',
+};
 
 String _permLabel(String p) =>
     p == 'stream_download' ? 'stream + download' : 'stream only';

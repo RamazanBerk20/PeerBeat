@@ -15,9 +15,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::eq::{EqHandle, EqSource};
-use super::timestretch::{SpeedHandle, MAX_SPEED, MIN_SPEED};
 #[cfg(not(target_os = "android"))]
 use super::timestretch::TimeStretchSource;
+use super::timestretch::{SpeedHandle, MAX_SPEED, MIN_SPEED};
 use super::widen::{StereoWidenHandle, StereoWidenSource};
 
 const END_SEEK_EPSILON: Duration = Duration::from_millis(250);

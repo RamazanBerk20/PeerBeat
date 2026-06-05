@@ -225,13 +225,17 @@ class ExoPlayerEngine implements AudioEngine {
   @override
   Future<void> playPath(String path, {Duration? duration}) async {
     await _player.setFilePath(path);
-    unawaited(_player.play()); // do not await: completes only when playback ends
+    unawaited(
+      _player.play(),
+    ); // do not await: completes only when playback ends
   }
 
   @override
   Future<void> playUrl(String url, {Duration? duration}) async {
     await _player.setUrl(url);
-    unawaited(_player.play()); // do not await: completes only when playback ends
+    unawaited(
+      _player.play(),
+    ); // do not await: completes only when playback ends
   }
 
   @override

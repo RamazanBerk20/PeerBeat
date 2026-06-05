@@ -34,7 +34,8 @@ void main() {
 
       await tester.enterText(find.byType(TextField), '1234');
       await tester.tap(find.text('Connect'));
-      await tester.pumpAndSettle(); // dialog EXIT transition — used to crash here
+      await tester
+          .pumpAndSettle(); // dialog EXIT transition — used to crash here
       await future;
 
       expect(result, '1234');
@@ -58,7 +59,10 @@ void main() {
     );
 
     String? result = 'sentinel';
-    final future = promptText(pageContext, title: 'Name').then((v) => result = v);
+    final future = promptText(
+      pageContext,
+      title: 'Name',
+    ).then((v) => result = v);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();

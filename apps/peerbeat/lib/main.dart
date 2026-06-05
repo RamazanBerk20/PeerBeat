@@ -227,11 +227,13 @@ class _GlobalPlaybackShortcutsState extends State<_GlobalPlaybackShortcuts> {
               const SingleActivator(
                 LogicalKeyboardKey.arrowRight,
                 control: true,
-              ): () => player.next(),
+              ): () =>
+                  player.next(),
               const SingleActivator(
                 LogicalKeyboardKey.arrowLeft,
                 control: true,
-              ): () => player.previous(),
+              ): () =>
+                  player.previous(),
               const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
                   player.setVolume((player.volume + 0.05).clamp(0.0, 1.0)),
               const SingleActivator(LogicalKeyboardKey.arrowDown): () =>

@@ -33,8 +33,10 @@ impl SpeedHandle {
 
     /// Set the speed; clamped to the supported range.
     pub fn set(&self, speed: f32) {
-        self.0
-            .store(speed.clamp(MIN_SPEED, MAX_SPEED).to_bits(), Ordering::Release);
+        self.0.store(
+            speed.clamp(MIN_SPEED, MAX_SPEED).to_bits(),
+            Ordering::Release,
+        );
     }
 
     pub fn get(&self) -> f32 {
@@ -287,7 +289,10 @@ mod imp {
             h.set(2.0);
             let out: Vec<i16> = TimeStretchSource::new(mono(44100), h).collect();
             let ratio = out.len() as f32 / 44100.0;
-            assert!((ratio - 0.5).abs() < 0.1, "2.0x should ~halve length, got {ratio}");
+            assert!(
+                (ratio - 0.5).abs() < 0.1,
+                "2.0x should ~halve length, got {ratio}"
+            );
         }
 
         #[test]
@@ -296,7 +301,10 @@ mod imp {
             h.set(0.5);
             let out: Vec<i16> = TimeStretchSource::new(mono(22050), h).collect();
             let ratio = out.len() as f32 / 22050.0;
-            assert!((ratio - 2.0).abs() < 0.2, "0.5x should ~double length, got {ratio}");
+            assert!(
+                (ratio - 2.0).abs() < 0.2,
+                "0.5x should ~double length, got {ratio}"
+            );
         }
 
         #[test]

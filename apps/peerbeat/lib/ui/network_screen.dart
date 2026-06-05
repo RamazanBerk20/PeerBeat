@@ -139,10 +139,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                dense: true,
-                title: Text('Shared by ${h.name}'),
-              ),
+              ListTile(dense: true, title: Text('Shared by ${h.name}')),
               for (final s in shares)
                 ListTile(
                   leading: Icon(
@@ -317,9 +314,9 @@ class _NetworkPanelState extends State<NetworkPanel> {
             'Playlists or the whole library, with access mode & PIN',
           ),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const SharingScreen()),
-          ),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SharingScreen())),
         ),
         if (_hosting)
           ListTile(
