@@ -71,11 +71,30 @@ pub fn read_lyrics(path: &Path) -> Option<String> {
     }
     let tagged = lofty::read_from_path(path).ok()?;
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
-    tag.get_string(ItemKey::Lyrics).map(|s| s.to_string())
+    tag.get_string(ItemKey::Lyrics).map(fix_mojibake)
 }
 
 /// Read tags + audio properties into a [`NewTrack`]. Falls back to the filename
 /// for the title when untagged.
+/// Recover tag text that was written as UTF-8 bytes but labeled ISO-8859-1 (a
+/// very common tagger bug; also bare ID3v1, which the spec defines as Latin-1).
+/// lofty honors the label and decodes each byte to U+0000..U+00FF, so genuine
+/// UTF-8 comes out as mojibake (e.g. "ş" → "ÅŸ", "ü" → "Ã¼"). If the string is
+/// all ≤ U+00FF and re-interpreting those chars as Latin-1 bytes yields *valid*
+/// UTF-8 that differs, the bytes were UTF-8 all along — return the recovered
+/// text. Correctly-decoded Latin-1 (e.g. "café") has isolated high bytes that are
+/// not valid UTF-8, so `from_utf8` fails and the text is left untouched.
+fn fix_mojibake(s: &str) -> String {
+    if s.is_ascii() || !s.chars().all(|c| (c as u32) <= 0xFF) {
+        return s.to_string();
+    }
+    let bytes: Vec<u8> = s.chars().map(|c| c as u8).collect();
+    match std::str::from_utf8(&bytes) {
+        Ok(recovered) if recovered != s => recovered.to_string(),
+        _ => s.to_string(),
+    }
+}
+
 pub fn read_tags(
     path: &Path,
     file_size: i64,
@@ -103,19 +122,22 @@ pub fn read_tags(
     if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
         if let Some(t) = tag.title() {
             if !t.trim().is_empty() {
-                nt.title = t.to_string();
+                nt.title = fix_mojibake(&t);
             }
         }
         if let Some(a) = tag.artist() {
-            nt.artists = split_multi(&a);
+            nt.artists = split_multi(&fix_mojibake(&a));
         }
-        nt.album = tag.album().map(|a| a.to_string()).filter(|s| !s.is_empty());
+        nt.album = tag
+            .album()
+            .map(|a| fix_mojibake(&a))
+            .filter(|s| !s.is_empty());
         nt.album_artist = tag
             .get_string(ItemKey::AlbumArtist)
-            .map(|s| s.to_string())
+            .map(fix_mojibake)
             .filter(|s| !s.is_empty());
         if let Some(g) = tag.genre() {
-            nt.genres = split_multi(&g);
+            nt.genres = split_multi(&fix_mojibake(&g));
         }
         nt.year = tag.get_string(ItemKey::Year).and_then(|s| {
             let s = s.trim();
@@ -217,5 +239,27 @@ mod tests {
         assert_eq!(parse_db("-6.50 dB"), Some(-6.5));
         assert_eq!(parse_db("3.2"), Some(3.2));
         assert_eq!(parse_db("n/a"), None);
+    }
+
+    #[test]
+    fn mojibake_recovers_utf8_mislabeled_as_latin1() {
+        // What lofty produces when UTF-8 tag bytes are labeled ISO-8859-1: each
+        // UTF-8 byte mapped 1:1 to a code point. Recover the original.
+        let moji: String = "Şarkı".bytes().map(|b| b as char).collect();
+        assert_ne!(moji, "Şarkı");
+        assert_eq!(fix_mojibake(&moji), "Şarkı");
+
+        let moji2: String = "Güneş — AC/DC".bytes().map(|b| b as char).collect();
+        assert_eq!(fix_mojibake(&moji2), "Güneş — AC/DC");
+    }
+
+    #[test]
+    fn mojibake_leaves_clean_text_untouched() {
+        // ASCII and correctly-decoded Latin-1 (lone high bytes, not valid UTF-8)
+        // must pass through unchanged — no false "recovery".
+        assert_eq!(fix_mojibake("Hello World"), "Hello World");
+        assert_eq!(fix_mojibake("café"), "café"); // é = lone 0xE9, not valid UTF-8
+        assert_eq!(fix_mojibake("Şarkı"), "Şarkı"); // already-correct UTF-8
+        assert_eq!(fix_mojibake(""), "");
     }
 }
