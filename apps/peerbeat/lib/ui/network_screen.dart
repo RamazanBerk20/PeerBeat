@@ -13,6 +13,7 @@ import '../src/rust/net/discovery.dart';
 import 'mini_player.dart';
 import 'remote_library.dart';
 import 'sharing_screen.dart';
+import 'text_input_dialog.dart';
 
 class NetworkScreen extends StatelessWidget {
   const NetworkScreen({super.key});
@@ -262,36 +263,13 @@ class _NetworkPanelState extends State<NetworkPanel> {
         : null;
   }
 
-  Future<String?> _promptPin() async {
-    final ctrl = TextEditingController();
-    try {
-      return await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Enter PIN'),
-          content: TextField(
-            controller: ctrl,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(hintText: '4–6 digits'),
-            onSubmitted: (v) => Navigator.pop(ctx, v),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text),
-              child: const Text('Connect'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      ctrl.dispose();
-    }
-  }
+  Future<String?> _promptPin() => promptText(
+    context,
+    title: 'Enter PIN',
+    hint: '4–6 digits',
+    keyboardType: TextInputType.number,
+    confirmLabel: 'Connect',
+  );
 
   @override
   Widget build(BuildContext context) {

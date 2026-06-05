@@ -16,6 +16,7 @@ import 'mini_player.dart';
 import 'network_screen.dart';
 import 'settings_screen.dart';
 import 'smart_playlist.dart';
+import 'text_input_dialog.dart';
 
 String fmtDuration(int ms) {
   final s = (ms / 1000).round();
@@ -95,38 +96,14 @@ class _LibraryHomeState extends State<LibraryHome> {
       );
     } catch (_) {
       if (!context.mounted) return null;
-      final controller = TextEditingController(
-        text: Platform.environment['HOME'] ?? '',
+      return promptText(
+        context,
+        title: 'Scan a music folder',
+        initialText: Platform.environment['HOME'] ?? '',
+        label: 'Folder path',
+        hint: '/home/you/Music',
+        confirmLabel: 'Scan',
       );
-      try {
-        return await showDialog<String>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Scan a music folder'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Folder path',
-                hintText: '/home/you/Music',
-              ),
-              onSubmitted: (v) => Navigator.pop(ctx, v),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, controller.text),
-                child: const Text('Scan'),
-              ),
-            ],
-          ),
-        );
-      } finally {
-        controller.dispose();
-      }
     }
   }
 
@@ -1137,35 +1114,15 @@ Future<String?> _playlistNameDialog(
   required String title,
   String initial = '',
 }) async {
-  final controller = TextEditingController(text: initial);
-  try {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Name'),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    final clean = name?.trim();
-    return clean == null || clean.isEmpty ? null : clean;
-  } finally {
-    controller.dispose();
-  }
+  final name = await promptText(
+    context,
+    title: title,
+    initialText: initial,
+    label: 'Name',
+    confirmLabel: 'Save',
+  );
+  final clean = name?.trim();
+  return clean == null || clean.isEmpty ? null : clean;
 }
 
 // ── Albums / Artists / Genres ───────────────────────────────────────────────

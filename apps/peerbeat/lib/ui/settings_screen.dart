@@ -4,6 +4,7 @@ import '../playback/player.dart';
 import '../src/rust/api/audio.dart' show OutputDeviceRow;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/eq_presets.dart';
+import 'text_input_dialog.dart';
 
 const _eqBands = [
   '31',
@@ -67,33 +68,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _savePreset() async {
-    final controller = TextEditingController();
+    final name = await promptText(
+      context,
+      title: 'Save EQ preset',
+      label: 'Preset name',
+      confirmLabel: 'Save',
+    );
+    final clean = name?.trim();
+    if (clean == null || clean.isEmpty) return;
     try {
-      final name = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Save EQ preset'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Preset name'),
-            textInputAction: TextInputAction.done,
-            onSubmitted: (v) => Navigator.of(context).pop(v),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-      final clean = name?.trim();
-      if (clean == null || clean.isEmpty) return;
       await eqPresetCreate(
         name: clean,
         bands: player.eqGains,
@@ -105,8 +88,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Could not save preset: $e')));
-    } finally {
-      controller.dispose();
     }
   }
 
