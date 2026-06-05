@@ -27,9 +27,6 @@ class _MiniPlayerState extends State<MiniPlayer> {
         final cs = Theme.of(context).colorScheme;
         final durMs = player.duration.inMilliseconds;
         final maxMs = durMs <= 0 ? 1 : durMs;
-        final posMs = (_dragMs ?? player.position.inMilliseconds.toDouble())
-            .clamp(0, maxMs.toDouble())
-            .toDouble();
         return Material(
           color: cs.surfaceContainerHigh,
           child: SafeArea(
@@ -37,41 +34,54 @@ class _MiniPlayerState extends State<MiniPlayer> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 2,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 6,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 12,
-                    ),
-                  ),
-                  child: Slider(
-                    min: 0,
-                    max: maxMs.toDouble(),
-                    value: posMs,
-                    onChanged: (v) => setState(() => _dragMs = v),
-                    onChangeEnd: (v) async {
-                      final requested = Duration(milliseconds: v.toInt());
-                      final duration = Duration(milliseconds: durMs);
-                      final target =
-                          duration > _endSeekEpsilon &&
-                              requested >= duration - _endSeekEpsilon
-                          ? duration - _endSeekEpsilon
-                          : requested;
-                      setState(() => _dragMs = null);
-                      try {
-                        await player.seek(target);
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Seek failed: $e')),
-                          );
-                        }
-                      }
-                    },
-                  ),
+                // Only the scrubber follows the live position (~5x/s). The rest
+                // of the bar — including the tooltipped transport buttons — is
+                // built from state that changes rarely, so position ticks don't
+                // churn the OverlayPortal-backed tooltips (which crashes the
+                // Overlay with a `_skipMarkNeedsLayout` assertion).
+                ValueListenableBuilder<Duration>(
+                  valueListenable: player.positionNotifier,
+                  builder: (context, pos, _) {
+                    final posMs = (_dragMs ?? pos.inMilliseconds.toDouble())
+                        .clamp(0, maxMs.toDouble())
+                        .toDouble();
+                    return SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 2,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 6,
+                        ),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 12,
+                        ),
+                      ),
+                      child: Slider(
+                        min: 0,
+                        max: maxMs.toDouble(),
+                        value: posMs,
+                        onChanged: (v) => setState(() => _dragMs = v),
+                        onChangeEnd: (v) async {
+                          final requested = Duration(milliseconds: v.toInt());
+                          final duration = Duration(milliseconds: durMs);
+                          final target =
+                              duration > _endSeekEpsilon &&
+                                  requested >= duration - _endSeekEpsilon
+                              ? duration - _endSeekEpsilon
+                              : requested;
+                          setState(() => _dragMs = null);
+                          try {
+                            await player.seek(target);
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Seek failed: $e')),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    );
+                  },
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 8, 8),
@@ -100,15 +110,27 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    Text(
-                                      '${t.artist.isEmpty ? 'Unknown' : t.artist}'
-                                      '   ${fmtDuration(posMs.round())} / ${fmtDuration(durMs)}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: cs.onSurfaceVariant,
-                                        fontSize: 12,
-                                      ),
+                                    // Live elapsed/total — its own listener so
+                                    // only this label repaints on each tick.
+                                    ValueListenableBuilder<Duration>(
+                                      valueListenable: player.positionNotifier,
+                                      builder: (context, pos, _) {
+                                        final posMs =
+                                            (_dragMs ??
+                                                    pos.inMilliseconds
+                                                        .toDouble())
+                                                .clamp(0, maxMs.toDouble());
+                                        return Text(
+                                          '${t.artist.isEmpty ? 'Unknown' : t.artist}'
+                                          '   ${fmtDuration(posMs.round())} / ${fmtDuration(durMs)}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: cs.onSurfaceVariant,
+                                            fontSize: 12,
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ],
                                 ),

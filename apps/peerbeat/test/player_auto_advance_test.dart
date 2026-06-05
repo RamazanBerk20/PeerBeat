@@ -130,6 +130,32 @@ void main() {
       expect(engine.playedPaths, ['/tmp/1.mp3', '/tmp/2.mp3']);
     },
   );
+
+  test(
+    'position ticks update positionNotifier without notifying main listeners',
+    () async {
+      // Regression guard for the Overlay `_skipMarkNeedsLayout` crash: a
+      // position tick must NOT fire the app-wide ChangeNotifier (which would
+      // rebuild every tooltip/Slider OverlayPortal ~5x/s). Only the dedicated
+      // positionNotifier may tick.
+      final engine = _FakeAudioEngine();
+      final controller = PlayerController.forTest(engine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.playQueue([_track(1)], 0); // loads the engine
+      var mainNotifies = 0;
+      var posNotifies = 0;
+      controller.addListener(() => mainNotifies++);
+      controller.positionNotifier.addListener(() => posNotifies++);
+
+      engine.emitPosition(const Duration(milliseconds: 300));
+      await _settle();
+
+      expect(controller.position, const Duration(milliseconds: 300));
+      expect(posNotifies, 1, reason: 'scrubber must follow the tick');
+      expect(mainNotifies, 0, reason: 'a tick must not rebuild the whole UI');
+    },
+  );
 }
 
 Future<void> _settle() async {

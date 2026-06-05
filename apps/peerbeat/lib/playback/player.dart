@@ -45,10 +45,11 @@ class PlayerController extends ChangeNotifier {
       // desktop poller (which reads 0 while idle) would clobber a restored
       // resume bookmark to 0:00 and then persist that 0.
       if (!_engineLoaded) return;
-      _position = p;
+      _setPosition(p);
       _scheduleMaybeAdvance();
       _persistResume();
-      notifyListeners();
+      // Deliberately no notifyListeners() here: position flows via
+      // positionNotifier only. See positionNotifier's doc comment.
     });
     _playSub = _engine.playingStream.listen((p) {
       if (!p && !_userPaused && current != null) {
@@ -92,6 +93,14 @@ class PlayerController extends ChangeNotifier {
   double _stereoWidth = 1.0;
   double _crossfade = 0.0; // seconds; 0 = off (default)
   Duration _position = Duration.zero;
+  // High-frequency playback position (engine poll, ~5x/s). Deliberately NOT
+  // routed through notifyListeners — a position tick must not rebuild the whole
+  // UI, or the tooltip/Slider OverlayPortals churning on every tick trip the
+  // Overlay's `_skipMarkNeedsLayout` assertion (full-screen red crash). Only the
+  // scrubbers/time labels/lyrics listen here; everything else listens to the
+  // ChangeNotifier, which now fires only on real state changes (track, play/pause,
+  // volume, shuffle, ...). This also stops the entire UI rebuilding 5x/second.
+  final ValueNotifier<Duration> positionNotifier = ValueNotifier(Duration.zero);
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
   // holding the track; the first play loads it and seeks to `_resumeFrom`.
@@ -127,6 +136,13 @@ class PlayerController extends ChangeNotifier {
   double get stereoWidth => _stereoWidth;
   double get crossfade => _crossfade;
   Duration get position => _position;
+
+  // Keep _position and the high-frequency notifier in lockstep.
+  void _setPosition(Duration p) {
+    _position = p;
+    positionNotifier.value = p;
+  }
+
   Duration get duration => current == null
       ? Duration.zero
       : Duration(milliseconds: current!.durationMs);
@@ -427,7 +443,7 @@ class PlayerController extends ChangeNotifier {
     if (t == null) return;
     _generation++;
     final resume = _resumeFrom;
-    _position = resume ?? Duration.zero;
+    _setPosition(resume ?? Duration.zero);
     _playing = true;
     _userPaused = false;
     _lastError = null;
@@ -489,20 +505,20 @@ class PlayerController extends ChangeNotifier {
     // Before the engine holds the track (restored session), a scrub just moves
     // the pending resume target.
     if (!_engineLoaded) {
-      _position = p;
+      _setPosition(p);
       _resumeFrom = p == Duration.zero ? null : p;
       _persistResume(force: true);
       notifyListeners();
       return;
     }
     final previous = _position;
-    _position = p;
+    _setPosition(p);
     _lastError = null;
     notifyListeners();
     try {
       await _engine.seek(p);
     } catch (e) {
-      _position = previous;
+      _setPosition(previous);
       _lastError = _engine.lastError ?? e.toString();
       notifyListeners();
       rethrow;
@@ -543,7 +559,7 @@ class PlayerController extends ChangeNotifier {
       _queue = [track];
       _order = [0];
       _pos = 0;
-      _position = Duration(milliseconds: clamped);
+      _setPosition(Duration(milliseconds: clamped));
       _resumeFrom = _position == Duration.zero ? null : _position;
       _engineLoaded = false;
       _playing = false;
@@ -594,12 +610,12 @@ class PlayerController extends ChangeNotifier {
     try {
       if (generation != _generation) return;
       if (_repeat == RepeatMode.one) {
-        _position = Duration.zero;
+        _setPosition(Duration.zero);
         await _playCurrent();
       } else if (hasNext) {
         await next();
       } else {
-        _position = d;
+        _setPosition(d);
         _persistResume(force: true);
         notifyListeners();
       }
@@ -613,6 +629,7 @@ class PlayerController extends ChangeNotifier {
     _posSub.cancel();
     _playSub.cancel();
     _engine.dispose();
+    positionNotifier.dispose();
     super.dispose();
   }
 }

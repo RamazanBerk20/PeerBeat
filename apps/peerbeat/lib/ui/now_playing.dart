@@ -165,9 +165,6 @@ class _Controls extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final durMs = player.duration.inMilliseconds;
     final maxMs = durMs <= 0 ? 1 : durMs;
-    final posMs = (dragMs ?? player.position.inMilliseconds.toDouble())
-        .clamp(0, maxMs.toDouble())
-        .toDouble();
     final upNext = player.upNext;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -192,23 +189,42 @@ class _Controls extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 12),
-          Slider(
-            min: 0,
-            max: maxMs.toDouble(),
-            value: posMs,
-            semanticFormatterCallback: (v) => fmtDuration(v.round()),
-            onChanged: onDragChanged,
-            onChangeEnd: onDragEnd,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(fmtDuration(posMs.round()), style: text.labelMedium),
-                Text(fmtDuration(durMs), style: text.labelMedium),
-              ],
-            ),
+          // Scrubber + elapsed/total follow the live position; the surrounding
+          // controls (tooltipped transport + volume) stay out of the ~5x/s path
+          // so their OverlayPortal tooltips don't churn and crash the Overlay.
+          ValueListenableBuilder<Duration>(
+            valueListenable: player.positionNotifier,
+            builder: (context, pos, _) {
+              final posMs = (dragMs ?? pos.inMilliseconds.toDouble())
+                  .clamp(0, maxMs.toDouble())
+                  .toDouble();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Slider(
+                    min: 0,
+                    max: maxMs.toDouble(),
+                    value: posMs,
+                    semanticFormatterCallback: (v) => fmtDuration(v.round()),
+                    onChanged: onDragChanged,
+                    onChangeEnd: onDragEnd,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          fmtDuration(posMs.round()),
+                          style: text.labelMedium,
+                        ),
+                        Text(fmtDuration(durMs), style: text.labelMedium),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 8),
           _transportRow(cs),
@@ -496,10 +512,9 @@ class _LyricsPanelState extends State<_LyricsPanel> {
         child: Text(raw, style: Theme.of(context).textTheme.bodyLarge),
       );
     }
-    return ListenableBuilder(
-      listenable: player,
-      builder: (context, _) {
-        final pos = player.position;
+    return ValueListenableBuilder<Duration>(
+      valueListenable: player.positionNotifier,
+      builder: (context, pos, _) {
         var active = 0;
         for (var i = 0; i < synced.length; i++) {
           if (synced[i].t <= pos) {
