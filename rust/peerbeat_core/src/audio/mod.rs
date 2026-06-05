@@ -12,15 +12,22 @@
 //! speed != 1.0) are implemented here. **Not yet built**: true gapless playback
 //! (see the roadmap / `docs/STATUS.md`).
 //!
-//! On Android this module is unused — playback there is ExoPlayer (Dart side).
+//! On Android this engine is unused — playback there is ExoPlayer (Dart side) —
+//! so the whole rodio/cpal/DSP stack (and its native C++ runtime) is excluded
+//! from the Android build; [`AudioEngine`] there is a no-op stub so the FRB
+//! surface still compiles.
 
+#[cfg(not(target_os = "android"))]
 mod engine;
-mod eq;
-mod timestretch;
-mod widen;
-pub use engine::AudioEngine;
+#[cfg(target_os = "android")]
+#[path = "engine_stub.rs"]
+mod engine;
 
-// Planned: replace the rodio engine with a custom symphonia→cpal pipeline:
-// mod decoder;      // symphonia source + dual-decoder crossfade mixer
-// mod dsp;          // biquad EQ, replaygain, widener, time-stretch
-// mod devices;      // output-device enumeration + selection
+#[cfg(not(target_os = "android"))]
+mod eq;
+#[cfg(not(target_os = "android"))]
+mod timestretch;
+#[cfg(not(target_os = "android"))]
+mod widen;
+
+pub use engine::AudioEngine;

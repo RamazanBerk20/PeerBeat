@@ -77,6 +77,18 @@ pub fn audio_set_eq(gains: Vec<f64>, preamp_db: f64) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "android")]
+pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
+    // Output routing is OS-controlled on Android (and the rodio/cpal engine isn't
+    // compiled there); expose only the system default.
+    Ok(vec![OutputDeviceRow {
+        id: "default".to_string(),
+        name: "System default".to_string(),
+        is_default: true,
+    }])
+}
+
+#[cfg(not(target_os = "android"))]
 pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
     use rodio::cpal::traits::{DeviceTrait, HostTrait};
 

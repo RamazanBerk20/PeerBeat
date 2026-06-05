@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::eq::{EqHandle, EqSource};
-#[cfg(not(target_os = "android"))]
+#[cfg(not(target_os = "windows"))]
 use super::timestretch::TimeStretchSource;
 use super::timestretch::{SpeedHandle, MAX_SPEED, MIN_SPEED};
 use super::widen::{StereoWidenHandle, StereoWidenSource};
@@ -418,7 +418,7 @@ fn open_source(path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>, 
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(target_os = "windows"))]
 fn with_dsp(
     source: Box<dyn rodio::Source<Item = i16> + Send>,
     eq: EqHandle,
@@ -437,10 +437,10 @@ fn with_dsp(
     ))
 }
 
-// Android plays via ExoPlayer; this rodio engine (and the Signalsmith time-stretch
-// stage) is unused there, so the desktop-only C++ dep is excluded. The `speed`
-// handle is accepted but ignored to keep the signature identical across targets.
-#[cfg(target_os = "android")]
+// Windows: Signalsmith Stretch's cxx bridge doesn't compile under MSVC, so there's
+// no time-stretch stage; variable speed falls back to rodio's resampling
+// `sink.set_speed` (see `engage_speed`). The `speed` handle is ignored here.
+#[cfg(target_os = "windows")]
 fn with_dsp(
     source: Box<dyn rodio::Source<Item = i16> + Send>,
     eq: EqHandle,
@@ -452,6 +452,19 @@ fn with_dsp(
         StereoWidenSource::new(EqSource::new(source, eq), widen),
         ended,
     ))
+}
+
+// Apply the current speed to a freshly-created sink / on a speed change. On
+// platforms with the time-stretch stage the sink stays at 1.0× and the live
+// `SpeedHandle` drives speed; on Windows (no stretcher) we use rodio's pitch-
+// shifting `set_speed` directly.
+#[cfg(not(target_os = "windows"))]
+fn engage_speed(_sink: &rodio::Sink, speed: f32, handle: &SpeedHandle) {
+    handle.set(speed);
+}
+#[cfg(target_os = "windows")]
+fn engage_speed(sink: &rodio::Sink, speed: f32, _handle: &SpeedHandle) {
+    sink.set_speed(speed);
 }
 
 fn open_seeked_source(
@@ -693,6 +706,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     base_position_ms = 0;
                     speed_anchor = Duration::ZERO; // fresh sink: get_pos() restarts at 0
                     force_position_ms = None; // drop any pending seek from a prior track
+                    engage_speed(&sink, speed, &speed_handle);
                     sink.append(source);
                     sink.play();
                     shared
@@ -768,6 +782,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     sink = s;
                     sink.set_volume(volume);
                     speed_anchor = Duration::ZERO;
+                    engage_speed(&sink, speed, &speed_handle);
                     fade_in = None;
                     fading_out.clear();
                     sink.append(source);
@@ -800,7 +815,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 base_position_ms += (since.as_secs_f64() * speed as f64 * 1000.0) as u64;
                 speed_anchor = out;
                 speed = s;
-                speed_handle.set(s);
+                engage_speed(&sink, s, &speed_handle);
             }
             Ok(Cmd::Eq(gains, preamp_db)) => {
                 eq.set(gains, preamp_db);
@@ -817,6 +832,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     sink = s;
                     sink.set_volume(volume);
                     speed_anchor = Duration::ZERO;
+                    engage_speed(&sink, speed, &speed_handle);
                     // Outgoing crossfade sinks belong to the old stream — drop them.
                     fade_in = None;
                     fading_out.clear();

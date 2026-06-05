@@ -8,9 +8,10 @@
 //! read once per output block from a cheaply-cloneable [`SpeedHandle`], so the UI
 //! can change speed live.
 //!
-//! The Signalsmith dependency is **desktop-only**: the whole rodio engine is
-//! unused on Android (playback there is ExoPlayer), so [`TimeStretchSource`] and
-//! the `ssstretch` C++ dep are excluded from the Android build. [`SpeedHandle`]
+//! The Signalsmith dependency is **Linux/macOS only**: it's unused on Android
+//! (ExoPlayer plays there) and doesn't compile under MSVC on Windows, so
+//! [`TimeStretchSource`] and the `ssstretch` C++ dep are excluded on both — those
+//! targets fall back to rodio's resampling speed in the engine. [`SpeedHandle`]
 //! and the speed bounds stay cross-platform (pure Rust).
 
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -50,10 +51,10 @@ impl Default for SpeedHandle {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
 pub use imp::TimeStretchSource;
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
 mod imp {
     use super::{SpeedHandle, MAX_SPEED, MIN_SPEED};
     use rodio::Source;

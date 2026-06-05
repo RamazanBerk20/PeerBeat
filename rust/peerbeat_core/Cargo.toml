@@ -24,8 +24,6 @@ lofty = "0.24.0"
 walkdir = "2.5.0"
 notify = "8"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
-rodio = { version = "=0.19.0", default-features = false, features = ["symphonia-all"] }
-symphonia = { version = "0.5.5", default-features = false, features = ["aac", "isomp4"] }
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "net", "fs", "sync"] }
 axum = { version = "0.8.9", features = ["ws"] }
 tower-http = { version = "0.6.11", features = ["fs"] }
@@ -41,11 +39,18 @@ axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
 rustls = { version = "0.23.40", default-features = false, features = ["ring"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
 
-# Desktop-only: Signalsmith Stretch (C++ via cc) drives pitch-preserving variable
-# speed. The whole rodio audio engine is unused on Android (playback there is
-# ExoPlayer), so this C++ dep — and the time-stretch stage — are excluded from the
-# Android build, keeping the APK lean and the NDK cross-compile clear.
+# The rodio audio engine is desktop-only — Android plays via ExoPlayer (Dart
+# side). Excluding rodio/symphonia from Android keeps the cpal→Oboe C++ runtime
+# (and its libc++ dependency, which broke `dlopen`) out of the APK entirely.
 [target.'cfg(not(target_os = "android"))'.dependencies]
+rodio = { version = "=0.19.0", default-features = false, features = ["symphonia-all"] }
+symphonia = { version = "0.5.5", default-features = false, features = ["aac", "isomp4"] }
+
+# Signalsmith Stretch (C++ via cc) drives pitch-preserving variable speed on
+# Linux/macOS. Excluded on Android (no rodio engine there) and on Windows (its cxx
+# bridge doesn't compile under MSVC — `make_unique` ambiguity); Windows falls back
+# to rodio's resampling speed.
+[target.'cfg(not(any(target_os = "android", target_os = "windows")))'.dependencies]
 ssstretch = "0.1"
 
 # Heavier subsystem deps (tokio, rusqlite, lofty, symphonia, cpal, rustls,
