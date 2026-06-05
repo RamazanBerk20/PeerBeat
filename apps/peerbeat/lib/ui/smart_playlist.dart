@@ -7,6 +7,7 @@ import '../src/rust/api/library.dart';
 import '../src/rust/db/smart.dart';
 import '../src/rust/db/tracks.dart';
 import 'library_home.dart' show TrackListView;
+import 'mini_player.dart';
 
 /// Selectable rule fields → display label. Text fields use text operators,
 /// numeric fields use comparison operators (mirrors the Rust whitelist).
@@ -363,6 +364,9 @@ class _SmartPlaylistDetailState extends State<SmartPlaylistDetail> {
         icon: const Icon(Icons.play_arrow),
         label: const Text('Play all'),
       ),
+      // Keep the persistent mini-player on this route too — otherwise playing a
+      // track from a smart playlist leaves no transport bar until you pop back.
+      bottomNavigationBar: const MiniPlayer(),
     );
   }
 }
