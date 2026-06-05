@@ -250,7 +250,12 @@ class _FoldersDialogState extends State<_FoldersDialog> {
   bool _changed = false;
   bool _busy = false;
 
-  void _reload() => setState(() => _future = libraryFolders());
+  // Block body (not an arrow): `_future = libraryFolders()` is an assignment
+  // *expression* whose value is the Future, so an arrow closure would return it
+  // and trip setState()'s "callback returned a Future" assertion.
+  void _reload() => setState(() {
+    _future = libraryFolders();
+  });
 
   Future<void> _rescanAll() async {
     setState(() => _busy = true);
