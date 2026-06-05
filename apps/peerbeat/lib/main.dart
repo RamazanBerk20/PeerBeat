@@ -162,12 +162,51 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
 }
 
 /// App-wide desktop keyboard shortcuts for playback. Wrapped via MaterialApp's
-/// builder so they work on every route. Keys consumed by a focused text field
-/// (typing, cursor movement) or button (space/enter) take precedence, so these
-/// don't interfere with editing.
-class _GlobalPlaybackShortcuts extends StatelessWidget {
+/// builder so they work on every route.
+///
+/// These bare keys (space, r, s, m, arrows) collide with text editing:
+/// `CallbackShortcuts` sits *below* `DefaultTextEditingShortcuts` in the
+/// WidgetsApp tree, so it would otherwise intercept the key before a focused
+/// text field could type the character or move the cursor (the reason typing
+/// "r"/"s"/"m"/space was impossible in search/name fields). So we watch the
+/// focus and empty the bindings while a text field has focus, letting the key
+/// fall through to the editor. The `CallbackShortcuts` element itself stays
+/// mounted (only its bindings change) so the child route subtree is never
+/// reparented.
+class _GlobalPlaybackShortcuts extends StatefulWidget {
   const _GlobalPlaybackShortcuts({required this.child});
   final Widget child;
+
+  @override
+  State<_GlobalPlaybackShortcuts> createState() =>
+      _GlobalPlaybackShortcutsState();
+}
+
+class _GlobalPlaybackShortcutsState extends State<_GlobalPlaybackShortcuts> {
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeListener(_onFocusChanged);
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// True when a text field (EditableText) currently holds focus. EditableText
+  /// attaches its focus node via a `Focus` widget inside its own subtree, so the
+  /// primary focus node's context resolves an `EditableTextState` ancestor.
+  bool get _editing {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    return ctx != null &&
+        ctx.findAncestorStateOfType<EditableTextState>() != null;
+  }
 
   void _seekBy(Duration delta) {
     final p = player.position + delta;
@@ -177,31 +216,33 @@ class _GlobalPlaybackShortcuts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.space): player.toggle,
-        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-            _seekBy(const Duration(seconds: 5)),
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-            _seekBy(const Duration(seconds: -5)),
-        const SingleActivator(LogicalKeyboardKey.arrowRight, control: true): () =>
-            player.next(),
-        const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true): () =>
-            player.previous(),
-        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-            player.setVolume((player.volume + 0.05).clamp(0.0, 1.0)),
-        const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-            player.setVolume((player.volume - 0.05).clamp(0.0, 1.0)),
-        const SingleActivator(LogicalKeyboardKey.keyM): player.toggleMute,
-        const SingleActivator(LogicalKeyboardKey.keyS): () =>
-            player.setShuffle(!player.shuffle),
-        const SingleActivator(LogicalKeyboardKey.keyR): player.cycleRepeat,
-      },
-      // CallbackShortcuts already provides its own (non-focusable) Focus that
-      // catches key events bubbling from the focused route, so no extra Focus is
-      // needed here. A wrapping Focus(autofocus: true) re-requested focus on every
-      // MaterialApp rebuild (e.g. dynamic-theme changes), which collided with
-      // route/overlay layout and tripped an overlay assertion.
-      child: child,
+      bindings: _editing
+          ? const <ShortcutActivator, VoidCallback>{}
+          : {
+              const SingleActivator(LogicalKeyboardKey.space): player.toggle,
+              const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+                  _seekBy(const Duration(seconds: 5)),
+              const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+                  _seekBy(const Duration(seconds: -5)),
+              const SingleActivator(
+                LogicalKeyboardKey.arrowRight,
+                control: true,
+              ): () => player.next(),
+              const SingleActivator(
+                LogicalKeyboardKey.arrowLeft,
+                control: true,
+              ): () => player.previous(),
+              const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+                  player.setVolume((player.volume + 0.05).clamp(0.0, 1.0)),
+              const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+                  player.setVolume((player.volume - 0.05).clamp(0.0, 1.0)),
+              const SingleActivator(LogicalKeyboardKey.keyM): player.toggleMute,
+              const SingleActivator(LogicalKeyboardKey.keyS): () =>
+                  player.setShuffle(!player.shuffle),
+              const SingleActivator(LogicalKeyboardKey.keyR):
+                  player.cycleRepeat,
+            },
+      child: widget.child,
     );
   }
 }
