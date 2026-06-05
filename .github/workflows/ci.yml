@@ -96,3 +96,10 @@ jobs:
       - run: dart pub global activate melos && melos bootstrap
       - run: flutter build apk --debug
         working-directory: apps/peerbeat
+      # Publish the (unsigned) debug APK as a downloadable artifact so it can be
+      # side-loaded for on-device testing without cutting a signed release.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: apps/peerbeat/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
