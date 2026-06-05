@@ -97,7 +97,9 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer (Inno Setup)
-        run: iscc packaging\windows\peerbeat.iss
+        run: |
+          $ver = (Select-String -Path apps/peerbeat/pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          iscc /DAppVersion=$ver packaging\windows\peerbeat.iss
       - uses: actions/upload-artifact@v4
         with:
           name: windows

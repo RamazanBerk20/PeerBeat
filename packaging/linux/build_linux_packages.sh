@@ -5,7 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 APP=peerbeat
-VERSION="${PEERBEAT_VERSION:-0.1.0}"
+# Derive the version from pubspec (single source of truth) unless overridden.
+VERSION="${PEERBEAT_VERSION:-$(sed -nE 's/^version: *([0-9.]+).*/\1/p' apps/peerbeat/pubspec.yaml)}"
 ARCH=amd64
 BUNDLE="apps/peerbeat/build/linux/x64/release/bundle"
 DIST="dist"
