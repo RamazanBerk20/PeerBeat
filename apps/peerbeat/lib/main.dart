@@ -3,6 +3,7 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -16,6 +17,19 @@ import 'ui/library_home.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Platform.isAndroid) {
+    // Attach a MediaSession + foreground service so Android shows lockscreen /
+    // notification controls and keeps playback alive in the background. Must run
+    // before the first AudioPlayer is created (i.e. before the player singleton).
+    try {
+      await JustAudioBackground.init(
+        androidNotificationChannelId:
+            'io.github.ramazanberk20.peerbeat.audio',
+        androidNotificationChannelName: 'PeerBeat playback',
+        androidNotificationOngoing: true,
+      );
+    } catch (_) {}
+  }
   if (DesktopShell.isDesktop) {
     try {
       await windowManager.ensureInitialized();

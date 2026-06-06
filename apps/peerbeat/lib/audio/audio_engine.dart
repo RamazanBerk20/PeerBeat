@@ -2,10 +2,32 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:just_audio/just_audio.dart' as ja;
+import 'package:just_audio_background/just_audio_background.dart';
 
 import '../net/tofu.dart';
 import '../src/rust/api/audio.dart' as rust;
 import '../util/log.dart';
+
+/// Now-playing metadata for the OS media session (Android lockscreen /
+/// notification). Desktop engines ignore it (MPRIS is fed separately). Kept
+/// engine-agnostic so the abstract interface doesn't leak just_audio types.
+class MediaTag {
+  const MediaTag({
+    required this.id,
+    required this.title,
+    this.artist = '',
+    this.album = '',
+    this.artUri,
+    this.durationMs = 0,
+  });
+
+  final String id;
+  final String title;
+  final String artist;
+  final String album;
+  final Uri? artUri;
+  final int durationMs;
+}
 
 /// Platform-agnostic audio transport.
 ///
@@ -17,10 +39,10 @@ abstract class AudioEngine {
     return RustDesktopEngine();
   }
 
-  Future<void> playPath(String path, {Duration? duration});
+  Future<void> playPath(String path, {Duration? duration, MediaTag? tag});
 
   /// Play a remote URL (LAN stream).
-  Future<void> playUrl(String url, {Duration? duration});
+  Future<void> playUrl(String url, {Duration? duration, MediaTag? tag});
   Future<void> pause();
   Future<void> resume();
   Future<void> stop();
@@ -80,14 +102,15 @@ class RustDesktopEngine implements AudioEngine {
   }
 
   @override
-  Future<void> playPath(String path, {Duration? duration}) async {
+  Future<void> playPath(String path, {Duration? duration, MediaTag? tag}) async {
+    // tag is unused on desktop — MPRIS metadata is published separately.
     rust.audioPlayPath(path: path);
     _duration = duration ?? Duration(milliseconds: rust.audioDurationMs());
     _setPlaying(true);
   }
 
   @override
-  Future<void> playUrl(String url, {Duration? duration}) async {
+  Future<void> playUrl(String url, {Duration? duration, MediaTag? tag}) async {
     // rodio plays from a file; cache the LAN stream to disk (reused on replay,
     // swept on startup). True HTTP Range streaming is a later slice.
     try {
@@ -277,19 +300,39 @@ class ExoPlayerEngine implements AudioEngine {
   final ja.AudioPlayer _player = ja.AudioPlayer();
 
   @override
-  Future<void> playPath(String path, {Duration? duration}) async {
-    await _player.setFilePath(path);
+  Future<void> playPath(String path, {Duration? duration, MediaTag? tag}) async {
+    await _player.setAudioSource(_source(Uri.file(path), tag, duration));
     unawaited(
       _player.play(),
     ); // do not await: completes only when playback ends
   }
 
   @override
-  Future<void> playUrl(String url, {Duration? duration}) async {
-    await _player.setUrl(url);
+  Future<void> playUrl(String url, {Duration? duration, MediaTag? tag}) async {
+    await _player.setAudioSource(_source(Uri.parse(url), tag, duration));
     unawaited(
       _player.play(),
     ); // do not await: completes only when playback ends
+  }
+
+  /// Build an [AudioSource] carrying a [MediaItem]. just_audio_background
+  /// requires every source to have a tag, so we always synthesise one (falling
+  /// back to placeholder text) even when the caller didn't supply metadata.
+  ja.AudioSource _source(Uri uri, MediaTag? tag, Duration? duration) {
+    final d = tag != null && tag.durationMs > 0
+        ? Duration(milliseconds: tag.durationMs)
+        : duration;
+    return ja.AudioSource.uri(
+      uri,
+      tag: MediaItem(
+        id: tag?.id ?? uri.toString(),
+        title: (tag?.title.isNotEmpty ?? false) ? tag!.title : 'PeerBeat',
+        artist: (tag?.artist.isNotEmpty ?? false) ? tag!.artist : null,
+        album: (tag?.album.isNotEmpty ?? false) ? tag!.album : null,
+        artUri: tag?.artUri,
+        duration: d,
+      ),
+    );
   }
 
   @override

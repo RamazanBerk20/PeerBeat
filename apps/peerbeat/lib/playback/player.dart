@@ -450,10 +450,21 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
     try {
       final p = t.path;
+      // Metadata for the OS media session (Android lockscreen/notification).
+      final tag = MediaTag(
+        id: '${t.id}',
+        title: t.title.isEmpty ? 'Unknown title' : t.title,
+        artist: t.artist,
+        album: t.album,
+        artUri: (t.artPath != null && t.artPath!.isNotEmpty)
+            ? Uri.file(t.artPath!)
+            : null,
+        durationMs: t.durationMs,
+      );
       if (p.startsWith('http://') || p.startsWith('https://')) {
-        await _engine.playUrl(p, duration: duration);
+        await _engine.playUrl(p, duration: duration, tag: tag);
       } else {
-        await _engine.playPath(p, duration: duration);
+        await _engine.playPath(p, duration: duration, tag: tag);
       }
       _engineLoaded = true;
       if (_persistSettings && !p.startsWith('http')) {
