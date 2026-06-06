@@ -53,8 +53,9 @@ pub fn parse_pls(content: &str, base_dir: &Path) -> Vec<PathBuf> {
         let Ok(n) = rest[..eq].parse::<u32>() else {
             continue;
         };
-        // Take the value from the original (case-preserving) line.
-        let val = line[line.find('=').unwrap() + 1..].trim();
+        // Take the value from the original (case-preserving) line. `split_once`
+        // avoids an unwrap and is robust to any stray content before the '='.
+        let val = line.split_once('=').map(|(_, v)| v.trim()).unwrap_or("");
         if !val.is_empty() {
             entries.push((n, resolve(val, base_dir)));
         }

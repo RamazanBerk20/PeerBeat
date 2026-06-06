@@ -9,8 +9,10 @@
 //! token's scope and permission allow. The listener is wrapped in TLS with a
 //! per-host self-signed cert in [`crate::api::network`]; peers pin it via TOFU.
 //!
-//! Not yet built (roadmap, see `docs/STATUS.md`): download endpoints, the
-//! transfer-log dashboard, and the WebSocket control / party channel.
+//! Auth hardening: session tokens carry an absolute TTL and are swept/rejected on
+//! expiry; `/v1/auth/session` is per-IP rate-limited against PIN brute-force; PINs
+//! are stored Argon2id-hashed; and the `/v1/party` WebSocket is token-gated (and
+//! re-checked live) so a revoke tears down in-flight party connections.
 
 use crate::db::{shares, tracks, transfer_log};
 use crate::net::party::PartyState;
@@ -20,7 +22,7 @@ use axum::{
         ConnectInfo, FromRequestParts, Path, Request, State,
     },
     http::{
-        header::{AUTHORIZATION, CONTENT_DISPOSITION},
+        header::{AUTHORIZATION, CONTENT_DISPOSITION, RETRY_AFTER},
         request::Parts,
         HeaderValue, StatusCode,
     },
@@ -31,10 +33,11 @@ use axum::{
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::broadcast;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
@@ -52,12 +55,57 @@ pub struct Session {
     pub scope: Scope,
     pub can_download: bool,
     pub created_at_ms: i64,
+    /// Absolute expiry (ms since epoch). The `Auth` extractor rejects + drops a
+    /// token past this; party sockets re-check it so a revoke tears down live ones.
+    pub expires_at_ms: i64,
     /// Peer IP (stable per device; revoke-by-peer keys on this).
     pub peer: String,
 }
 
 /// Host-side token store (token → grant). Cleared by a host "revoke all".
 pub type Sessions = Arc<Mutex<HashMap<String, Session>>>;
+
+/// How long an issued session token stays valid (12h — long enough for a
+/// listening session, short enough that a leaked token doesn't live forever).
+const TOKEN_TTL_MS: i64 = 12 * 60 * 60 * 1000;
+
+/// Auth brute-force guard: max failed attempts per peer IP inside the window.
+const AUTH_WINDOW_MS: i64 = 60_000;
+const AUTH_MAX_FAILS: u32 = 5;
+
+/// Per-IP failed-auth counter (fixed window). Successful auth clears the entry.
+/// Only PIN mismatches count, so legitimate open-share peers are never throttled.
+#[derive(Default)]
+pub struct RateLimiter {
+    inner: Mutex<HashMap<IpAddr, (i64, u32)>>, // ip → (window_start_ms, fails)
+}
+
+impl RateLimiter {
+    /// `Some(retry_after_secs)` if `ip` is currently blocked, else `None`.
+    fn blocked_for(&self, ip: IpAddr, now: i64) -> Option<i64> {
+        let g = self.inner.lock().ok()?;
+        let (start, fails) = g.get(&ip).copied()?;
+        if now - start < AUTH_WINDOW_MS && fails >= AUTH_MAX_FAILS {
+            Some(((start + AUTH_WINDOW_MS - now) / 1000).max(1))
+        } else {
+            None
+        }
+    }
+    fn record_failure(&self, ip: IpAddr, now: i64) {
+        if let Ok(mut g) = self.inner.lock() {
+            let e = g.entry(ip).or_insert((now, 0));
+            if now - e.0 >= AUTH_WINDOW_MS {
+                *e = (now, 0); // window rolled over
+            }
+            e.1 += 1;
+        }
+    }
+    fn record_success(&self, ip: IpAddr) {
+        if let Ok(mut g) = self.inner.lock() {
+            g.remove(&ip);
+        }
+    }
+}
 
 /// Party-mode broadcast hub: fans the host's playback state out to connected
 /// WebSocket peers, keeps the latest snapshot for new joiners, and tracks active.
@@ -116,6 +164,7 @@ pub struct ServerConfig {
     pub fingerprint: String,
     pub sessions: Sessions,
     pub party: PartyHub,
+    pub auth_limiter: Arc<RateLimiter>,
 }
 
 impl ServerConfig {
@@ -127,6 +176,7 @@ impl ServerConfig {
             fingerprint,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             party: PartyHub::new(),
+            auth_limiter: Arc::new(RateLimiter::default()),
         }
     }
 }
@@ -217,7 +267,12 @@ where
 
 // ── Bearer-token auth extractor ──────────────────────────────────────────────
 
-struct Auth(Session);
+struct Auth {
+    session: Session,
+    /// The bearer token itself, so long-lived consumers (party socket) can
+    /// re-check that it is still present + unexpired while they run.
+    token: String,
+}
 
 impl FromRequestParts<ServerConfig> for Auth {
     type Rejection = (StatusCode, &'static str);
@@ -243,13 +298,23 @@ impl FromRequestParts<ServerConfig> for Auth {
                 })
             })
             .ok_or((StatusCode::UNAUTHORIZED, "missing bearer token"))?;
-        state
+        let now = now_ms();
+        let mut map = state
             .sessions
             .lock()
-            .ok()
-            .and_then(|m| m.get(&token).cloned())
-            .map(Auth)
-            .ok_or((StatusCode::UNAUTHORIZED, "invalid or revoked token"))
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "session store poisoned"))?;
+        match map.get(&token) {
+            Some(s) if s.expires_at_ms > now => {
+                let session = s.clone();
+                drop(map);
+                Ok(Auth { session, token })
+            }
+            Some(_) => {
+                map.remove(&token); // expired → drop it
+                Err((StatusCode::UNAUTHORIZED, "session expired"))
+            }
+            None => Err((StatusCode::UNAUTHORIZED, "invalid or revoked token")),
+        }
     }
 }
 
@@ -309,6 +374,19 @@ async fn auth_session(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(req): Json<AuthReq>,
 ) -> impl IntoResponse {
+    let ip = addr.ip();
+    let now = now_ms();
+
+    // Brute-force guard: a peer that has burned through its failed-attempt budget
+    // is told to back off (429 + Retry-After) before we even touch the PIN.
+    if let Some(retry) = cfg.auth_limiter.blocked_for(ip, now) {
+        let mut resp = (StatusCode::TOO_MANY_REQUESTS, "too many attempts").into_response();
+        if let Ok(v) = HeaderValue::from_str(&retry.to_string()) {
+            resp.headers_mut().insert(RETRY_AFTER, v);
+        }
+        return resp;
+    }
+
     let pid = if req.scope == "playlist" {
         req.playlist_id
     } else {
@@ -327,9 +405,12 @@ async fn auth_session(
     match access.mode.as_str() {
         "open" => {}
         "pin" => {
-            let provided = req.pin.as_deref().map(shares::hash_pin);
-            let ok = matches!((&access.pin_hash, &provided), (Some(w), Some(g)) if w == g);
+            let ok = match (&access.pin_hash, req.pin.as_deref()) {
+                (Some(stored), Some(p)) => shares::verify_pin(stored, p),
+                _ => false,
+            };
             if !ok {
+                cfg.auth_limiter.record_failure(ip, now);
                 return (StatusCode::UNAUTHORIZED, "incorrect PIN").into_response();
             }
         }
@@ -349,23 +430,26 @@ async fn auth_session(
     };
     let token = uuid::Uuid::new_v4().simple().to_string();
     if let Ok(mut m) = cfg.sessions.lock() {
+        m.retain(|_, s| s.expires_at_ms > now); // opportunistic sweep of expired tokens
         m.insert(
             token.clone(),
             Session {
                 scope,
                 can_download: access.allows_download(),
-                created_at_ms: now_ms(),
-                peer: addr.ip().to_string(),
+                created_at_ms: now,
+                expires_at_ms: now + TOKEN_TTL_MS,
+                peer: ip.to_string(),
             },
         );
     }
+    cfg.auth_limiter.record_success(ip);
     Json(AuthResp { token }).into_response()
 }
 
 // ── Token-scoped endpoints ───────────────────────────────────────────────────
 
 async fn list_tracks(State(cfg): State<ServerConfig>, auth: Auth) -> impl IntoResponse {
-    let scope = auth.0.scope.clone();
+    let scope = auth.session.scope.clone();
     let rows = blocking_db(cfg.db_path.clone(), move |c| {
         let songs = match scope {
             Scope::Library => tracks::browse_songs(c, 100_000, 0)?,
@@ -379,7 +463,7 @@ async fn list_tracks(State(cfg): State<ServerConfig>, auth: Auth) -> impl IntoRe
 }
 
 async fn list_playlists(State(cfg): State<ServerConfig>, auth: Auth) -> impl IntoResponse {
-    let scope = auth.0.scope.clone();
+    let scope = auth.session.scope.clone();
     let rows = blocking_db(cfg.db_path.clone(), move |c| {
         let pls = shares::shared_playlists(c)?;
         let pls = match scope {
@@ -405,7 +489,7 @@ async fn playlist_tracks(
     Path(id): Path<i64>,
     auth: Auth,
 ) -> impl IntoResponse {
-    if let Scope::Playlist(pid) = auth.0.scope {
+    if let Scope::Playlist(pid) = auth.session.scope {
         if pid != id {
             return (StatusCode::FORBIDDEN, "out of scope").into_response();
         }
@@ -439,13 +523,13 @@ async fn stream(
     auth: Auth,
     request: Request,
 ) -> impl IntoResponse {
-    if !track_in_scope(&cfg, auth.0.scope.clone(), id).await {
+    if !track_in_scope(&cfg, auth.session.scope.clone(), id).await {
         return (StatusCode::FORBIDDEN, "track not in your shared scope").into_response();
     }
     let Some(file_path) = track_path(&cfg, id).await else {
         return (StatusCode::NOT_FOUND, "no such track").into_response();
     };
-    log_transfer(&cfg, &auth.0.peer, id, "stream");
+    log_transfer(&cfg, &auth.session.peer, id, "stream");
     match ServeFile::new(&file_path).oneshot(request).await {
         Ok(resp) => resp.into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "file missing").into_response(),
@@ -494,20 +578,20 @@ async fn download(
     auth: Auth,
     request: Request,
 ) -> impl IntoResponse {
-    if !auth.0.can_download {
+    if !auth.session.can_download {
         return (
             StatusCode::FORBIDDEN,
             "downloads are not permitted for this share",
         )
             .into_response();
     }
-    if !track_in_scope(&cfg, auth.0.scope.clone(), id).await {
+    if !track_in_scope(&cfg, auth.session.scope.clone(), id).await {
         return (StatusCode::FORBIDDEN, "track not in your shared scope").into_response();
     }
     let Some(file_path) = track_path(&cfg, id).await else {
         return (StatusCode::NOT_FOUND, "no such track").into_response();
     };
-    log_transfer(&cfg, &auth.0.peer, id, "download");
+    log_transfer(&cfg, &auth.session.peer, id, "download");
     let filename = std::path::Path::new(&file_path)
         .file_name()
         .and_then(|s| s.to_str())
@@ -542,10 +626,10 @@ async fn track_meta(
     Path(id): Path<i64>,
     auth: Auth,
 ) -> impl IntoResponse {
-    if !track_in_scope(&cfg, auth.0.scope.clone(), id).await {
+    if !track_in_scope(&cfg, auth.session.scope.clone(), id).await {
         return (StatusCode::FORBIDDEN, "track not in your shared scope").into_response();
     }
-    let can_download = auth.0.can_download;
+    let can_download = auth.session.can_download;
     let meta = blocking_db(cfg.db_path.clone(), move |c| {
         Ok(tracks::track_by_id(c, id)?.map(|t| MetaDto {
             id: t.id,
@@ -573,7 +657,7 @@ async fn track_art(
     auth: Auth,
     request: Request,
 ) -> impl IntoResponse {
-    if !track_in_scope(&cfg, auth.0.scope.clone(), id).await {
+    if !track_in_scope(&cfg, auth.session.scope.clone(), id).await {
         return (StatusCode::FORBIDDEN, "track not in your shared scope").into_response();
     }
     let art = blocking_db(cfg.db_path.clone(), move |c| {
@@ -592,14 +676,34 @@ async fn track_art(
 
 // ── Party mode (WebSocket control channel) ───────────────────────────────────
 
-/// Upgrade to a party WebSocket: the host fans its playback state out here and
-/// answers clock-sync pings. No auth gate yet — party membership is open to LAN
-/// peers who know the host (a session-token gate is a follow-up).
-async fn party_ws(State(cfg): State<ServerConfig>, ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_party(socket, cfg))
+/// Upgrade to a party WebSocket. Auth-gated: the `Auth` extractor runs before the
+/// upgrade, so a peer without a valid (unexpired) session token is rejected 401 —
+/// this closes the pre-hardening hole where any LAN device could read the host's
+/// now-playing state. The token is re-checked while the socket runs so a host
+/// "revoke" (or token expiry) tears the live connection down.
+async fn party_ws(
+    State(cfg): State<ServerConfig>,
+    auth: Auth,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    let token = auth.token;
+    ws.on_upgrade(move |socket| handle_party(socket, cfg, token))
 }
 
-async fn handle_party(mut socket: WebSocket, cfg: ServerConfig) {
+/// True while `token` is still a live, unexpired session.
+fn token_live(cfg: &ServerConfig, token: &str) -> bool {
+    cfg.sessions
+        .lock()
+        .ok()
+        .map(|m| {
+            m.get(token)
+                .map(|s| s.expires_at_ms > now_ms())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
+async fn handle_party(mut socket: WebSocket, cfg: ServerConfig, token: String) {
     // Send the current snapshot immediately so a joiner can sync at once.
     if let Some(latest) = cfg.party.latest.lock().ok().and_then(|l| l.clone()) {
         if socket.send(Message::Text(latest.into())).await.is_err() {
@@ -607,8 +711,16 @@ async fn handle_party(mut socket: WebSocket, cfg: ServerConfig) {
         }
     }
     let mut rx = cfg.party.tx.subscribe();
+    // Periodic liveness check so a revoked / expired token drops the socket even
+    // when the host isn't actively broadcasting.
+    let mut revalidate = tokio::time::interval(Duration::from_secs(5));
     loop {
         tokio::select! {
+            _ = revalidate.tick() => {
+                if !token_live(&cfg, &token) {
+                    break;
+                }
+            }
             msg = rx.recv() => match msg {
                 Ok(text) => {
                     if socket.send(Message::Text(text.into())).await.is_err() {
@@ -893,6 +1005,92 @@ mod tests {
             )
             .await;
             assert_eq!(dl2, StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn expired_token_is_rejected_and_dropped() {
+        run(async {
+            let (path, _ids) = seed_db(1);
+            let cfg = ServerConfig::new(path, "Host".into(), "h".into(), "fp".into());
+            shares::set_share(
+                &Connection::open(&cfg.db_path).unwrap(),
+                None,
+                "stream",
+                "open",
+                None,
+                true,
+            )
+            .unwrap();
+            // Inject an already-expired token straight into the store.
+            let token = "expiredtoken".to_string();
+            cfg.sessions.lock().unwrap().insert(
+                token.clone(),
+                Session {
+                    scope: Scope::Library,
+                    can_download: false,
+                    created_at_ms: 0,
+                    expires_at_ms: 1, // long past
+                    peer: "127.0.0.1".into(),
+                },
+            );
+            let status = status_of(
+                &cfg,
+                HttpRequest::get("/v1/tracks")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED);
+            // The extractor also evicts the dead token.
+            assert!(cfg.sessions.lock().unwrap().get(&token).is_none());
+        });
+    }
+
+    #[test]
+    fn auth_rate_limits_after_repeated_bad_pins() {
+        run(async {
+            let (path, _ids) = seed_db(1);
+            let cfg = ServerConfig::new(path, "Host".into(), "h".into(), "fp".into());
+            shares::set_share(
+                &Connection::open(&cfg.db_path).unwrap(),
+                None,
+                "stream",
+                "pin",
+                Some("4242"),
+                true,
+            )
+            .unwrap();
+            let bad = || {
+                HttpRequest::post("/v1/auth/session")
+                    .header("content-type", "application/json")
+                    .extension(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 5000))))
+                    .body(Body::from(
+                        r#"{"scope":"library","pin":"0000"}"#.to_string(),
+                    ))
+                    .unwrap()
+            };
+            for _ in 0..AUTH_MAX_FAILS {
+                assert_eq!(status_of(&cfg, bad()).await, StatusCode::UNAUTHORIZED);
+            }
+            // Budget spent → throttled before the PIN is even checked.
+            assert_eq!(status_of(&cfg, bad()).await, StatusCode::TOO_MANY_REQUESTS);
+        });
+    }
+
+    #[test]
+    fn party_ws_requires_token() {
+        run(async {
+            let (path, _ids) = seed_db(1);
+            let cfg = ServerConfig::new(path, "Host".into(), "h".into(), "fp".into());
+            // No token → 401 (Auth extractor runs before the WS upgrade).
+            let s = status_of(
+                &cfg,
+                HttpRequest::get("/v1/party").body(Body::empty()).unwrap(),
+            )
+            .await;
+            assert_eq!(s, StatusCode::UNAUTHORIZED);
         });
     }
 }

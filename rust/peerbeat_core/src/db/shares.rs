@@ -9,9 +9,10 @@
 
 use crate::db::playlists::PlaylistRow;
 use crate::db::tracks::{self, TrackRow};
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::Argon2;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 /// A share as shown to the host UI. The `pin_hash` is never exposed; `has_pin`
 /// only signals whether a PIN is set.
@@ -45,13 +46,40 @@ impl ShareAccess {
     }
 }
 
-/// Salted SHA-256 of a PIN, hex. Short PINs over TLS don't need a slow KDF, but
-/// we never store the plaintext and salt with a fixed domain string.
+/// A share PIN must be 4–6 digits (spec). Enforced here and at the API/UI layer.
+pub fn pin_is_valid_format(pin: &str) -> bool {
+    let p = pin.trim();
+    (4..=6).contains(&p.chars().count()) && p.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Argon2id hash of a PIN as a self-contained PHC string (random per-PIN salt +
+/// KDF params embedded). Short PINs are inherently weak, but a slow KDF with a
+/// per-PIN salt removes cheap rainbow/precompute attacks against a stolen DB and
+/// makes online guessing expensive (paired with auth rate-limiting). Stored in
+/// `shares.pin_hash`. Returns an empty string only if hashing fails (never used).
 pub fn hash_pin(pin: &str) -> String {
-    let mut h = Sha256::new();
-    h.update(b"peerbeat-share-pin:");
-    h.update(pin.trim().as_bytes());
-    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    // 16 random bytes from a v4 UUID make a fine Argon2 salt without pulling in a
+    // separate RNG dependency (uuid is already a dep).
+    let salt = match SaltString::encode_b64(uuid::Uuid::new_v4().as_bytes()) {
+        Ok(s) => s,
+        Err(_) => return String::new(),
+    };
+    Argon2::default()
+        .hash_password(pin.trim().as_bytes(), &salt)
+        .map(|h| h.to_string())
+        .unwrap_or_default()
+}
+
+/// Verify a candidate PIN against a stored PHC hash. Pre-hardening SHA-256 hex
+/// values fail to parse as PHC and therefore never verify — which intentionally
+/// forces hosts to re-enter (re-save) their PIN once after upgrading.
+pub fn verify_pin(stored_hash: &str, candidate: &str) -> bool {
+    match PasswordHash::new(stored_hash) {
+        Ok(parsed) => Argon2::default()
+            .verify_password(candidate.trim().as_bytes(), &parsed)
+            .is_ok(),
+        Err(_) => false,
+    }
 }
 
 fn normalize_permission(p: &str) -> &'static str {
@@ -396,14 +424,21 @@ mod tests {
         assert!(rows[0].has_pin);
         let acc = playlist_access(c, p).unwrap().unwrap();
         assert!(acc.allows_download());
-        assert_eq!(acc.pin_hash.as_deref(), Some(hash_pin("1234").as_str()));
+        // PIN is stored as an Argon2 PHC hash (random salt) — verify, don't compare.
+        assert!(verify_pin(acc.pin_hash.as_deref().unwrap(), "1234"));
+        assert!(!verify_pin(acc.pin_hash.as_deref().unwrap(), "9999"));
 
         // re-save without a pin keeps the existing one for a pin share
         set_share(c, Some(p), "stream_download", "pin", None, true).unwrap();
-        assert_eq!(
-            playlist_access(c, p).unwrap().unwrap().pin_hash.as_deref(),
-            Some(hash_pin("1234").as_str())
-        );
+        assert!(verify_pin(
+            playlist_access(c, p)
+                .unwrap()
+                .unwrap()
+                .pin_hash
+                .as_deref()
+                .unwrap(),
+            "1234"
+        ));
 
         // disable hides it from access but keeps the row
         set_enabled(c, Some(p), false).unwrap();
@@ -462,5 +497,22 @@ mod tests {
         remove(c, None).unwrap();
         assert!(!anything_shared(c).unwrap());
         assert!(library_access(c).unwrap().is_none());
+    }
+
+    #[test]
+    fn pin_format_and_hash_roundtrip() {
+        assert!(pin_is_valid_format("1234"));
+        assert!(pin_is_valid_format("123456"));
+        assert!(!pin_is_valid_format("123")); // too short
+        assert!(!pin_is_valid_format("1234567")); // too long
+        assert!(!pin_is_valid_format("12a4")); // non-digit
+        assert!(!pin_is_valid_format("")); // empty
+
+        let h = hash_pin("4242");
+        assert!(h.starts_with("$argon2"));
+        assert!(verify_pin(&h, "4242"));
+        assert!(!verify_pin(&h, "0000"));
+        // a legacy SHA-256 hex value never verifies (forces re-entry post-upgrade)
+        assert!(!verify_pin("deadbeef", "4242"));
     }
 }

@@ -231,6 +231,13 @@ pub fn share_set(
     pin: Option<String>,
     enabled: bool,
 ) -> Result<i64, String> {
+    // Reject a too-weak PIN at the boundary (spec: 4–6 digits). An empty/None pin
+    // on a "pin" share means "keep the existing one", so only validate a new value.
+    if let Some(p) = pin.as_deref() {
+        if !p.trim().is_empty() && !shares::pin_is_valid_format(p) {
+            return Err("PIN must be 4–6 digits".to_string());
+        }
+    }
     with_db(|db| {
         shares::set_share(
             db.conn(),

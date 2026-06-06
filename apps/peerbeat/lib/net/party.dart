@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../playback/player.dart';
 import '../src/rust/api/network.dart';
 import '../src/rust/db/tracks.dart';
+import '../util/log.dart';
 import 'tofu.dart';
 
 /// Drives synchronized party mode on both ends.
@@ -54,7 +55,9 @@ class PartyController extends ChangeNotifier {
         positionMs: player.position.inMilliseconds,
         playing: player.playing,
       );
-    } catch (_) {}
+    } catch (e) {
+      logErr('party.broadcast', e);
+    }
   }
 
   Future<void> stopHosting() async {
@@ -65,7 +68,9 @@ class PartyController extends ChangeNotifier {
     player.removeListener(_onHostChange);
     try {
       await netPartyStop();
-    } catch (_) {}
+    } catch (e) {
+      logErr('party.stop', e);
+    }
     notifyListeners();
   }
 
@@ -94,7 +99,10 @@ class PartyController extends ChangeNotifier {
     _offset = 0;
     _bestRtt = 1 << 30;
     _curKey = '';
-    final wsUrl = '${base.replaceFirst('https://', 'wss://')}/v1/party';
+    // The party WS is token-gated server-side; carry the library-scope token in
+    // the query (the host's Auth extractor reads `?token=` for header-less clients).
+    final wsUrl =
+        '${base.replaceFirst('https://', 'wss://')}/v1/party?token=$token';
     final client = await tofuStreamClient();
     try {
       _ws = await WebSocket.connect(wsUrl, customClient: client);
@@ -130,7 +138,9 @@ class PartyController extends ChangeNotifier {
     _ws = null;
     try {
       await ws?.close();
-    } catch (_) {}
+    } catch (e) {
+      logErr('party.leave', e);
+    }
     notifyListeners();
   }
 

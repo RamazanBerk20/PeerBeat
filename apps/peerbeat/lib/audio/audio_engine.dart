@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart' as ja;
 
 import '../net/tofu.dart';
 import '../src/rust/api/audio.dart' as rust;
+import '../util/log.dart';
 
 /// Platform-agnostic audio transport.
 ///
@@ -91,7 +92,9 @@ class RustDesktopEngine implements AudioEngine {
     // swept on startup). True HTTP Range streaming is a later slice.
     try {
       final dir = await _streamCacheDir();
-      final file = File('${dir.path}/${url.hashCode}.audio');
+      // Key on a stable hash of the host+path (NOT the volatile `?token=`), so the
+      // same track reuses its cache within a session; `hashCode` could collide.
+      final file = File('${dir.path}/${_cacheKey(url)}.audio');
       if (!await file.exists() || await file.length() == 0) {
         final part = File('${file.path}.part');
         // TOFU client: trusts a self-signed cert only if its fingerprint
@@ -104,6 +107,7 @@ class RustDesktopEngine implements AudioEngine {
           }
           await resp.pipe(part.openWrite());
           await part.rename(file.path); // atomic publish
+          unawaited(_capStreamCache(dir)); // bound disk use, oldest-first
         } finally {
           client.close();
         }
@@ -114,6 +118,52 @@ class RustDesktopEngine implements AudioEngine {
     } catch (e) {
       _setPlaying(false);
       throw Exception('LAN stream playback failed: $e');
+    }
+  }
+
+  /// Deterministic, low-collision filename for a stream URL. FNV-1a over the
+  /// host+path (query dropped) — no crypto dependency needed for a cache key.
+  static String _cacheKey(String url) {
+    final uri = Uri.tryParse(url);
+    final basis = uri == null ? url : '${uri.host}:${uri.port}${uri.path}';
+    var hash = 0xcbf29ce484222325;
+    for (final c in basis.codeUnits) {
+      hash = (hash ^ c) * 0x100000001b3;
+    }
+    return (hash & 0x7fffffffffffffff).toRadixString(16);
+  }
+
+  /// Cap of the on-disk stream cache. Streamed LAN audio is transient, so a
+  /// generous bound is enough to avoid unbounded growth within a session.
+  static const int _cacheCapBytes = 1500 * 1024 * 1024; // ~1.5 GB
+
+  /// Evict oldest cached files once the cache exceeds [_cacheCapBytes].
+  static Future<void> _capStreamCache(Directory dir) async {
+    try {
+      final files = <File>[];
+      var total = 0;
+      await for (final e in dir.list()) {
+        if (e is File) {
+          files.add(e);
+          total += await e.length();
+        }
+      }
+      if (total <= _cacheCapBytes) return;
+      files.sort(
+        (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+      );
+      for (final f in files) {
+        if (total <= _cacheCapBytes) break;
+        final len = await f.length();
+        try {
+          await f.delete();
+          total -= len;
+        } catch (_) {
+          // skip a file we can't evict; the cap is best-effort
+        }
+      }
+    } catch (e) {
+      logErr('cache.cap', e);
     }
   }
 
@@ -135,10 +185,14 @@ class RustDesktopEngine implements AudioEngine {
         await for (final e in dir.list()) {
           try {
             await e.delete(recursive: true);
-          } catch (_) {}
+          } catch (_) {
+            // a single stale file we can't delete is harmless; skip it
+          }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      logErr('cache.sweep', e);
+    }
   }
 
   @override
