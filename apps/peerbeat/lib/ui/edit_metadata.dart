@@ -27,6 +27,181 @@ Future<TrackRow?> showEditMetadataDialog(
   );
 }
 
+/// Batch tag editor: apply a chosen field (album, album artist, genre, year, or
+/// artist) across [trackIds], leaving every other field per-track. Returns the
+/// updated rows (so the caller can refresh in place), or null if cancelled.
+Future<List<TrackRow>?> showBatchEditDialog(
+  BuildContext context,
+  List<int> trackIds,
+) {
+  return showDialog<List<TrackRow>>(
+    context: context,
+    builder: (_) => _BatchEditDialog(trackIds: trackIds),
+  );
+}
+
+class _BatchEditDialog extends StatefulWidget {
+  const _BatchEditDialog({required this.trackIds});
+  final List<int> trackIds;
+
+  @override
+  State<_BatchEditDialog> createState() => _BatchEditDialogState();
+}
+
+class _BatchEditDialogState extends State<_BatchEditDialog> {
+  final _album = TextEditingController();
+  final _albumArtist = TextEditingController();
+  final _genre = TextEditingController();
+  final _artist = TextEditingController();
+  final _year = TextEditingController();
+  bool _doAlbum = false,
+      _doAlbumArtist = false,
+      _doGenre = false,
+      _doArtist = false,
+      _doYear = false;
+  bool _saving = false;
+  int _done = 0;
+
+  @override
+  void dispose() {
+    for (final c in [_album, _albumArtist, _genre, _artist, _year]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  bool get _anyField =>
+      _doAlbum || _doAlbumArtist || _doGenre || _doArtist || _doYear;
+
+  Future<void> _apply() async {
+    setState(() {
+      _saving = true;
+      _done = 0;
+    });
+    final updated = <TrackRow>[];
+    var failed = 0;
+    for (final id in widget.trackIds) {
+      try {
+        final cur = await libraryTrackTags(trackId: id);
+        final row = await libraryUpdateTags(
+          trackId: id,
+          title: cur.title,
+          artist: _doArtist ? _artist.text : cur.artist,
+          album: _doAlbum ? _album.text : cur.album,
+          albumArtist: _doAlbumArtist ? _albumArtist.text : cur.albumArtist,
+          genre: _doGenre ? _genre.text : cur.genre,
+          year: _doYear ? int.tryParse(_year.text.trim()) : cur.year,
+          trackNo: cur.trackNo,
+        );
+        updated.add(row);
+      } catch (_) {
+        failed++;
+      }
+      if (mounted) setState(() => _done++);
+    }
+    if (!mounted) return;
+    if (failed > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$failed track(s) could not be updated')),
+      );
+    }
+    Navigator.of(context).pop(updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget row(
+      String label,
+      bool on,
+      ValueChanged<bool> toggle,
+      TextEditingController c, {
+      bool number = false,
+    }) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Checkbox(value: on, onChanged: (v) => toggle(v ?? false)),
+          Expanded(
+            child: TextField(
+              controller: c,
+              enabled: on,
+              keyboardType: number ? TextInputType.number : TextInputType.text,
+              decoration: InputDecoration(
+                labelText: label,
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final n = widget.trackIds.length;
+    return AlertDialog(
+      title: Text('Edit $n tracks'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tick a field to apply it to all selected tracks; the rest stay '
+                'as they are.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              row(
+                'Album',
+                _doAlbum,
+                (v) => setState(() => _doAlbum = v),
+                _album,
+              ),
+              row(
+                'Album artist',
+                _doAlbumArtist,
+                (v) => setState(() => _doAlbumArtist = v),
+                _albumArtist,
+              ),
+              row(
+                'Genre (";"-separated)',
+                _doGenre,
+                (v) => setState(() => _doGenre = v),
+                _genre,
+              ),
+              row(
+                'Artist (";"-separated)',
+                _doArtist,
+                (v) => setState(() => _doArtist = v),
+                _artist,
+              ),
+              row(
+                'Year',
+                _doYear,
+                (v) => setState(() => _doYear = v),
+                _year,
+                number: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: (_saving || !_anyField) ? null : _apply,
+          child: _saving ? Text('$_done/$n') : const Text('Apply'),
+        ),
+      ],
+    );
+  }
+}
+
 class _EditMetadataDialog extends StatefulWidget {
   const _EditMetadataDialog({required this.track, required this.tags});
   final TrackRow track;

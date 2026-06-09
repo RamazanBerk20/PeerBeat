@@ -13,7 +13,10 @@ features.
   album-art theming finds no strong colour. Extra desktop shortcuts: `n`/`p`
   (next/previous track) and `[`/`]` (speed −/+).
 - **Lyrics**: the synced `.lrc` view now auto-scrolls to keep the current line
-  centred.
+  centred, and tapping a line seeks to it.
+- **Library**: batch tag editing — long-press (or ⋮ → Select) to multi-select
+  tracks, then apply album / album-artist / genre / artist / year across all of
+  them at once (other fields untouched). Selected tracks can also be queued.
 - **Visualizer**: a real-time spectrum visualizer on Now Playing — the desktop
   engine taps its DSP output, FFTs it, and the UI draws log-spaced bars
   (fast-attack/slow-release smoothing). Silent on Android (no desktop engine).

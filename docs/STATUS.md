@@ -21,7 +21,7 @@ Import MP3/FLAC/WAV/AAC/OGG/M4A; read + edit ID3/Vorbis/MP4 tags (with mojibake
 recovery); embedded art + fallback; browse Songs/Albums/Artists/Genres/Years/
 Recently-Added; FTS5 trigram fuzzy search; on-demand rescan + active watch-folders
 with a per-folder watch toggle; duplicate detection (Find duplicates); 50k-track
-scale covered by a test. ⚠️ Batch tag editing is still planned.
+scale covered by a test; batch tag editing across a multi-selection.
 
 ### 3. Playlists & queue — ✅
 Full CRUD + duplicate + drag-reorder; queue with Play-Next / Add-to-Queue;
@@ -84,8 +84,8 @@ they aren't "re-fixed" later.
 - Flatpak packaging; full version sync; AUR bump at release.
 - Per-peer streaming byte-rate limit.
 - Full WCAG 2.1 AA verification + scrub/first-audio benchmarks.
-- 100× feature themes — shipped: spectrum visualizer + lyrics auto-scroll,
-  smarter library (per-folder watch toggle + duplicate detection),
-  personalization (theme selector, accent picker, more shortcuts). Remaining:
-  lyrics tap-to-seek/editor, batch tag editing, and party/social polish
-  (reconnect UI, chat/reactions, transfer dashboard).
+- 100× feature themes — shipped: spectrum visualizer + lyrics auto-scroll +
+  tap-to-seek, smarter library (per-folder watch toggle, duplicate detection,
+  batch tag editing), personalization (theme selector, accent picker, more
+  shortcuts). Remaining: an `.lrc` lyrics editor, and party/social polish
+  (reconnect UI, chat/reactions, transfer dashboard — needs 2-device verify).

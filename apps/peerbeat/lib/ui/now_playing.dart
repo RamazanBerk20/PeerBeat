@@ -737,15 +737,20 @@ class _LyricsPanelState extends State<_LyricsPanel> {
           itemCount: synced.length,
           itemBuilder: (context, i) {
             final on = i == active;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                synced[i].text.isEmpty ? '♪' : synced[i].text,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: on ? 18 : 15,
-                  fontWeight: on ? FontWeight.bold : FontWeight.normal,
-                  color: on ? cs.primary : null,
+            // Tap a line to seek there.
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => player.seek(synced[i].t),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                child: Text(
+                  synced[i].text.isEmpty ? '♪' : synced[i].text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: on ? 18 : 15,
+                    fontWeight: on ? FontWeight.bold : FontWeight.normal,
+                    color: on ? cs.primary : null,
+                  ),
                 ),
               ),
             );

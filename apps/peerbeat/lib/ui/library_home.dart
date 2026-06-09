@@ -744,6 +744,75 @@ class TrackListView extends StatefulWidget {
 class _TrackListViewState extends State<TrackListView> {
   late List<TrackRow> _tracks = List.of(widget.tracks);
   final _scroll = ScrollController();
+  // Multi-select (long-press to enter): batch tag-edit / add-to-queue.
+  final Set<int> _selected = {};
+  bool get _selecting => _selected.isNotEmpty;
+
+  void _toggle(int id) => setState(() {
+    if (!_selected.remove(id)) _selected.add(id);
+  });
+
+  void _clearSelection() => setState(_selected.clear);
+
+  void _addSelectedToQueue() {
+    for (final t in _tracks.where((t) => _selected.contains(t.id))) {
+      player.addToQueue(t);
+    }
+    final n = _selected.length;
+    _clearSelection();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Added $n to queue')));
+  }
+
+  Future<void> _batchEdit() async {
+    final updated = await showBatchEditDialog(context, _selected.toList());
+    if (!mounted || updated == null) return;
+    // Reflect the new tags in the visible rows (no full rescan needed).
+    final byId = {for (final r in updated) r.id: r};
+    setState(() {
+      for (var i = 0; i < _tracks.length; i++) {
+        final r = byId[_tracks[i].id];
+        if (r != null) _tracks[i] = r;
+      }
+      _selected.clear();
+    });
+  }
+
+  Widget _selectionBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: 'Clear selection',
+              icon: const Icon(Icons.close),
+              onPressed: _clearSelection,
+            ),
+            Expanded(
+              child: Text(
+                '${_selected.length} selected',
+                style: TextStyle(color: cs.onSecondaryContainer),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Add to queue',
+              icon: const Icon(Icons.add_to_queue),
+              onPressed: _addSelectedToQueue,
+            ),
+            IconButton(
+              tooltip: 'Edit tags',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: _batchEdit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -778,65 +847,102 @@ class _TrackListViewState extends State<TrackListView> {
     if (_tracks.isEmpty) {
       return const Center(child: Text('Nothing here yet'));
     }
-    return ListenableBuilder(
-      listenable: player,
-      builder: (context, _) => ListView.builder(
-        controller: _scroll,
-        itemCount: _tracks.length,
-        itemBuilder: (_, i) {
-          final t = _tracks[i];
-          final selected = player.current?.id == t.id;
-          return ListTile(
-            selected: selected,
-            leading: TrackArt(track: t, selected: selected),
-            title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              [
-                if (t.artist.isNotEmpty) t.artist,
-                if (t.album.isNotEmpty) t.album,
-              ].join(' • '),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    return Column(
+      children: [
+        if (_selecting) _selectionBar(context),
+        Expanded(
+          child: ListenableBuilder(
+            listenable: player,
+            builder: (context, _) => ListView.builder(
+              controller: _scroll,
+              itemCount: _tracks.length,
+              itemBuilder: (_, i) {
+                final t = _tracks[i];
+                final nowPlaying = player.current?.id == t.id;
+                final isSel = _selected.contains(t.id);
+                return ListTile(
+                  selected: _selecting ? isSel : nowPlaying,
+                  leading: _selecting
+                      ? Checkbox(value: isSel, onChanged: (_) => _toggle(t.id))
+                      : TrackArt(track: t, selected: nowPlaying),
+                  title: Text(
+                    t.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    [
+                      if (t.artist.isNotEmpty) t.artist,
+                      if (t.album.isNotEmpty) t.album,
+                    ].join(' • '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: _selecting
+                      ? null
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(fmtDuration(t.durationMs)),
+                            PopupMenuButton<String>(
+                              tooltip: 'Track actions',
+                              onSelected: (value) =>
+                                  _handleTrackAction(context, value, t),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'play_next',
+                                  child: Text('Play next'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'add_queue',
+                                  child: Text('Add to queue'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'add_playlist',
+                                  child: Text('Add to playlist'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit metadata'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'select',
+                                  child: Text('Select'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                  onTap: () async {
+                    if (_selecting) {
+                      _toggle(t.id);
+                      return;
+                    }
+                    try {
+                      await player.playQueue(_tracks, i);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Playback failed: $e')),
+                        );
+                      }
+                    }
+                  },
+                  // Long-press: toggle when selecting, else the actions sheet
+                  // (which includes "Select" to start multi-select).
+                  onLongPress: () {
+                    if (_selecting) {
+                      _toggle(t.id);
+                    } else {
+                      _showTrackMenu(context, t);
+                    }
+                  },
+                );
+              },
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(fmtDuration(t.durationMs)),
-                PopupMenuButton<String>(
-                  tooltip: 'Track actions',
-                  onSelected: (value) => _handleTrackAction(context, value, t),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'play_next', child: Text('Play next')),
-                    PopupMenuItem(
-                      value: 'add_queue',
-                      child: Text('Add to queue'),
-                    ),
-                    PopupMenuItem(
-                      value: 'add_playlist',
-                      child: Text('Add to playlist'),
-                    ),
-                    PopupMenuItem(value: 'edit', child: Text('Edit metadata')),
-                  ],
-                ),
-              ],
-            ),
-            onTap: () async {
-              try {
-                await player.playQueue(_tracks, i);
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Playback failed: $e')),
-                  );
-                }
-              }
-            },
-            // Long-press opens the same actions as the ⋮ menu (better on mobile,
-            // where the small trailing target is hard to hit).
-            onLongPress: () => _showTrackMenu(context, t),
-          );
-        },
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -886,6 +992,11 @@ class _TrackListViewState extends State<TrackListView> {
               title: const Text('Edit metadata'),
               onTap: () => Navigator.pop(ctx, 'edit'),
             ),
+            ListTile(
+              leading: const Icon(Icons.checklist),
+              title: const Text('Select'),
+              onTap: () => Navigator.pop(ctx, 'select'),
+            ),
           ],
         ),
       ),
@@ -916,6 +1027,9 @@ class _TrackListViewState extends State<TrackListView> {
           final i = _tracks.indexWhere((x) => x.id == updated.id);
           if (i >= 0) setState(() => _tracks[i] = updated);
         }
+        return;
+      case 'select':
+        setState(() => _selected.add(track.id));
         return;
     }
     if (context.mounted) {
