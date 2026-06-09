@@ -46,6 +46,13 @@ What works today:
 - **OS integration** — MPRIS (Linux) + SMTC (Windows) media controls & keys; system
   tray + close-to-tray (Wayland falls back to system notifications); Android
   lockscreen / notification / background playback.
+- **Languages** — the UI is localized into 10 languages (English, Turkish, Spanish,
+  French, German, Russian, Arabic — with RTL —, Japanese, Chinese, Korean); pick one
+  in Settings → Language or follow the system locale.
+- **Auto-update** — Windows and Android builds (side-loaded from GitHub Releases)
+  check for new versions on launch and from Settings, then download and hand off to
+  the OS installer; you always confirm the install. Linux updates are left to your
+  package manager (AUR / `.deb` / AppImage).
 
 ## Roadmap
 

@@ -71,6 +71,25 @@ Public GitHub repo + Releases workflow building Windows `.exe`, Android
 ❌ Flatpak is specified but not yet built. Version strings across
 Cargo/Inno/metainfo/AUR are being synced to the release version.
 
+### 10. Localization — ✅ (RC feature)
+The UI is localized into 10 languages — English (template), Turkish, Spanish,
+French, German, Russian, Arabic (RTL-verified), Japanese, Chinese, Korean — via
+Flutter `gen-l10n` (~230 keys, ICU plurals + placeholders). Settings → Language
+picks System default or any language (each shown in its own script); persisted and
+applied live. ⚠️ Still English (documented): the smart-playlist rule field/operator
+DSL tokens, the desktop tray menu (built without a `BuildContext`), and error
+strings surfaced from the Rust core. Translations are model-generated — native
+review welcome.
+
+### 11. Auto-update — ✅ Windows/Android · n/a Linux (RC feature)
+Side-loaded Windows + Android builds check GitHub Releases on launch (throttled
+~24 h) and via a Settings button, then download the platform asset and hand it to
+the OS installer — the Inno `.exe` (UAC) on Windows, the package-installer intent
+on Android (`REQUEST_INSTALL_PACKAGES` + `FileProvider`). The OS always asks the
+user to confirm. Linux is intentionally inert (package-manager-owned). SemVer-aware
+compare (`rc < release`) is unit-tested; the Windows `.exe` launch and Android
+FileProvider intent are code-built and flagged **needs on-device verification**.
+
 ## Known-not-bugs (audit false positives, intentionally unchanged)
 
 The audit's adversarial verification refuted several "races": the SQLite store is

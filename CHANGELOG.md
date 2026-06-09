@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — toward 1.0.0-rc
+
+### Features
+- **Localization** — the entire UI is translated into 10 languages: English (base),
+  Turkish, Spanish, French, German, Russian, Arabic (right-to-left), Japanese,
+  Chinese, and Korean. Built with Flutter `gen-l10n` (~230 message keys, ICU plurals
+  + placeholders). Settings → Language offers System default + each language shown in
+  its own script; the choice applies live and persists. Translations are
+  machine-generated and welcome native review. Known gaps (still English): the
+  smart-playlist rule field/operator tokens, the desktop tray menu, and error text
+  returned from the Rust core.
+- **Auto-update (Windows + Android)** — side-loaded builds check GitHub Releases on
+  launch (throttled to once a day) and via a manual button in Settings, then download
+  the matching asset and hand it to the OS installer — the Inno `.exe` (with a UAC
+  prompt) on Windows, the system package-installer intent on Android
+  (`REQUEST_INSTALL_PACKAGES` + a `FileProvider`). The user always confirms the final
+  install; nothing installs silently. Linux is intentionally inert — updates come
+  from its package manager (AUR / `.deb` / AppImage).
+
 ## 0.3.0 — beta (audit + hardening)
 
 An audit-driven correctness, security, and accessibility pass on the way to a
