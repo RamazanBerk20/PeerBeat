@@ -14,6 +14,7 @@ import 'playback/player.dart';
 import 'src/rust/api/library.dart';
 import 'src/rust/frb_generated.dart';
 import 'ui/library_home.dart';
+import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,8 +24,7 @@ Future<void> main() async {
     // before the first AudioPlayer is created (i.e. before the player singleton).
     try {
       await JustAudioBackground.init(
-        androidNotificationChannelId:
-            'io.github.ramazanberk20.peerbeat.audio',
+        androidNotificationChannelId: 'io.github.ramazanberk20.peerbeat.audio',
         androidNotificationChannelName: 'PeerBeat playback',
         androidNotificationOngoing: true,
       );
@@ -68,13 +68,7 @@ class _StartupErrorApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: PeerBeatApp._seed,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      darkTheme: peerBeatTheme(Brightness.dark),
       home: Scaffold(
         body: Center(
           child: Padding(
@@ -107,8 +101,6 @@ String _deviceName() {
 
 class PeerBeatApp extends StatefulWidget {
   const PeerBeatApp({super.key});
-
-  static const _seed = Color(0xFF2BD9C6); // neon teal from the PeerBeat icon
 
   @override
   State<PeerBeatApp> createState() => _PeerBeatAppState();
@@ -154,23 +146,24 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
 
   @override
   Widget build(BuildContext context) {
-    ColorScheme scheme(Brightness b) =>
-        ColorScheme.fromSeed(seedColor: PeerBeatApp._seed, brightness: b);
-    return MaterialApp(
-      title: 'PeerBeat',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: scheme(Brightness.light),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: scheme(Brightness.dark),
-        useMaterial3: true,
-      ),
-      themeMode: ThemeMode.dark,
-      builder: (context, child) =>
-          _GlobalPlaybackShortcuts(child: child ?? const SizedBox.shrink()),
-      home: const LibraryHome(),
+    // Rebuild the app theme only when the album-art accent changes (track
+    // cadence) — MaterialApp animates the new ColorScheme via its internal
+    // AnimatedTheme, so this never rebuilds on the position tick.
+    return ValueListenableBuilder<Color?>(
+      valueListenable: player.accentColor,
+      builder: (context, accent, _) {
+        final seed = accent ?? kDefaultSeed;
+        return MaterialApp(
+          title: 'PeerBeat',
+          debugShowCheckedModeBanner: false,
+          theme: peerBeatTheme(Brightness.light, seed: seed),
+          darkTheme: peerBeatTheme(Brightness.dark, seed: seed),
+          themeMode: ThemeMode.dark,
+          builder: (context, child) =>
+              _GlobalPlaybackShortcuts(child: child ?? const SizedBox.shrink()),
+          home: const LibraryHome(),
+        );
+      },
     );
   }
 }

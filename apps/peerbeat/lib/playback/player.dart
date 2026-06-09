@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 
@@ -9,6 +10,7 @@ import '../audio/replay_gain.dart';
 import '../src/rust/api/audio.dart' show OutputDeviceRow;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
+import '../ui/theme.dart' show accentFromArt;
 
 export '../audio/replay_gain.dart' show ReplayGainMode;
 
@@ -24,6 +26,7 @@ const _kEqPreamp = 'audio.eq_preamp';
 const _kOutputDevice = 'audio.output_device';
 const _kStereoWidth = 'audio.stereo_width';
 const _kCrossfade = 'audio.crossfade';
+const _kDynamicTheme = 'ui.dynamic_theme';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -101,6 +104,12 @@ class PlayerController extends ChangeNotifier {
   // ChangeNotifier, which now fires only on real state changes (track, play/pause,
   // volume, shuffle, ...). This also stops the entire UI rebuilding 5x/second.
   final ValueNotifier<Duration> positionNotifier = ValueNotifier(Duration.zero);
+  // Album-art accent for dynamic theming. Updated ONLY on track change (never on
+  // the position tick) and consumed by the app shell via AnimatedTheme — so the
+  // root theme never rebuilds mid-position-tick (the old dynamic-theme crash).
+  final ValueNotifier<Color?> accentColor = ValueNotifier(null);
+  bool _dynamicTheme = true;
+  bool get dynamicTheme => _dynamicTheme;
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
   // holding the track; the first play loads it and seeks to `_resumeFrom`.
@@ -333,6 +342,32 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle album-art dynamic theming. When off, the accent clears (the app
+  /// falls back to its default seed); when on, recompute for the current track.
+  void setDynamicTheme(bool on) {
+    _dynamicTheme = on;
+    if (on) {
+      unawaited(_updateAccent(current));
+    } else {
+      accentColor.value = null;
+    }
+    unawaited(settingsSet(key: _kDynamicTheme, value: on ? '1' : '0'));
+    notifyListeners();
+  }
+
+  /// Recompute the album-art accent for [t]. Best-effort and async; a stale
+  /// result for a track we've since left is discarded.
+  Future<void> _updateAccent(TrackRow? t) async {
+    if (!_dynamicTheme) {
+      accentColor.value = null;
+      return;
+    }
+    final c = await accentFromArt(t?.artPath);
+    if (identical(current, t) || current?.id == t?.id) {
+      accentColor.value = c;
+    }
+  }
+
   void _applyEq() {
     final gains = _eqEnabled ? _eqGains : List<double>.filled(10, 0.0);
     final preamp = _eqEnabled ? _eqPreampDb : 0.0;
@@ -382,6 +417,8 @@ class PlayerController extends ChangeNotifier {
       if (crossfade != null) {
         _crossfade = (double.tryParse(crossfade) ?? 0.0).clamp(0.0, 12.0);
       }
+      final dyn = await settingsGet(key: _kDynamicTheme);
+      if (dyn != null) _dynamicTheme = dyn == '1';
       _recomputeRg();
       _applyVolume();
       _applyEq();
@@ -447,6 +484,7 @@ class PlayerController extends ChangeNotifier {
     _playing = true;
     _userPaused = false;
     _lastError = null;
+    unawaited(_updateAccent(t)); // album-art accent for dynamic theming
     notifyListeners();
     try {
       final p = t.path;
@@ -641,6 +679,7 @@ class PlayerController extends ChangeNotifier {
     _playSub.cancel();
     _engine.dispose();
     positionNotifier.dispose();
+    accentColor.dispose();
     super.dispose();
   }
 }

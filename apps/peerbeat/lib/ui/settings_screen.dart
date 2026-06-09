@@ -133,6 +133,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 12),
             const _CrossfadeCard(),
             const SizedBox(height: 16),
+            Text('Appearance', style: text.titleLarge),
+            const SizedBox(height: 8),
+            Card(
+              child: SwitchListTile(
+                secondary: const Icon(Icons.palette_outlined),
+                title: const Text('Dynamic theme from album art'),
+                subtitle: const Text(
+                  "Tint the app with the current track's colors",
+                ),
+                value: player.dynamicTheme,
+                onChanged: player.setDynamicTheme,
+              ),
+            ),
+            const SizedBox(height: 16),
             Text('About', style: text.titleLarge),
             const Card(
               child: ListTile(
