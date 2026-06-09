@@ -8,8 +8,42 @@ use std::sync::OnceLock;
 static ENGINE: OnceLock<AudioEngine> = OnceLock::new();
 
 fn engine() -> &'static AudioEngine {
-    ENGINE.get_or_init(AudioEngine::new)
+    ENGINE.get_or_init(|| {
+        silence_alsa();
+        AudioEngine::new()
+    })
 }
+
+/// Install a no-op ALSA error handler so libasound's `dmix`/`jack`/`/dev/dsp`
+/// probe messages (printed to stderr by cpal during device enumeration / stream
+/// open) don't spam the logs. Linux-only; a no-op elsewhere. Idempotent.
+#[cfg(target_os = "linux")]
+fn silence_alsa() {
+    use std::os::raw::{c_char, c_int};
+    use std::sync::Once;
+    static ONCE: Once = Once::new();
+    // ALSA's handler is variadic; we register a non-variadic no-op and let it
+    // ignore the trailing args (safe — it reads none).
+    type Handler = extern "C" fn(*const c_char, c_int, *const c_char, c_int, *const c_char);
+    #[link(name = "asound")]
+    extern "C" {
+        fn snd_lib_error_set_handler(handler: Handler) -> c_int;
+    }
+    extern "C" fn quiet(
+        _file: *const c_char,
+        _line: c_int,
+        _func: *const c_char,
+        _err: c_int,
+        _fmt: *const c_char,
+    ) {
+    }
+    ONCE.call_once(|| unsafe {
+        snd_lib_error_set_handler(quiet);
+    });
+}
+
+#[cfg(not(target_os = "linux"))]
+fn silence_alsa() {}
 
 pub struct OutputDeviceRow {
     pub id: String,
@@ -102,6 +136,7 @@ pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
 pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
     use rodio::cpal::traits::{DeviceTrait, HostTrait};
 
+    silence_alsa(); // quiet libasound's probe spam during enumeration
     let host = rodio::cpal::default_host();
     let default_name = host.default_output_device().and_then(|d| d.name().ok());
     let mut rows = vec![OutputDeviceRow {
