@@ -3,7 +3,7 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart' show LogicalKeyboardKey, rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -47,6 +47,14 @@ Future<void> main() async {
     final dir = await getApplicationSupportDirectory();
     appDbPath = '${dir.path}${Platform.pathSeparator}library.db';
     appDisplayName = _deviceName();
+    // Extract the bundled icon to a file so the media session can use it as the
+    // artwork fallback for tracks with no embedded cover (esp. on Android).
+    try {
+      final iconData = await rootBundle.load('assets/icon/app_icon.png');
+      final iconFile = File('${dir.path}${Platform.pathSeparator}app_icon.png');
+      await iconFile.writeAsBytes(iconData.buffer.asUint8List(), flush: true);
+      appIconPath = iconFile.path;
+    } catch (_) {}
     await libraryOpen(dbPath: appDbPath);
     await player.loadAudioSettings(); // ReplayGain mode/preamp
     await player.restoreSession(); // best-effort: restore last track + position

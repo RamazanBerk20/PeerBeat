@@ -1,5 +1,6 @@
 import 'package:audio_service/audio_service.dart';
 
+import '../app_config.dart';
 import '../playback/player.dart';
 
 /// Bridges the OS media session (Android lockscreen / notification / output
@@ -31,7 +32,10 @@ class PeerBeatAudioHandler extends BaseAudioHandler {
     final key = '${t.id}';
     if (key == _lastItemKey) return;
     _lastItemKey = key;
+    // Embedded cover if present, else the app icon (so the applet shows the
+    // PeerBeat artwork instead of a blank/white square for tag-less tracks).
     final art = t.artPath;
+    final artFile = (art != null && art.isNotEmpty) ? art : appIconPath;
     mediaItem.add(
       MediaItem(
         id: key,
@@ -40,7 +44,7 @@ class PeerBeatAudioHandler extends BaseAudioHandler {
         artist: t.artist.isEmpty ? '' : t.artist,
         album: t.album.isEmpty ? '' : t.album,
         duration: Duration(milliseconds: t.durationMs),
-        artUri: (art != null && art.isNotEmpty) ? Uri.file(art) : null,
+        artUri: artFile != null ? Uri.file(artFile) : null,
       ),
     );
   }
