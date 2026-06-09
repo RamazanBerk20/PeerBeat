@@ -16,12 +16,12 @@ Play/pause/seek/prev/next, volume + mute, shuffle, repeat (off/all/one), gapless
 0.5–2× is **pitch-preserving on Linux/macOS** (Signalsmith Stretch); ⚠️ on
 **Windows** it currently falls back to a pitch-shifting resample.
 
-### 2. Local library — ✅ (watch-folders ⚠️)
+### 2. Local library — ✅
 Import MP3/FLAC/WAV/AAC/OGG/M4A; read + edit ID3/Vorbis/MP4 tags (with mojibake
 recovery); embedded art + fallback; browse Songs/Albums/Artists/Genres/Years/
-Recently-Added; FTS5 trigram fuzzy search; on-demand rescan; 50k-track scale
-covered by a test. ⚠️ Active watch-folders run but the per-folder `is_watched`
-toggle isn't wired yet (all roots are watched).
+Recently-Added; FTS5 trigram fuzzy search; on-demand rescan + active watch-folders
+with a per-folder watch toggle; duplicate detection (Find duplicates); 50k-track
+scale covered by a test. ⚠️ Batch tag editing is still planned.
 
 ### 3. Playlists & queue — ✅
 Full CRUD + duplicate + drag-reorder; queue with Play-Next / Add-to-Queue;
@@ -42,9 +42,11 @@ in the desktop Rust engine. ❌ On Android the engine is a stub; wiring
 `just_audio`'s `AndroidEqualizer`/`LoudnessEnhancer` is planned for RC.
 
 ### 6. UI / UX — ✅ (full WCAG pass ⚠️)
-Now Playing (large art, scrubber, synced `.lrc`/embedded lyrics, up-next),
-persistent mini-player, light/dark + album-art dynamic theming, responsive
-desktop/phone/tablet layouts, desktop keyboard shortcuts. Accessibility: tap
+Now Playing (large art, scrubber, auto-scrolling synced `.lrc`/embedded lyrics,
+real-time spectrum **visualizer**, up-next), persistent mini-player, light/dark +
+album-art dynamic theming **plus a System/Light/Dark selector and accent picker**,
+responsive desktop/phone/tablet layouts, desktop keyboard shortcuts.
+Accessibility: tap
 targets ≥48 dp, non-colour state cues, screen-reader labels and an efficient
 synced-lyrics view are done; ⚠️ a full WCAG 2.1 AA pass (keyboard focus
 traversal everywhere, contrast audit) is in progress.
@@ -82,6 +84,8 @@ they aren't "re-fixed" later.
 - Flatpak packaging; full version sync; AUR bump at release.
 - Per-peer streaming byte-rate limit.
 - Full WCAG 2.1 AA verification + scrub/first-audio benchmarks.
-- 100× feature themes: synced-lyrics polish + visualizer, smarter library
-  (live watch, batch tag edit, duplicate detection), party/social polish,
-  personalization.
+- 100× feature themes — shipped: spectrum visualizer + lyrics auto-scroll,
+  smarter library (per-folder watch toggle + duplicate detection),
+  personalization (theme selector, accent picker, more shortcuts). Remaining:
+  lyrics tap-to-seek/editor, batch tag editing, and party/social polish
+  (reconnect UI, chat/reactions, transfer dashboard).

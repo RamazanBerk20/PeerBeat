@@ -1,6 +1,10 @@
+import 'dart:typed_data' show Float32List;
+
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/scheduler.dart' show Ticker;
 
 import '../playback/player.dart';
+import '../src/rust/api/audio.dart' show audioSpectrum;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
 import 'library_home.dart' show TrackArt, fmtDuration;
@@ -288,6 +292,8 @@ class _Controls extends StatelessWidget {
               );
             },
           ),
+          const SizedBox(height: 8),
+          _Visualizer(color: cs.primary),
           const SizedBox(height: 8),
           _transportRow(cs),
           const SizedBox(height: 8),
@@ -748,4 +754,105 @@ class _LyricsPanelState extends State<_LyricsPanel> {
       },
     );
   }
+}
+
+/// A lightweight real-time spectrum visualizer. Polls the Rust desktop engine's
+/// FFT each frame with fast-attack / slow-release smoothing; flat when paused or
+/// on platforms without the desktop engine (the spectrum reads as silence).
+class _Visualizer extends StatefulWidget {
+  const _Visualizer({required this.color});
+
+  final Color color;
+
+  static const int _bands = 28;
+  static const double _height = 40;
+
+  @override
+  State<_Visualizer> createState() => _VisualizerState();
+}
+
+class _VisualizerState extends State<_Visualizer>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  final List<double> _levels = List.filled(_Visualizer._bands, 0.0);
+  final ValueNotifier<List<double>> _frame = ValueNotifier(const []);
+
+  @override
+  void initState() {
+    super.initState();
+    _frame.value = List.of(_levels);
+    _ticker = createTicker(_tick)..start();
+  }
+
+  void _tick(Duration _) {
+    Float32List raw;
+    try {
+      raw = player.playing
+          ? audioSpectrum(bands: _Visualizer._bands)
+          : Float32List(0);
+    } catch (_) {
+      raw = Float32List(0);
+    }
+    var changed = false;
+    for (var i = 0; i < _Visualizer._bands; i++) {
+      final target = i < raw.length ? raw[i].clamp(0.0, 1.0).toDouble() : 0.0;
+      final cur = _levels[i];
+      // Fast attack, slow release → lively but not jittery.
+      final next = target > cur ? target : cur + (target - cur) * 0.18;
+      if ((next - cur).abs() > 0.001) changed = true;
+      _levels[i] = next;
+    }
+    if (changed) _frame.value = List.of(_levels);
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _frame.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _Visualizer._height,
+      width: double.infinity,
+      child: ValueListenableBuilder<List<double>>(
+        valueListenable: _frame,
+        builder: (_, levels, _) =>
+            CustomPaint(painter: _BarsPainter(levels, widget.color)),
+      ),
+    );
+  }
+}
+
+class _BarsPainter extends CustomPainter {
+  _BarsPainter(this.levels, this.color);
+
+  final List<double> levels;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = levels.length;
+    if (n == 0) return;
+    const gap = 2.0;
+    final barW = (size.width - gap * (n - 1)) / n;
+    if (barW <= 0) return;
+    final paint = Paint();
+    for (var i = 0; i < n; i++) {
+      final lvl = levels[i].clamp(0.0, 1.0);
+      final h = lvl * size.height;
+      final x = i * (barW + gap);
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, size.height - h, barW, h < 2 ? 2 : h),
+        const Radius.circular(2),
+      );
+      paint.color = color.withValues(alpha: 0.30 + 0.60 * lvl);
+      canvas.drawRRect(rect, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BarsPainter old) => !identical(old.levels, levels);
 }

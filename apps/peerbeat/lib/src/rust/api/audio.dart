@@ -36,6 +36,12 @@ void audioSetSpeed({required double speed}) =>
 void audioSetCrossfade({required double secs}) =>
     RustLib.instance.api.crateApiAudioAudioSetCrossfade(secs: secs);
 
+/// Latest Now-Playing visualizer spectrum: `bands` log-spaced magnitudes, each
+/// roughly 0..1. Cheap (one cached 1024-pt FFT); poll at the UI frame rate.
+/// All-zero when idle, and on Android (no desktop engine).
+Float32List audioSpectrum({required int bands}) =>
+    RustLib.instance.api.crateApiAudioAudioSpectrum(bands: bands);
+
 /// 10-band graphic EQ, using ISO octave centers from 31 Hz to 16 kHz.
 /// `gains` must contain exactly 10 dB values. Values are clamped by the engine
 /// to -12..12 dB; `preamp_db` is clamped to -15..15 dB.

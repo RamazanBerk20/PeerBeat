@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::eq::{EqHandle, EqSource};
+use super::spectrum::SpectrumTap;
 #[cfg(not(target_os = "windows"))]
 use super::timestretch::TimeStretchSource;
 use super::timestretch::{SpeedHandle, MAX_SPEED, MIN_SPEED};
@@ -428,15 +429,16 @@ fn with_dsp(
     speed: SpeedHandle,
     ended: Arc<AtomicBool>,
 ) -> Box<dyn rodio::Source<Item = i16> + Send> {
-    // EQ → stereo widen → pitch-preserving time-stretch → end-notify. The
-    // stretcher is a no-op (pure passthrough) while speed == 1.0.
-    Box::new(EndNotifySource::new(
+    // EQ → stereo widen → pitch-preserving time-stretch → end-notify →
+    // visualizer tap (audio unchanged). The stretcher is a no-op (pure
+    // passthrough) while speed == 1.0.
+    Box::new(SpectrumTap::new(EndNotifySource::new(
         TimeStretchSource::new(
             StereoWidenSource::new(EqSource::new(source, eq), widen),
             speed,
         ),
         ended,
-    ))
+    )))
 }
 
 // Windows: Signalsmith Stretch's cxx bridge doesn't compile under MSVC, so there's
@@ -450,10 +452,10 @@ fn with_dsp(
     _speed: SpeedHandle,
     ended: Arc<AtomicBool>,
 ) -> Box<dyn rodio::Source<Item = i16> + Send> {
-    Box::new(EndNotifySource::new(
+    Box::new(SpectrumTap::new(EndNotifySource::new(
         StereoWidenSource::new(EqSource::new(source, eq), widen),
         ended,
-    ))
+    )))
 }
 
 // Apply the current speed to a freshly-created sink / on a speed change. On
@@ -743,6 +745,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     sink = s;
                     sink.set_volume(volume);
                 }
+                super::spectrum::clear(); // visualizer settles to silence
                 speed_anchor = Duration::ZERO;
                 fade_in = None;
                 fading_out.clear();

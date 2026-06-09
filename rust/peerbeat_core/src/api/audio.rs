@@ -64,6 +64,14 @@ pub fn audio_set_crossfade(secs: f64) {
     engine().set_crossfade(secs as f32);
 }
 
+/// Latest Now-Playing visualizer spectrum: `bands` log-spaced magnitudes, each
+/// roughly 0..1. Cheap (one cached 1024-pt FFT); poll at the UI frame rate.
+/// All-zero when idle, and on Android (no desktop engine).
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_spectrum(bands: u32) -> Vec<f32> {
+    crate::audio::spectrum_bands(bands as usize)
+}
+
 /// 10-band graphic EQ, using ISO octave centers from 31 Hz to 16 kHz.
 /// `gains` must contain exactly 10 dB values. Values are clamped by the engine
 /// to -12..12 dB; `preamp_db` is clamped to -15..15 dB.
