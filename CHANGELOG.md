@@ -31,6 +31,20 @@ features.
   groups byte-identical tracks (shared content hash) and removes the extras
   from the library (files on disk are never deleted).
 
+### Fixes (Android on-device)
+- **Playback** worked again: `MainActivity` now extends `AudioServiceActivity`
+  (not `FlutterActivity`), so `just_audio_background` initializes — the first
+  play no longer throws `LateInitializationError(_audioHandler)`.
+- **Filenames**: mojibake recovery is now applied to filename-derived titles
+  too (UTF-8 names mis-stored as Latin-1, incl. NFD combining marks) — e.g.
+  "KuÅ\u{9f}ku" → "Kuşku", "GoÌ\u{88}zuÌ\u{88}" → "Gözü". (Re-add a folder to
+  re-read already-scanned files.)
+- **Now Playing**: album-art corners no longer show dark gaps (artwork radius
+  matches its clip); the "Up next" strip expands to the full-screen queue on tap
+  or swipe-up.
+- **Android build**: forced plugin subprojects to compileSdk 36 (desktop_drop
+  pinned 33), unblocking the APK + CI Android job.
+
 ### Fixes (correctness & security)
 - Playback speed is clamped to the engine-safe 0.5–2× in the UI (no more silent
   re-clamping); the engine carries fractional milliseconds across speed changes.

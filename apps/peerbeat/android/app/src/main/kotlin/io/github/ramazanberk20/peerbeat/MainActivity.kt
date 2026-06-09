@@ -1,5 +1,8 @@
 package io.github.ramazanberk20.peerbeat
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// Must extend AudioServiceActivity (not FlutterActivity) so just_audio_background
+// / audio_service can bind its foreground media service to this engine —
+// otherwise the first playback throws LateInitializationError(_audioHandler).
+class MainActivity : AudioServiceActivity()

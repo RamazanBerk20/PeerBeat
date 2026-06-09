@@ -115,7 +115,10 @@ pub fn read_tags(
         file_size,
         mtime_ns,
         added_at,
-        title: stem(path),
+        // Filename-derived fallback title also gets mojibake recovery: many
+        // libraries have UTF-8 names that a prior tool mis-stored as Latin-1
+        // (e.g. "KuÅ\u{9f}ku" → "Kuşku", NFD "GoÌ\u{88}zuÌ\u{88}" → "Gözü").
+        title: fix_mojibake(&stem(path)),
         ..Default::default()
     };
 
@@ -251,6 +254,19 @@ mod tests {
 
         let moji2: String = "Güneş — AC/DC".bytes().map(|b| b as char).collect();
         assert_eq!(fix_mojibake(&moji2), "Güneş — AC/DC");
+    }
+
+    #[test]
+    fn mojibake_recovers_filename_cases() {
+        // Real-world filenames seen on-device: UTF-8 bytes mapped 1:1 to code
+        // points (incl. C1 controls 0x80-0x9F from continuation bytes), and an
+        // NFD name (combining marks) mis-stored the same way.
+        let kusku: String = "Kuşku".bytes().map(|b| b as char).collect();
+        assert_eq!(fix_mojibake(&kusku), "Kuşku");
+        // NFD "Gözü" = o + U+0308, u + U+0308 — recovers to the NFD original.
+        let gozu_nfd = "Go\u{308}zu\u{308}";
+        let moji: String = gozu_nfd.bytes().map(|b| b as char).collect();
+        assert_eq!(fix_mojibake(&moji), gozu_nfd);
     }
 
     #[test]

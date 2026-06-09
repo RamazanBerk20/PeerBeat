@@ -137,6 +137,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     dragMs: _dragMs,
                     onDragChanged: (v) => setState(() => _dragMs = v),
                     onDragEnd: _onSeekEnd,
+                    onExpandQueue: () => _showQueue(context),
                   );
                   if (wide) {
                     return Row(
@@ -200,9 +201,12 @@ class _Artwork extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           final side = c.biggest.shortestSide.clamp(120.0, 420.0);
+          // Match TrackArt's own corner radius (size * 0.2) so the artwork fills
+          // the clipped Material edge-to-edge — otherwise the squarer Material
+          // shows dark gaps in the corners behind TrackArt's rounder shape.
           return Material(
             elevation: 8,
-            borderRadius: BorderRadius.circular(side * 0.06),
+            borderRadius: BorderRadius.circular(side * 0.2),
             clipBehavior: Clip.antiAlias,
             child: TrackArt(track: track, size: side),
           );
@@ -218,12 +222,16 @@ class _Controls extends StatelessWidget {
     required this.dragMs,
     required this.onDragChanged,
     required this.onDragEnd,
+    required this.onExpandQueue,
   });
 
   final TrackRow track;
   final double? dragMs;
   final ValueChanged<double> onDragChanged;
   final ValueChanged<double> onDragEnd;
+
+  /// Open the full-screen queue sheet (tap or swipe-up on "Up next").
+  final VoidCallback onExpandQueue;
 
   @override
   Widget build(BuildContext context) {
@@ -300,12 +308,40 @@ class _Controls extends StatelessWidget {
           _volumeRow(context, cs),
           if (upNext.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Up next', style: text.titleSmall),
+            // Tap or swipe up to open the full-screen, reorderable queue.
+            InkWell(
+              onTap: onExpandQueue,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Text('Up next', style: text.titleSmall),
+                    const Spacer(),
+                    Icon(
+                      Icons.keyboard_arrow_up,
+                      size: 18,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    Text(
+                      'Expand',
+                      style: text.labelSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 4),
-            Expanded(child: _UpNextList(tracks: upNext)),
+            Expanded(
+              child: GestureDetector(
+                onVerticalDragEnd: (d) {
+                  if ((d.primaryVelocity ?? 0) < -100) onExpandQueue();
+                },
+                child: _UpNextList(tracks: upNext),
+              ),
+            ),
           ] else
             const Spacer(),
         ],
