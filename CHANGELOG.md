@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.3.0 — beta (audit + hardening)
+
+An audit-driven correctness, security, and accessibility pass on the way to a
+release candidate, plus a documentation rebuild.
+
+### Fixes (correctness & security)
+- Playback speed is clamped to the engine-safe 0.5–2× in the UI (no more silent
+  re-clamping); the engine carries fractional milliseconds across speed changes.
+- LAN: session tokens are stored as SHA-256 digests (not plaintext) in memory;
+  download `Content-Disposition` filenames strip control characters; the party
+  broadcast buffer was enlarged and a lagging peer is resent the latest snapshot
+  instead of silently desyncing.
+- Party sync: the Cristian clock-sync offset now captures one receive timestamp
+  (fixing the error that broke the ~100 ms target), peers auto-reconnect with
+  backoff, and a joining/following peer loads already seeked to the target
+  position (no audible play-from-zero).
+- Discovery: IPv6 fallback; manual connect reuses a discovered host's identity
+  to avoid a duplicate TOFU trust anchor.
+- Linux MPRIS reports Volume independently of mute (spec compliance) and tears
+  down a stolen media-player name cleanly; the tray temp icon is cleaned up.
+- Cross-cutting: previously-swallowed database errors (party request titles,
+  remembered-peer persistence, watch-folder rescans) are now logged/propagated.
+
+### Accessibility
+- Mini-player transport tap targets are back to ≥48 dp; shuffle/repeat/speed
+  expose non-colour state cues; the now-playing track exposes a screen-reader
+  label; the synced-lyrics view rebuilds per active line, not per position tick.
+
+### Docs
+- Rebuilt `docs/` from the current code: `architecture`, `data-model`,
+  `protocol`, `security`, `privacy`, and an honest `STATUS` matrix. README and
+  module docs de-staled (shipped features were still listed as "roadmap").
+
+### Tests
+- Added regression coverage: speed clamp, party clock-sync math, `playQueue`
+  start-position, and PIN hashing + legacy-hash rejection.
+
 ## 0.2.0 — beta (alpha → RC push)
 
 A large stabilization, security, and UX release taking PeerBeat from alpha
