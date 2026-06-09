@@ -87,6 +87,29 @@ pub fn library_remove_folder(folder_id: i64) -> Result<(), String> {
     r
 }
 
+/// Enable/disable filesystem watching for a single folder. The watcher is
+/// restarted so the change takes effect immediately (an unwatched folder is no
+/// longer auto-rescanned on changes).
+pub fn library_set_folder_watched(folder_id: i64, watched: bool) -> Result<(), String> {
+    let r = with_db(|db| folders::set_watched(db.conn(), folder_id, watched));
+    restart_watcher();
+    r
+}
+
+// ── Duplicate detection (smarter library) ────────────────────────────────────
+
+/// Groups of tracks that are byte-for-byte duplicate audio (shared content
+/// hash), each group having 2+ members. Empty when there are none.
+pub fn library_duplicate_groups() -> Result<Vec<Vec<TrackRow>>, String> {
+    with_db(|db| tracks::duplicate_groups(db.conn()))
+}
+
+/// Remove a single track from the library (does not delete the file on disk).
+/// Used to resolve duplicates; joins cascade via the schema.
+pub fn library_remove_track(track_id: i64) -> Result<(), String> {
+    with_db(|db| library::scan::delete_track(db.conn(), track_id))
+}
+
 /// Re-scan every known folder: import new/changed files and prune tracks whose
 /// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
 pub fn library_rescan_all() -> Result<ScanReport, String> {
@@ -134,8 +157,11 @@ pub fn library_start_watching() -> Result<(), String> {
     if guard.is_some() {
         return Ok(());
     }
+    // Only watch folders the user hasn't muted (is_watched); unwatched folders
+    // are scanned on demand but not auto-updated.
     let roots: Vec<PathBuf> = with_db(|db| folders::list(db.conn()))?
         .into_iter()
+        .filter(|f| f.is_watched)
         .map(|f| PathBuf::from(f.path))
         .collect();
     if roots.is_empty() {
@@ -191,11 +217,16 @@ fn watch_loop(rx: std::sync::mpsc::Receiver<PathBuf>, roots: Vec<PathBuf>) {
             .iter()
             .filter(|root| changed.iter().any(|p| p.starts_with(root)))
         {
-            let _ = with_db(|db| -> anyhow::Result<()> {
+            let res = with_db(|db| -> anyhow::Result<()> {
                 library::scan_folder(db.conn(), root, now, db.art_dir())?;
                 library::scan::prune_missing(db.conn(), root)?;
                 Ok(())
             });
+            if let Err(e) = res {
+                // A watched folder went unreadable (permissions, unmounted, …).
+                // Don't silently stop reflecting it — surface the failure.
+                eprintln!("peerbeat: watch rescan of {} failed: {e}", root.display());
+            }
         }
     }
 }
@@ -231,6 +262,13 @@ pub fn share_set(
     pin: Option<String>,
     enabled: bool,
 ) -> Result<i64, String> {
+    // Reject a too-weak PIN at the boundary (spec: 4–6 digits). An empty/None pin
+    // on a "pin" share means "keep the existing one", so only validate a new value.
+    if let Some(p) = pin.as_deref() {
+        if !p.trim().is_empty() && !shares::pin_is_valid_format(p) {
+            return Err("PIN must be 4–6 digits".to_string());
+        }
+    }
     with_db(|db| {
         shares::set_share(
             db.conn(),

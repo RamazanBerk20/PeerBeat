@@ -131,6 +131,39 @@ void main() {
     },
   );
 
+  test('setSpeed clamps to the engine-safe 0.5–2.0 range', () async {
+    final engine = _FakeAudioEngine();
+    final controller = PlayerController.forTest(engine: engine);
+    addTearDown(controller.dispose);
+
+    controller.setSpeed(3.5);
+    expect(controller.speed, 2.0); // above max → clamped down
+    controller.setSpeed(0.1);
+    expect(controller.speed, 0.5); // below min → clamped up
+    controller.setSpeed(1.25);
+    expect(controller.speed, 1.25); // in range → unchanged
+  });
+
+  test(
+    'playQueue(startAt:) loads the track already seeked to that position',
+    () async {
+      final engine = _FakeAudioEngine();
+      final controller = PlayerController.forTest(engine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.playQueue(
+        [_track(1)],
+        0,
+        startAt: const Duration(milliseconds: 500),
+      );
+
+      // The engine is positioned at the start point during load (party sync path),
+      // not played from zero and then seeked.
+      expect(engine.seekedPositions, [const Duration(milliseconds: 500)]);
+      expect(controller.position, const Duration(milliseconds: 500));
+    },
+  );
+
   test(
     'position ticks update positionNotifier without notifying main listeners',
     () async {
@@ -194,14 +227,18 @@ class _FakeAudioEngine implements AudioEngine {
   }
 
   @override
-  Future<void> playPath(String path, {Duration? duration}) async {
+  Future<void> playPath(
+    String path, {
+    Duration? duration,
+    MediaTag? tag,
+  }) async {
     playedPaths.add(path);
     _pos = Duration.zero;
     _isPlaying = true;
   }
 
   @override
-  Future<void> playUrl(String url, {Duration? duration}) =>
+  Future<void> playUrl(String url, {Duration? duration, MediaTag? tag}) =>
       playPath(url, duration: duration);
 
   @override

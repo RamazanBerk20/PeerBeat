@@ -1,21 +1,42 @@
 import 'dart:io';
 import 'dart:ui' show AppExitResponse;
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart' show LogicalKeyboardKey, rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app_config.dart';
+import 'os/audio_handler.dart';
 import 'os/desktop_shell.dart';
 import 'os/os_media_controller.dart';
 import 'playback/player.dart';
 import 'src/rust/api/library.dart';
 import 'src/rust/frb_generated.dart';
 import 'ui/library_home.dart';
+import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Platform.isAndroid) {
+    // Media session + foreground service for lockscreen/notification controls
+    // and background playback. Our custom handler exposes exactly
+    // previous · play/pause · next (no stop) and drives the app player.
+    try {
+      await AudioService.init(
+        builder: () => PeerBeatAudioHandler(),
+        config: const AudioServiceConfig(
+          androidNotificationChannelId:
+              'io.github.ramazanberk20.peerbeat.audio',
+          androidNotificationChannelName: 'PeerBeat playback',
+          androidNotificationOngoing: true,
+          androidNotificationIcon: 'drawable/ic_notification',
+          androidStopForegroundOnPause: true,
+        ),
+      );
+    } catch (_) {}
+  }
   if (DesktopShell.isDesktop) {
     try {
       await windowManager.ensureInitialized();
@@ -26,6 +47,14 @@ Future<void> main() async {
     final dir = await getApplicationSupportDirectory();
     appDbPath = '${dir.path}${Platform.pathSeparator}library.db';
     appDisplayName = _deviceName();
+    // Extract the bundled icon to a file so the media session can use it as the
+    // artwork fallback for tracks with no embedded cover (esp. on Android).
+    try {
+      final iconData = await rootBundle.load('assets/icon/app_icon.png');
+      final iconFile = File('${dir.path}${Platform.pathSeparator}app_icon.png');
+      await iconFile.writeAsBytes(iconData.buffer.asUint8List(), flush: true);
+      appIconPath = iconFile.path;
+    } catch (_) {}
     await libraryOpen(dbPath: appDbPath);
     await player.loadAudioSettings(); // ReplayGain mode/preamp
     await player.restoreSession(); // best-effort: restore last track + position
@@ -54,13 +83,7 @@ class _StartupErrorApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: PeerBeatApp._seed,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      darkTheme: peerBeatTheme(Brightness.dark),
       home: Scaffold(
         body: Center(
           child: Padding(
@@ -93,8 +116,6 @@ String _deviceName() {
 
 class PeerBeatApp extends StatefulWidget {
   const PeerBeatApp({super.key});
-
-  static const _seed = Color(0xFF2BD9C6); // neon teal from the PeerBeat icon
 
   @override
   State<PeerBeatApp> createState() => _PeerBeatAppState();
@@ -140,23 +161,37 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
 
   @override
   Widget build(BuildContext context) {
-    ColorScheme scheme(Brightness b) =>
-        ColorScheme.fromSeed(seedColor: PeerBeatApp._seed, brightness: b);
-    return MaterialApp(
-      title: 'PeerBeat',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: scheme(Brightness.light),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: scheme(Brightness.dark),
-        useMaterial3: true,
-      ),
-      themeMode: ThemeMode.dark,
-      builder: (context, child) =>
-          _GlobalPlaybackShortcuts(child: child ?? const SizedBox.shrink()),
-      home: const LibraryHome(),
+    // Rebuild the app theme only when the accent, theme mode, or chosen seed
+    // changes (track / settings cadence) — MaterialApp animates the new
+    // ColorScheme via its internal AnimatedTheme, so this never rebuilds on the
+    // position tick.
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        player.accentColor,
+        player.themeMode,
+        player.accentSeed,
+      ]),
+      builder: (context, _) {
+        // Album-art accent (when dynamic) wins; else the user's fixed accent;
+        // else the built-in default.
+        final seed =
+            player.accentColor.value ?? player.accentSeed.value ?? kDefaultSeed;
+        final mode = switch (player.themeMode.value) {
+          AppThemeMode.system => ThemeMode.system,
+          AppThemeMode.light => ThemeMode.light,
+          AppThemeMode.dark => ThemeMode.dark,
+        };
+        return MaterialApp(
+          title: 'PeerBeat',
+          debugShowCheckedModeBanner: false,
+          theme: peerBeatTheme(Brightness.light, seed: seed),
+          darkTheme: peerBeatTheme(Brightness.dark, seed: seed),
+          themeMode: mode,
+          builder: (context, child) =>
+              _GlobalPlaybackShortcuts(child: child ?? const SizedBox.shrink()),
+          home: const LibraryHome(),
+        );
+      },
     );
   }
 }
@@ -243,6 +278,16 @@ class _GlobalPlaybackShortcutsState extends State<_GlobalPlaybackShortcuts> {
                   player.setShuffle(!player.shuffle),
               const SingleActivator(LogicalKeyboardKey.keyR):
                   player.cycleRepeat,
+              // Track navigation by letter (alongside Ctrl+←/→).
+              const SingleActivator(LogicalKeyboardKey.keyN): () =>
+                  player.next(),
+              const SingleActivator(LogicalKeyboardKey.keyP): () =>
+                  player.previous(),
+              // Speed nudge (engine clamps to 0.5–2×).
+              const SingleActivator(LogicalKeyboardKey.bracketRight): () =>
+                  player.setSpeed(player.speed + 0.25),
+              const SingleActivator(LogicalKeyboardKey.bracketLeft): () =>
+                  player.setSpeed(player.speed - 0.25),
             },
       child: widget.child,
     );

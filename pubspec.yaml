@@ -7,8 +7,6 @@ environment:
 # Dart pub workspace — all members resolve together with one lockfile.
 workspace:
   - apps/peerbeat
-  - packages/pb_audio
-  - packages/pb_os
   - packages/pb_design
 
 dev_dependencies:

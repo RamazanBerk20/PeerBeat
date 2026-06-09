@@ -81,6 +81,41 @@ pub(crate) fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackRow> {
     })
 }
 
+/// Groups of tracks that share an audio content hash (true duplicate files),
+/// each group having 2+ members. Ordered by descending group size; within a
+/// group by `id` ascending (so "keep the first" is the earliest-added). Tracks
+/// without a content hash are ignored.
+pub fn duplicate_groups(conn: &Connection) -> rusqlite::Result<Vec<Vec<TrackRow>>> {
+    let mut hash_stmt = conn.prepare(
+        "SELECT content_hash FROM tracks
+         WHERE content_hash IS NOT NULL AND content_hash <> ''
+         GROUP BY content_hash HAVING COUNT(*) > 1
+         ORDER BY COUNT(*) DESC, content_hash",
+    )?;
+    let hashes: Vec<String> = hash_stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(hash_stmt);
+
+    let sql = format!(
+        "{SELECT_ROW} tracks t
+         LEFT JOIN albums al ON al.id = t.album_id
+         WHERE t.content_hash = ?1
+         ORDER BY t.id"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let mut groups = Vec::with_capacity(hashes.len());
+    for h in hashes {
+        let rows: Vec<TrackRow> = stmt
+            .query_map([&h], map_row)?
+            .collect::<rusqlite::Result<_>>()?;
+        if rows.len() > 1 {
+            groups.push(rows);
+        }
+    }
+    Ok(groups)
+}
+
 fn get_or_create(
     conn: &Connection,
     sql_sel: &str,
@@ -336,6 +371,30 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_groups_finds_shared_content_hash() {
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        let mut a = sample("/m/a.flac", "Song", "Artist", "Album");
+        a.content_hash = Some("HASH1".into());
+        let mut b = sample("/m/b.flac", "Song (copy)", "Artist", "Album");
+        b.content_hash = Some("HASH1".into());
+        let mut u = sample("/m/u.flac", "Unique", "Artist", "Album");
+        u.content_hash = Some("HASH2".into());
+        let n = sample("/m/n.flac", "NoHash", "Artist", "Album"); // content_hash None
+        let id_a = upsert_track(c, &a).unwrap();
+        let id_b = upsert_track(c, &b).unwrap();
+        upsert_track(c, &u).unwrap();
+        upsert_track(c, &n).unwrap();
+
+        let groups = duplicate_groups(c).unwrap();
+        assert_eq!(groups.len(), 1, "only HASH1 is duplicated");
+        assert_eq!(groups[0].len(), 2);
+        // ordered by id ascending → keep-the-first is the earliest-added
+        assert_eq!(groups[0][0].id, id_a);
+        assert_eq!(groups[0][1].id, id_b);
+    }
+
+    #[test]
     fn browse_and_search() {
         let db = Db::open_in_memory().unwrap();
         let c = db.conn();
@@ -356,5 +415,44 @@ mod tests {
         // 'Re' matches 'Reunion' title)
         let short = search_tracks(c, "Re", 10).unwrap();
         assert!(short.iter().any(|r| r.title == "Reunion"));
+    }
+
+    #[test]
+    fn browse_songs_scales_to_50k() {
+        use std::time::Instant;
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        // Seed 50k minimal tracks in one transaction (fast).
+        c.execute_batch("BEGIN").unwrap();
+        {
+            let mut stmt = c
+                .prepare(
+                    "INSERT INTO tracks(path, normalized_path, title, added_at) \
+                     VALUES (?1, ?2, ?3, ?4)",
+                )
+                .unwrap();
+            for i in 0..50_000i64 {
+                let p = format!("/m/{i:06}.flac");
+                stmt.execute(params![p, p, format!("Song {i:06}"), i])
+                    .unwrap();
+            }
+        }
+        c.execute_batch("COMMIT").unwrap();
+
+        // First page must come back quickly + correctly.
+        let t = Instant::now();
+        let page = browse_songs(c, 300, 0).unwrap();
+        let elapsed = t.elapsed();
+        assert_eq!(page.len(), 300);
+        assert_eq!(page[0].title, "Song 000000"); // alphabetical order holds
+                                                  // Generous ceiling: the spec target is <2s for the whole 50k UI load; the
+                                                  // paged query is far under that. Mostly a guard against an O(n^2) regression.
+        assert!(
+            elapsed.as_millis() < 1500,
+            "first page of 50k took {elapsed:?}"
+        );
+
+        // A deep page still returns a full page.
+        assert_eq!(browse_songs(c, 300, 49_500).unwrap().len(), 300);
     }
 }

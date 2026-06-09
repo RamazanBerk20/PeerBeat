@@ -1,78 +1,59 @@
 # PeerBeat — Privacy
 
-**PeerBeat is offline-first and LAN-only.** It has no accounts, no cloud, no
-telemetry, no analytics, no ads, and never requires an internet connection. The
-app makes **no outbound internet connections** at all. The only data that ever
-leaves your device goes **directly to a peer on your local network that you
-explicitly shared with**.
+**PeerBeat is offline-first and local-only.** No accounts, no cloud, no
+telemetry, no analytics, no third-party streaming services, and no internet
+connection is ever required. The only network traffic PeerBeat originates is on
+your **local network**, and only when you opt into LAN sharing.
 
-This document lists *every* piece of data PeerBeat stores or transmits, and where.
+## Everything stored (on your device)
 
-## 1. Data stored on your device (local only)
+- **SQLite database** (one local file): your library metadata (titles, artists,
+  albums, genres, years, durations, codecs, ReplayGain values), play counts and
+  history, ratings, favorites, playlists and smart-playlist rules, the play
+  queue, EQ presets, and app settings (including the resume bookmark, theme, and
+  output device). Full schema: [`data-model.md`](data-model.md).
+- **Album-art cache**: deduplicated cover images extracted from your files,
+  stored as local files referenced by `art_cache`.
+- **TLS identity** (only if you host sharing): a self-signed certificate + key
+  generated on your device.
+- **TOFU trust store** (`known_hosts`): for hosts you've connected to — their
+  display name, color, and pinned certificate fingerprint.
+- **Share config** (`shares`): which playlists you expose and how. PINs are
+  stored **only as Argon2id hashes**, never in clear.
+- **Approved-peer decisions** (`remembered_peers`) and a **transfer log**
+  (who streamed/downloaded what from you), for the host's own dashboard.
 
-| Data | Where | Notes |
-|------|-------|-------|
-| Track metadata (title, artist, album, genre, year, durations, codec, bitrate, ratings, play counts, last-played) | SQLite DB in app-private dir | Read from your files; editable |
-| Play history (event log) | SQLite DB | Powers Recently/Most-Played + smart playlists |
-| Playlists & smart-playlist rules | SQLite DB | |
-| Album art | On-disk cache dir, deduped by image hash | Extracted from your files |
-| EQ presets, settings, last playback position | SQLite DB / settings file | Resume-on-restart |
-| Watch-folder paths | SQLite DB | Library roots you chose |
-| **Known-host pins** (host id, display name, colour, certificate fingerprint) | SQLite DB | TOFU trust for LAN peers |
-| **Remembered peers** (Approved-mode decisions) | SQLite DB | Allow/deny memory |
-| **Your shares** (which playlists, permission, PIN hash) | SQLite DB | PIN stored only as a salted hash |
-| **Transfer log** (who streamed/downloaded what, when) | SQLite DB | For your own safety dashboard; local |
-| Your host identity (random id, display name, avatar colour) + self-signed TLS cert & private key | App-private dir, restrictive perms | Generated on first run; never leaves the device (only the public fingerprint is shared) |
+Session bearer tokens for LAN auth live **in memory only** (as SHA-256 digests)
+and are never written to disk.
 
-Your **music files are never moved or copied** except when *you* download a track
-from a peer (into your library) or *you* edit a tag (written back to that file).
+## Everything transmitted (LAN only, opt-in)
 
-## 2. Data transmitted — only over your LAN, only when you share
+Sharing is off until you enable it. When enabled:
 
-When you act as a **host** and mark playlists shareable, connected peers can
-receive, over TLS on your local network:
+- **mDNS advertisement** on `_peerbeat._tcp`: your host display name, a host id,
+  and your certificate fingerprint — broadcast on the local network so peers can
+  discover you. (You choose the display name; it need not identify you.)
+- **To peers you authorize**: shareable playlist/library listings, track
+  metadata + album art, and the **original audio bytes** you stream or allow to
+  be downloaded — all over TLS.
+- **From peers**: a PIN (if you set one), clock-sync pings, and optional track
+  requests in party mode.
 
-| Data | When | To whom |
-|------|------|---------|
-| Host name, avatar colour, protocol version, **public** cert fingerprint | Advertised via mDNS + `GET /info` | Anyone on the LAN can see the advertisement |
-| Shareable playlist names + track metadata + album art | On request | Pinned peers you allow (per your sharing mode) |
-| Audio bytes (original file, or transcoded if needed) | On stream/download | Peers with a valid session token + permission |
-| Connected-peer list (names/colours) | Only if you enable "peers can see each other" | Connected peers |
-| Party-mode timing + control messages | In a party session you host | Party participants |
+All of this stays on the LAN. PeerBeat makes no outbound internet connections.
 
-As a **peer**, you transmit to a host: your chosen display name, avatar colour, a
-random peer id, and (if required) the host's session PIN. You receive the data
-above into your own local library.
+## What is never collected or sent
 
-### What is *never* transmitted
-- No data to any server on the internet — there is no server.
-- No identifiers tied to your real identity (host/peer ids are random).
-- No usage analytics or crash telemetry.
-- Nothing leaves the LAN. The UI states this explicitly on the Network screen.
+- No user accounts, emails, or device identifiers tied to a service.
+- No usage analytics, crash telemetry, or "phone-home" of any kind.
+- No listening data leaves your device except the audio you deliberately share
+  on your LAN.
 
-## 3. Security of what is transmitted
+## Your controls
 
-All LAN traffic is **TLS 1.3** with a per-host self-signed certificate, **pinned
-on first use** (TOFU). On untrusted shared Wi-Fi this keeps your streams
-encrypted and warns hard if a host's certificate ever changes (possible MITM).
-PINs are transmitted over the established TLS channel and stored only as salted
-hashes. See [`security.md`](security.md).
-
-## 4. Permissions PeerBeat requests
-
-| Platform | Permission | Why |
-|----------|-----------|-----|
-| Android | Read audio/media (`READ_MEDIA_AUDIO`) | Import your local music |
-| Android | `POST_NOTIFICATIONS` | Playback notification |
-| Android | `FOREGROUND_SERVICE` + `…_MEDIA_PLAYBACK` | Background playback |
-| Android | `INTERNET` + `CHANGE_WIFI_MULTICAST_STATE` | **LAN sockets + mDNS only** (the `INTERNET` permission is required by Android for *local* TCP sockets; PeerBeat makes no internet calls) |
-| All | Local network access | Discover/serve peers on the LAN |
-
-## 5. Your controls
-
-- Sharing is **off by default**; you choose exactly which playlists are shared and
-  the mode (Open / PIN / Approved).
-- The host dashboard shows every active stream/download and **revokes access with
-  one tap**.
-- You can clear known-host pins, remembered peers, and the transfer log at any
-  time in Settings.
+- Sharing is opt-in per scope (Open / PIN / Approved-peers) with per-share
+  stream-or-download permission.
+- The host dashboard shows current streams/downloads and offers **one-tap revoke
+  all** (which also drops live party sockets).
+- The Network screen states plainly that everything is local-network only.
+- Deleting the app's data directory removes the database, art cache, and TLS
+  identity — there is nothing stored anywhere else.

@@ -52,7 +52,7 @@ jobs:
             apps/peerbeat/build/app/outputs/flutter-apk/*.apk
             apps/peerbeat/build/app/outputs/bundle/release/*.aab
 
-  # ── Linux: AppImage + .deb + Flatpak bundle ────────────────────────────────
+  # ── Linux: AppImage + .deb + tarball ───────────────────────────────────────
   linux:
     runs-on: ubuntu-latest
     steps:

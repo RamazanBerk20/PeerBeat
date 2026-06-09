@@ -24,37 +24,42 @@ controls, or download them — encrypted, and never touching the internet. Start
 What works today:
 
 - **Playback** — play/pause/seek/prev/next, shuffle, repeat (off/all/one), volume +
-  mute, variable speed, resume-on-restart.
+  mute, gapless, configurable crossfade (0–12 s), variable speed (0.5–2×,
+  pitch-preserving on Linux/macOS), resume-on-restart.
 - **Library** — MP3/FLAC/WAV/AAC/OGG/M4A; read & edit tags; album art with fallback;
   browse by Songs/Albums/Artists/Genres/Years/Recently-Added; fast FTS5 fuzzy search;
-  add folders + on-demand rescan.
+  add folders + watch + on-demand rescan.
 - **Playlists & queue** — full playlist CRUD + duplicate + drag-and-drop reorder,
-  Play-Next/Add-to-Queue, rule-based smart playlists, M3U/PLS import-export.
+  Play-Next/Add-to-Queue, rule-based smart playlists, auto-lists
+  (Recently/Most/Never-Played, Favorites), M3U/PLS import-export.
 - **LAN sharing** — mDNS discovery (+ manual IP), per-host self-signed **TLS with
-  TOFU certificate pinning**, and HTTP-Range streaming of a host's library; the UI
-  makes it explicit that nothing leaves the local network.
+  TOFU certificate pinning**, Open/PIN/Approved-peers access modes, per-playlist
+  stream-or-download permissions, HTTP-Range streaming **and downloads**, a host
+  dashboard of active transfers with one-tap revoke, and synchronized **party mode**
+  over a WebSocket clock-sync channel. The UI makes it explicit that nothing leaves
+  the local network.
 - **Audio quality** — 10-band graphic EQ + built-in & custom presets, ReplayGain
-  normalization, output-device selection, stereo widening.
-- **Now Playing & UI** — large artwork, scrubber, up-next, persistent mini-player,
-  light/dark Material 3, responsive desktop/phone/tablet layouts.
-- **OS integration** — MPRIS media controls + media keys on Linux; Android playback
-  via ExoPlayer (lockscreen / notification / background).
+  normalization, output-device selection, stereo widening (desktop engine).
+- **Now Playing & UI** — large artwork, scrubber, up-next, synced `.lrc`/embedded
+  **lyrics**, persistent mini-player, light/dark Material 3 with **album-art dynamic
+  theming**, responsive desktop/phone/tablet layouts, desktop keyboard shortcuts.
+- **OS integration** — MPRIS (Linux) + SMTC (Windows) media controls & keys; system
+  tray + close-to-tray (Wayland falls back to system notifications); Android
+  lockscreen / notification / background playback.
 
 ## Roadmap
 
 Targeted next — see [`docs/STATUS.md`](docs/STATUS.md) for the full done/partial/planned matrix:
 
-- **Audio engine** — gapless, configurable crossfade (0–12 s), and *pitch-preserving*
-  speed (the current desktop engine shifts pitch with speed).
-- **LAN sharing** — mark playlists shareable, Open/PIN/Approved access modes,
-  per-playlist stream-or-download permissions, track/playlist **downloads**, a host
-  dashboard of active transfers with one-tap revoke, and synchronized **party mode**
-  over a WebSocket control channel.
-- **Library/UX** — active watch-folders, auto-lists (Recently/Most/Never-Played,
-  Favorites), a synced **lyrics** panel (`.lrc` / embedded), dynamic theming from
-  album art, keyboard shortcuts + gestures, and a full WCAG 2.1 AA pass.
-- **OS integration** — Windows SMTC, a tray mini-player + custom sliding notification
-  (with a Wayland fallback to system notifications), close-to-tray, and Android Auto.
+- **Audio** — pitch-preserving speed on Windows; EQ/ReplayGain on Android.
+- **LAN/UX** — remote volume + metadata/art preview before streaming; per-folder
+  watch toggle; a full WCAG 2.1 AA pass (keyboard focus traversal, contrast).
+- **OS integration** — a tray-anchored mini-player + custom sliding notification on
+  X11/Windows, and Android Auto.
+- **Packaging** — Flatpak alongside AppImage/`.deb`.
+- **100× features** — synced-lyrics polish + audio visualizer, a smarter library
+  (live watch, batch tag editing, duplicate detection), party/social polish, and
+  personalization (theme presets, layouts, full shortcuts/gestures).
 
 ## Architecture
 

@@ -26,8 +26,21 @@ mod engine;
 #[cfg(not(target_os = "android"))]
 mod eq;
 #[cfg(not(target_os = "android"))]
+pub mod spectrum;
+#[cfg(not(target_os = "android"))]
 mod timestretch;
 #[cfg(not(target_os = "android"))]
 mod widen;
 
 pub use engine::AudioEngine;
+
+/// Latest Now-Playing visualizer spectrum: `bands` log-spaced magnitudes (each
+/// ~0..1). Silent (all-zero) on Android, where there is no desktop engine.
+#[cfg(not(target_os = "android"))]
+pub fn spectrum_bands(bands: usize) -> Vec<f32> {
+    spectrum::compute(bands)
+}
+#[cfg(target_os = "android")]
+pub fn spectrum_bands(bands: usize) -> Vec<f32> {
+    vec![0.0; bands]
+}

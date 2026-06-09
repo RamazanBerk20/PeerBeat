@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../src/rust/api/library.dart';
 import '../src/rust/db/playlists.dart';
@@ -132,6 +133,28 @@ class _ShareTileState extends State<_ShareTile> {
   }
 
   Future<void> _save({required bool enabled}) async {
+    final newPin = _pin.text.trim();
+    final hasPin = widget.existing?.hasPin ?? false;
+    // Validate a PIN share before hitting the network: a fresh PIN must be 4–6
+    // digits, and a brand-new PIN share must actually set one.
+    if (enabled && _mode == 'pin') {
+      final needsPin = !hasPin && newPin.isEmpty;
+      final badPin =
+          newPin.isNotEmpty &&
+          !(newPin.length >= 4 &&
+              newPin.length <= 6 &&
+              RegExp(r'^\d+$').hasMatch(newPin));
+      if (needsPin || badPin) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              needsPin ? 'Set a 4–6 digit PIN first' : 'PIN must be 4–6 digits',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     setState(() => _busy = true);
     try {
       await shareSet(
@@ -204,7 +227,7 @@ class _ShareTileState extends State<_ShareTile> {
                         DropdownMenuItem(value: 'pin', child: Text('PIN')),
                         DropdownMenuItem(
                           value: 'approved',
-                          child: Text('Approved (soon)'),
+                          child: Text('Approved'),
                         ),
                       ],
                     ),
@@ -236,7 +259,10 @@ class _ShareTileState extends State<_ShareTile> {
                   TextField(
                     controller: _pin,
                     keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     decoration: InputDecoration(
+                      counterText: '',
                       labelText: hasPin
                           ? 'Change PIN (leave blank to keep)'
                           : 'Set a 4–6 digit PIN',
@@ -246,8 +272,8 @@ class _ShareTileState extends State<_ShareTile> {
                   const Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
-                      'Approved-peer prompts arrive with the control channel; '
-                      'peers cannot connect in this mode yet.',
+                      'Each new device asks to connect; you allow or deny it on '
+                      'the Network screen (tick "Always" to remember a device).',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),

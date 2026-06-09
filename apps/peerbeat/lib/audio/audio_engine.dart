@@ -1,10 +1,33 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:just_audio/just_audio.dart' as ja;
 
 import '../net/tofu.dart';
 import '../src/rust/api/audio.dart' as rust;
+import '../util/log.dart';
+
+/// Now-playing metadata for the OS media session (Android lockscreen /
+/// notification). Desktop engines ignore it (MPRIS is fed separately). Kept
+/// engine-agnostic so the abstract interface doesn't leak just_audio types.
+class MediaTag {
+  const MediaTag({
+    required this.id,
+    required this.title,
+    this.artist = '',
+    this.album = '',
+    this.artUri,
+    this.durationMs = 0,
+  });
+
+  final String id;
+  final String title;
+  final String artist;
+  final String album;
+  final Uri? artUri;
+  final int durationMs;
+}
 
 /// Platform-agnostic audio transport.
 ///
@@ -16,10 +39,10 @@ abstract class AudioEngine {
     return RustDesktopEngine();
   }
 
-  Future<void> playPath(String path, {Duration? duration});
+  Future<void> playPath(String path, {Duration? duration, MediaTag? tag});
 
   /// Play a remote URL (LAN stream).
-  Future<void> playUrl(String url, {Duration? duration});
+  Future<void> playUrl(String url, {Duration? duration, MediaTag? tag});
   Future<void> pause();
   Future<void> resume();
   Future<void> stop();
@@ -79,19 +102,26 @@ class RustDesktopEngine implements AudioEngine {
   }
 
   @override
-  Future<void> playPath(String path, {Duration? duration}) async {
+  Future<void> playPath(
+    String path, {
+    Duration? duration,
+    MediaTag? tag,
+  }) async {
+    // tag is unused on desktop — MPRIS metadata is published separately.
     rust.audioPlayPath(path: path);
     _duration = duration ?? Duration(milliseconds: rust.audioDurationMs());
     _setPlaying(true);
   }
 
   @override
-  Future<void> playUrl(String url, {Duration? duration}) async {
+  Future<void> playUrl(String url, {Duration? duration, MediaTag? tag}) async {
     // rodio plays from a file; cache the LAN stream to disk (reused on replay,
     // swept on startup). True HTTP Range streaming is a later slice.
     try {
       final dir = await _streamCacheDir();
-      final file = File('${dir.path}/${url.hashCode}.audio');
+      // Key on a stable hash of the host+path (NOT the volatile `?token=`), so the
+      // same track reuses its cache within a session; `hashCode` could collide.
+      final file = File('${dir.path}/${_cacheKey(url)}.audio');
       if (!await file.exists() || await file.length() == 0) {
         final part = File('${file.path}.part');
         // TOFU client: trusts a self-signed cert only if its fingerprint
@@ -104,6 +134,7 @@ class RustDesktopEngine implements AudioEngine {
           }
           await resp.pipe(part.openWrite());
           await part.rename(file.path); // atomic publish
+          unawaited(_capStreamCache(dir)); // bound disk use, oldest-first
         } finally {
           client.close();
         }
@@ -114,6 +145,52 @@ class RustDesktopEngine implements AudioEngine {
     } catch (e) {
       _setPlaying(false);
       throw Exception('LAN stream playback failed: $e');
+    }
+  }
+
+  /// Deterministic, low-collision filename for a stream URL. FNV-1a over the
+  /// host+path (query dropped) — no crypto dependency needed for a cache key.
+  static String _cacheKey(String url) {
+    final uri = Uri.tryParse(url);
+    final basis = uri == null ? url : '${uri.host}:${uri.port}${uri.path}';
+    var hash = 0xcbf29ce484222325;
+    for (final c in basis.codeUnits) {
+      hash = (hash ^ c) * 0x100000001b3;
+    }
+    return (hash & 0x7fffffffffffffff).toRadixString(16);
+  }
+
+  /// Cap of the on-disk stream cache. Streamed LAN audio is transient, so a
+  /// generous bound is enough to avoid unbounded growth within a session.
+  static const int _cacheCapBytes = 1500 * 1024 * 1024; // ~1.5 GB
+
+  /// Evict oldest cached files once the cache exceeds [_cacheCapBytes].
+  static Future<void> _capStreamCache(Directory dir) async {
+    try {
+      final files = <File>[];
+      var total = 0;
+      await for (final e in dir.list()) {
+        if (e is File) {
+          files.add(e);
+          total += await e.length();
+        }
+      }
+      if (total <= _cacheCapBytes) return;
+      files.sort(
+        (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+      );
+      for (final f in files) {
+        if (total <= _cacheCapBytes) break;
+        final len = await f.length();
+        try {
+          await f.delete();
+          total -= len;
+        } catch (_) {
+          // skip a file we can't evict; the cap is best-effort
+        }
+      }
+    } catch (e) {
+      logErr('cache.cap', e);
     }
   }
 
@@ -135,10 +212,14 @@ class RustDesktopEngine implements AudioEngine {
         await for (final e in dir.list()) {
           try {
             await e.delete(recursive: true);
-          } catch (_) {}
+          } catch (_) {
+            // a single stale file we can't delete is harmless; skip it
+          }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      logErr('cache.sweep', e);
+    }
   }
 
   @override
@@ -220,19 +301,51 @@ class RustDesktopEngine implements AudioEngine {
 
 /// Android: ExoPlayer via just_audio.
 class ExoPlayerEngine implements AudioEngine {
-  final ja.AudioPlayer _player = ja.AudioPlayer();
+  // The platform graphic EQ, inserted into the player's audio pipeline. Its
+  // `parameters` (and per-band gains) only resolve once a source has activated
+  // the effect, so we cache the desired curve and (re)apply it after each load.
+  final ja.AndroidEqualizer _eq = ja.AndroidEqualizer();
+  late final ja.AudioPlayer _player = ja.AudioPlayer(
+    audioPipeline: ja.AudioPipeline(androidAudioEffects: [_eq]),
+  );
 
+  // 10-band ISO octave centres (Hz), matching the desktop engine + the UI.
+  static const _centers = <double>[
+    31.25,
+    62.5,
+    125,
+    250,
+    500,
+    1000,
+    2000,
+    4000,
+    8000,
+    16000,
+  ];
+  List<double> _eqGains = List<double>.filled(10, 0.0);
+  double _eqPreampDb = 0.0;
+  bool _eqOn = false;
+
+  // Metadata for the OS media session is published by PeerBeatAudioHandler
+  // (audio_service) straight from the player, so the just_audio sources need no
+  // MediaItem tag here.
   @override
-  Future<void> playPath(String path, {Duration? duration}) async {
-    await _player.setFilePath(path);
+  Future<void> playPath(
+    String path, {
+    Duration? duration,
+    MediaTag? tag,
+  }) async {
+    await _player.setAudioSource(ja.AudioSource.uri(Uri.file(path)));
+    unawaited(_pushEq()); // (re)apply once the effect activates on this source
     unawaited(
       _player.play(),
     ); // do not await: completes only when playback ends
   }
 
   @override
-  Future<void> playUrl(String url, {Duration? duration}) async {
-    await _player.setUrl(url);
+  Future<void> playUrl(String url, {Duration? duration, MediaTag? tag}) async {
+    await _player.setAudioSource(ja.AudioSource.uri(Uri.parse(url)));
+    unawaited(_pushEq());
     unawaited(
       _player.play(),
     ); // do not await: completes only when playback ends
@@ -259,8 +372,46 @@ class ExoPlayerEngine implements AudioEngine {
 
   @override
   Future<void> setEq(List<double> gains, double preampDb) async {
-    // Android platform EQ lands with the Android audio-effects pass. Persisting
-    // and exposing the same controls now keeps settings cross-platform.
+    _eqGains = gains.length == 10 ? gains : List<double>.filled(10, 0.0);
+    _eqPreampDb = preampDb;
+    _eqOn = preampDb.abs() > 0.01 || _eqGains.any((g) => g.abs() > 0.01);
+    await _pushEq();
+  }
+
+  /// Interpolate the desired gain (dB) at [freq] from the 10-band curve, on a
+  /// log-frequency axis (so it lands sensibly on the device's own band centres).
+  double _gainAt(double freq) {
+    if (freq <= _centers.first) return _eqGains.first;
+    if (freq >= _centers.last) return _eqGains.last;
+    for (var i = 0; i < _centers.length - 1; i++) {
+      final lo = _centers[i], hi = _centers[i + 1];
+      if (freq >= lo && freq <= hi) {
+        final t = (_logf(freq) - _logf(lo)) / (_logf(hi) - _logf(lo));
+        return _eqGains[i] + (_eqGains[i + 1] - _eqGains[i]) * t;
+      }
+    }
+    return 0.0;
+  }
+
+  static double _logf(double x) => math.log(x) / math.ln10;
+
+  /// Push the cached EQ curve onto the device equalizer. `parameters` resolves
+  /// only after a source activates the effect; before then this just pends.
+  Future<void> _pushEq() async {
+    try {
+      final params = await _eq.parameters;
+      await _eq.setEnabled(_eqOn);
+      if (!_eqOn) return;
+      for (final band in params.bands) {
+        final g = (_gainAt(band.centerFrequency) + _eqPreampDb).clamp(
+          params.minDecibels,
+          params.maxDecibels,
+        );
+        await band.setGain(g);
+      }
+    } catch (e) {
+      logErr('android.eq', e);
+    }
   }
 
   @override

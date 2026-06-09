@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 
@@ -9,10 +10,15 @@ import '../audio/replay_gain.dart';
 import '../src/rust/api/audio.dart' show OutputDeviceRow;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
+import '../ui/theme.dart' show accentFromArt;
 
 export '../audio/replay_gain.dart' show ReplayGainMode;
 
 enum RepeatMode { off, all, one }
+
+/// App theme mode (kept material-free here; mapped to Flutter's `ThemeMode` in
+/// the app shell).
+enum AppThemeMode { system, light, dark }
 
 const _kResumeTrack = 'resume.track_id';
 const _kResumePos = 'resume.position_ms';
@@ -24,6 +30,9 @@ const _kEqPreamp = 'audio.eq_preamp';
 const _kOutputDevice = 'audio.output_device';
 const _kStereoWidth = 'audio.stereo_width';
 const _kCrossfade = 'audio.crossfade';
+const _kDynamicTheme = 'ui.dynamic_theme';
+const _kThemeMode = 'ui.theme_mode';
+const _kAccentSeed = 'ui.accent_seed';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -101,6 +110,18 @@ class PlayerController extends ChangeNotifier {
   // ChangeNotifier, which now fires only on real state changes (track, play/pause,
   // volume, shuffle, ...). This also stops the entire UI rebuilding 5x/second.
   final ValueNotifier<Duration> positionNotifier = ValueNotifier(Duration.zero);
+  // Album-art accent for dynamic theming. Updated ONLY on track change (never on
+  // the position tick) and consumed by the app shell via AnimatedTheme — so the
+  // root theme never rebuilds mid-position-tick (the old dynamic-theme crash).
+  final ValueNotifier<Color?> accentColor = ValueNotifier(null);
+  bool _dynamicTheme = true;
+  bool get dynamicTheme => _dynamicTheme;
+  // Light/dark/system mode, and a user-chosen fixed accent seed used when
+  // dynamic theming yields nothing (or is off). Both drive the app shell theme.
+  final ValueNotifier<AppThemeMode> themeMode = ValueNotifier(
+    AppThemeMode.dark,
+  );
+  final ValueNotifier<Color?> accentSeed = ValueNotifier(null);
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
   // holding the track; the first play loads it and seeks to `_resumeFrom`.
@@ -153,9 +174,17 @@ class PlayerController extends ChangeNotifier {
       _order.isNotEmpty && (_pos > 0 || _repeat == RepeatMode.all);
   String? get lastError => _lastError;
 
-  /// Play [tracks] starting at [index] (the new queue).
-  Future<void> playQueue(List<TrackRow> tracks, int index) async {
-    _resumeFrom = null; // a fresh user choice supersedes any restored bookmark
+  /// Play [tracks] starting at [index] (the new queue). If [startAt] is given
+  /// the track loads already positioned there (used by party sync to avoid a
+  /// brief play-from-zero before the seek lands).
+  Future<void> playQueue(
+    List<TrackRow> tracks,
+    int index, {
+    Duration? startAt,
+  }) async {
+    // A fresh user choice supersedes any restored bookmark, unless an explicit
+    // start position was requested.
+    _resumeFrom = (startAt != null && startAt > Duration.zero) ? startAt : null;
     _queue = List.of(tracks);
     _order = List<int>.generate(_queue.length, (i) => i);
     _pos = index.clamp(0, _order.isEmpty ? 0 : _order.length - 1);
@@ -176,6 +205,69 @@ class PlayerController extends ChangeNotifier {
   void addToQueue(TrackRow t) {
     _queue = [..._queue, t];
     _order = [..._order, _queue.length - 1];
+    notifyListeners();
+  }
+
+  /// Reorder a track within "Up next" (indices are into [upNext]). [newIndex] is
+  /// already adjusted for the removal (ReorderableListView.onReorderItem).
+  void reorderUpNext(int oldIndex, int newIndex) {
+    final base = _pos + 1;
+    if (base < 1) return;
+    final upNextLen = _order.length - base;
+    if (oldIndex < 0 || oldIndex >= upNextLen) return;
+    newIndex = newIndex.clamp(0, upNextLen - 1);
+    final item = _order.removeAt(base + oldIndex);
+    _order.insert(base + newIndex, item);
+    notifyListeners();
+  }
+
+  /// Remove a track from "Up next" by its [upNext] index.
+  void removeFromUpNext(int upNextIndex) {
+    final idx = _pos + 1 + upNextIndex;
+    if (idx <= _pos || idx >= _order.length) return;
+    _order.removeAt(idx);
+    notifyListeners();
+  }
+
+  // ── Sleep timer ──────────────────────────────────────────────────────────
+  Timer? _sleepTimer;
+  DateTime? _sleepDeadline;
+  bool get sleepActive => _sleepTimer != null;
+
+  /// Time left on the sleep timer, or null if it's off.
+  Duration? get sleepRemaining {
+    final d = _sleepDeadline;
+    if (d == null) return null;
+    final r = d.difference(DateTime.now());
+    return r.isNegative ? Duration.zero : r;
+  }
+
+  /// Arm (or, with null/zero, cancel) the sleep timer. On fire it fades the
+  /// volume out then pauses, restoring the volume so the next play is normal.
+  void setSleepTimer(Duration? duration) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepDeadline = null;
+    if (duration != null && duration > Duration.zero) {
+      _sleepDeadline = DateTime.now().add(duration);
+      _sleepTimer = Timer(duration, _onSleep);
+    }
+    notifyListeners();
+  }
+
+  Future<void> _onSleep() async {
+    _sleepTimer = null;
+    _sleepDeadline = null;
+    notifyListeners();
+    final restore = _volume;
+    for (var step = 1; step <= 10 && _playing; step++) {
+      _volume = (restore * (1 - step / 10)).clamp(0.0, 1.0);
+      _applyVolume();
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+    if (_playing) toggle(); // pause
+    _volume = restore;
+    _applyVolume();
     notifyListeners();
   }
 
@@ -333,6 +425,49 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle album-art dynamic theming. When off, the accent clears (the app
+  /// falls back to its default seed); when on, recompute for the current track.
+  void setDynamicTheme(bool on) {
+    _dynamicTheme = on;
+    if (on) {
+      unawaited(_updateAccent(current));
+    } else {
+      accentColor.value = null;
+    }
+    unawaited(settingsSet(key: _kDynamicTheme, value: on ? '1' : '0'));
+    notifyListeners();
+  }
+
+  /// Set the app theme mode (system/light/dark).
+  void setThemeMode(AppThemeMode m) {
+    themeMode.value = m;
+    unawaited(settingsSet(key: _kThemeMode, value: m.name));
+    notifyListeners();
+  }
+
+  /// Set the fixed accent seed (null = the built-in default). Used when dynamic
+  /// theming is off, or as the fallback when album art yields no color.
+  void setAccentSeed(Color? c) {
+    accentSeed.value = c;
+    unawaited(
+      settingsSet(key: _kAccentSeed, value: c == null ? '' : '${c.toARGB32()}'),
+    );
+    notifyListeners();
+  }
+
+  /// Recompute the album-art accent for [t]. Best-effort and async; a stale
+  /// result for a track we've since left is discarded.
+  Future<void> _updateAccent(TrackRow? t) async {
+    if (!_dynamicTheme) {
+      accentColor.value = null;
+      return;
+    }
+    final c = await accentFromArt(t?.artPath);
+    if (identical(current, t) || current?.id == t?.id) {
+      accentColor.value = c;
+    }
+  }
+
   void _applyEq() {
     final gains = _eqEnabled ? _eqGains : List<double>.filled(10, 0.0);
     final preamp = _eqEnabled ? _eqPreampDb : 0.0;
@@ -382,6 +517,20 @@ class PlayerController extends ChangeNotifier {
       if (crossfade != null) {
         _crossfade = (double.tryParse(crossfade) ?? 0.0).clamp(0.0, 12.0);
       }
+      final dyn = await settingsGet(key: _kDynamicTheme);
+      if (dyn != null) _dynamicTheme = dyn == '1';
+      final tm = await settingsGet(key: _kThemeMode);
+      if (tm != null) {
+        themeMode.value = AppThemeMode.values.firstWhere(
+          (m) => m.name == tm,
+          orElse: () => AppThemeMode.dark,
+        );
+      }
+      final seedStr = await settingsGet(key: _kAccentSeed);
+      if (seedStr != null && seedStr.isNotEmpty) {
+        final v = int.tryParse(seedStr);
+        if (v != null) accentSeed.value = Color(v);
+      }
       _recomputeRg();
       _applyVolume();
       _applyEq();
@@ -402,9 +551,12 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  /// Set playback speed (0.25–4×). Desktop currently shifts pitch with speed.
+  /// Set playback speed (0.5–2×). Pitch-preserving on Linux/macOS (Signalsmith
+  /// Stretch); on Windows it currently falls back to a pitch-shifting resample.
+  /// The range matches the engine's safe bounds so the UI never shows a speed
+  /// the engine would silently clamp away.
   void setSpeed(double s) {
-    _speed = s.clamp(0.25, 4.0);
+    _speed = s.clamp(0.5, 2.0);
     _engine.setSpeed(_speed);
     notifyListeners();
   }
@@ -447,13 +599,25 @@ class PlayerController extends ChangeNotifier {
     _playing = true;
     _userPaused = false;
     _lastError = null;
+    unawaited(_updateAccent(t)); // album-art accent for dynamic theming
     notifyListeners();
     try {
       final p = t.path;
+      // Metadata for the OS media session (Android lockscreen/notification).
+      final tag = MediaTag(
+        id: '${t.id}',
+        title: t.title.isEmpty ? 'Unknown title' : t.title,
+        artist: t.artist,
+        album: t.album,
+        artUri: (t.artPath != null && t.artPath!.isNotEmpty)
+            ? Uri.file(t.artPath!)
+            : null,
+        durationMs: t.durationMs,
+      );
       if (p.startsWith('http://') || p.startsWith('https://')) {
-        await _engine.playUrl(p, duration: duration);
+        await _engine.playUrl(p, duration: duration, tag: tag);
       } else {
-        await _engine.playPath(p, duration: duration);
+        await _engine.playPath(p, duration: duration, tag: tag);
       }
       _engineLoaded = true;
       if (_persistSettings && !p.startsWith('http')) {
@@ -628,8 +792,12 @@ class PlayerController extends ChangeNotifier {
   void dispose() {
     _posSub.cancel();
     _playSub.cancel();
+    _sleepTimer?.cancel();
     _engine.dispose();
     positionNotifier.dispose();
+    accentColor.dispose();
+    themeMode.dispose();
+    accentSeed.dispose();
     super.dispose();
   }
 }

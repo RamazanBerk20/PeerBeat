@@ -35,6 +35,12 @@
     <content_attribute id="social-audio">intense</content_attribute>
   </content_rating>
   <releases>
+    <release version="0.3.0" date="2026-06-09">
+      <description>
+        <p>Audit-driven correctness, security, and accessibility pass; rebuilt
+        documentation. Toward a release candidate.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-05-30">
       <description><p>Initial release.</p></description>
     </release>

@@ -8,8 +8,42 @@ use std::sync::OnceLock;
 static ENGINE: OnceLock<AudioEngine> = OnceLock::new();
 
 fn engine() -> &'static AudioEngine {
-    ENGINE.get_or_init(AudioEngine::new)
+    ENGINE.get_or_init(|| {
+        silence_alsa();
+        AudioEngine::new()
+    })
 }
+
+/// Install a no-op ALSA error handler so libasound's `dmix`/`jack`/`/dev/dsp`
+/// probe messages (printed to stderr by cpal during device enumeration / stream
+/// open) don't spam the logs. Linux-only; a no-op elsewhere. Idempotent.
+#[cfg(target_os = "linux")]
+fn silence_alsa() {
+    use std::os::raw::{c_char, c_int};
+    use std::sync::Once;
+    static ONCE: Once = Once::new();
+    // ALSA's handler is variadic; we register a non-variadic no-op and let it
+    // ignore the trailing args (safe — it reads none).
+    type Handler = extern "C" fn(*const c_char, c_int, *const c_char, c_int, *const c_char);
+    #[link(name = "asound")]
+    extern "C" {
+        fn snd_lib_error_set_handler(handler: Handler) -> c_int;
+    }
+    extern "C" fn quiet(
+        _file: *const c_char,
+        _line: c_int,
+        _func: *const c_char,
+        _err: c_int,
+        _fmt: *const c_char,
+    ) {
+    }
+    ONCE.call_once(|| unsafe {
+        snd_lib_error_set_handler(quiet);
+    });
+}
+
+#[cfg(not(target_os = "linux"))]
+fn silence_alsa() {}
 
 pub struct OutputDeviceRow {
     pub id: String,
@@ -49,8 +83,10 @@ pub fn audio_set_volume(volume: f64) {
     engine().set_volume(volume as f32);
 }
 
-/// Playback speed 0.25–4.0 (1.0 = normal). NOTE: rodio's speed also shifts
-/// pitch; pitch-preserving speed arrives with the P4 custom engine.
+/// Playback speed; the engine clamps to 0.5–2.0 (1.0 = normal). On Linux/macOS
+/// this is pitch-preserving via Signalsmith Stretch; on Windows (MSVC) the
+/// stretch stage is disabled and speed falls back to rodio's pitch-shifting
+/// resample.
 #[flutter_rust_bridge::frb(sync)]
 pub fn audio_set_speed(speed: f64) {
     engine().set_speed(speed as f32);
@@ -60,6 +96,14 @@ pub fn audio_set_speed(speed: f64) {
 #[flutter_rust_bridge::frb(sync)]
 pub fn audio_set_crossfade(secs: f64) {
     engine().set_crossfade(secs as f32);
+}
+
+/// Latest Now-Playing visualizer spectrum: `bands` log-spaced magnitudes, each
+/// roughly 0..1. Cheap (one cached 1024-pt FFT); poll at the UI frame rate.
+/// All-zero when idle, and on Android (no desktop engine).
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_spectrum(bands: u32) -> Vec<f32> {
+    crate::audio::spectrum_bands(bands as usize)
 }
 
 /// 10-band graphic EQ, using ISO octave centers from 31 Hz to 16 kHz.
@@ -92,6 +136,7 @@ pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
 pub fn audio_output_devices() -> Result<Vec<OutputDeviceRow>, String> {
     use rodio::cpal::traits::{DeviceTrait, HostTrait};
 
+    silence_alsa(); // quiet libasound's probe spam during enumeration
     let host = rodio::cpal::default_host();
     let default_name = host.default_output_device().and_then(|d| d.name().ok());
     let mut rows = vec![OutputDeviceRow {

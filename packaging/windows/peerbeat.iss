@@ -3,9 +3,9 @@
 ; Produces dist\PeerBeat-Setup-<version>.exe
 
 #define AppName "PeerBeat"
-; Overridable from CI: iscc /DAppVersion=0.1.1 (falls back to this for local builds).
+; Overridable from CI: iscc /DAppVersion=0.3.0 (falls back to this for local builds).
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.3.0"
 #endif
 #define AppPublisher "RamazanBerk20"
 #define AppURL "https://github.com/RamazanBerk20/PeerBeat"

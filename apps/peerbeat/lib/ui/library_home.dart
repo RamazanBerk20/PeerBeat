@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
@@ -36,6 +38,7 @@ class _LibraryHomeState extends State<LibraryHome> {
   bool _busy = false;
   int _version = 0; // bumped after a scan to refresh tab data
   int _count = 0;
+  bool _dragging = false; // a folder is being dragged over the window
 
   @override
   void initState() {
@@ -51,9 +54,14 @@ class _LibraryHomeState extends State<LibraryHome> {
   Future<void> _scan() async {
     final path = await _pickMusicFolder(context);
     if (path == null || path.trim().isEmpty) return;
+    await _scanPath(path.trim());
+  }
+
+  /// Add + scan a single folder, refreshing the count and the visible tabs.
+  Future<void> _scanPath(String path) async {
     setState(() => _busy = true);
     try {
-      final r = await libraryScan(path: path.trim());
+      final r = await libraryScan(path: path);
       await _refreshCount();
       if (mounted) {
         setState(() => _version++);
@@ -75,6 +83,67 @@ class _LibraryHomeState extends State<LibraryHome> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Desktop drag-and-drop: dropping a folder onto the library adds + scans it
+  /// (a dropped file resolves to its containing folder). Only wired on desktop.
+  static bool get _dropSupported =>
+      Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+
+  Future<void> _onFolderDrop(List<String> paths) async {
+    final dirs = <String>{};
+    for (final p in paths) {
+      if (await Directory(p).exists()) {
+        dirs.add(p);
+      } else if (await File(p).exists()) {
+        dirs.add(File(p).parent.path);
+      }
+    }
+    for (final d in dirs) {
+      await _scanPath(d);
+    }
+  }
+
+  /// Wrap the body in a desktop [DropTarget] so a dragged-in folder is added +
+  /// scanned, with a highlight while dragging. No-op on mobile.
+  Widget _wrapDrop(Widget child) {
+    if (!_dropSupported) return child;
+    final cs = Theme.of(context).colorScheme;
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      onDragDone: (detail) {
+        setState(() => _dragging = false);
+        unawaited(_onFolderDrop([for (final f in detail.files) f.path]));
+      },
+      child: Stack(
+        children: [
+          child,
+          if (_dragging)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  alignment: Alignment.center,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.create_new_folder_outlined, size: 40),
+                          SizedBox(height: 12),
+                          Text('Drop a folder to add it to your library'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _manageFolders() async {
@@ -166,28 +235,30 @@ class _LibraryHomeState extends State<LibraryHome> {
                 ),
             ],
           ),
-          body: wide
-              ? Row(
-                  children: [
-                    NavigationRail(
-                      selectedIndex: _section,
-                      onDestinationSelected: (v) =>
-                          setState(() => _section = v),
-                      labelType: NavigationRailLabelType.all,
-                      destinations: [
-                        for (final (icon, sel, label) in _destinations)
-                          NavigationRailDestination(
-                            icon: Icon(icon),
-                            selectedIcon: Icon(sel),
-                            label: Text(label),
-                          ),
-                      ],
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: section),
-                  ],
-                )
-              : section,
+          body: _wrapDrop(
+            wide
+                ? Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: _section,
+                        onDestinationSelected: (v) =>
+                            setState(() => _section = v),
+                        labelType: NavigationRailLabelType.all,
+                        destinations: [
+                          for (final (icon, sel, label) in _destinations)
+                            NavigationRailDestination(
+                              icon: Icon(icon),
+                              selectedIcon: Icon(sel),
+                              label: Text(label),
+                            ),
+                        ],
+                      ),
+                      const VerticalDivider(width: 1),
+                      Expanded(child: section),
+                    ],
+                  )
+                : section,
+          ),
           bottomNavigationBar: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -259,6 +330,21 @@ class _FoldersDialogState extends State<_FoldersDialog> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _toggleWatch(FolderRow f) async {
+    try {
+      await librarySetFolderWatched(folderId: f.id, watched: !f.isWatched);
+      if (!mounted) return;
+      _changed = true;
+      _reload();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not change watching: $e')),
+        );
+      }
     }
   }
 
@@ -335,10 +421,176 @@ class _FoldersDialogState extends State<_FoldersDialog> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: IconButton(
-                    tooltip: 'Remove',
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _remove(f),
+                  subtitle: Text(
+                    f.isWatched
+                        ? 'Watching for changes'
+                        : 'Not watching (scan manually)',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: f.isWatched
+                            ? 'Watching — tap to stop'
+                            : 'Not watching — tap to watch',
+                        isSelected: f.isWatched,
+                        icon: Icon(
+                          f.isWatched ? Icons.sync : Icons.sync_disabled,
+                        ),
+                        onPressed: () => _toggleWatch(f),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _remove(f),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: _findDuplicates,
+          icon: const Icon(Icons.copy_all_outlined),
+          label: const Text('Find duplicates'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _changed),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _findDuplicates() async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DuplicatesDialog(),
+    );
+    if (changed == true && mounted) {
+      _changed = true;
+      _reload();
+    }
+  }
+}
+
+/// Lists groups of byte-identical duplicate tracks and lets the user remove the
+/// extras from the library (files on disk are never deleted).
+class _DuplicatesDialog extends StatefulWidget {
+  const _DuplicatesDialog();
+
+  @override
+  State<_DuplicatesDialog> createState() => _DuplicatesDialogState();
+}
+
+class _DuplicatesDialogState extends State<_DuplicatesDialog> {
+  late Future<List<List<TrackRow>>> _future = libraryDuplicateGroups();
+  bool _changed = false;
+
+  void _reload() => setState(() {
+    _future = libraryDuplicateGroups();
+  });
+
+  Future<void> _remove(TrackRow t) async {
+    try {
+      await libraryRemoveTrack(trackId: t.id);
+      if (!mounted) return;
+      _changed = true;
+      _reload();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not remove: $e')));
+      }
+    }
+  }
+
+  Future<void> _removeExtras(List<TrackRow> group) async {
+    for (var i = 1; i < group.length; i++) {
+      try {
+        await libraryRemoveTrack(trackId: group[i].id);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    _changed = true;
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.copy_all_outlined),
+          SizedBox(width: 12),
+          Expanded(child: Text('Duplicate tracks')),
+        ],
+      ),
+      content: SizedBox(
+        width: 520,
+        height: 360,
+        child: FutureBuilder<List<List<TrackRow>>>(
+          future: _future,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final groups = snap.data!;
+            if (groups.isEmpty) {
+              return const Center(child: Text('No duplicates found.'));
+            }
+            return ListView.builder(
+              itemCount: groups.length,
+              itemBuilder: (_, gi) {
+                final g = groups[gi];
+                return Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        dense: true,
+                        title: Text(
+                          '${g.length} copies · ${g.first.title}',
+                          style: text.titleSmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: TextButton(
+                          onPressed: () => _removeExtras(g),
+                          child: const Text('Remove extras'),
+                        ),
+                      ),
+                      for (var i = 0; i < g.length; i++)
+                        ListTile(
+                          dense: true,
+                          leading: Icon(
+                            i == 0
+                                ? Icons.check_circle_outline
+                                : Icons.subdirectory_arrow_right,
+                            size: 18,
+                          ),
+                          title: Text(
+                            g[i].path,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodySmall,
+                          ),
+                          subtitle: i == 0 ? const Text('Kept') : null,
+                          trailing: i == 0
+                              ? null
+                              : IconButton(
+                                  tooltip: 'Remove from library',
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: () => _remove(g[i]),
+                                ),
+                        ),
+                    ],
                   ),
                 );
               },
@@ -438,8 +690,9 @@ class TrackArt extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(size * 0.2);
     final art = track.artPath;
+    final Widget visual;
     if (art != null && art.isNotEmpty) {
-      return ClipRRect(
+      visual = ClipRRect(
         borderRadius: radius,
         child: Image.file(
           File(art),
@@ -452,8 +705,13 @@ class TrackArt extends StatelessWidget {
           errorBuilder: (_, _, _) => _placeholder(cs, radius),
         ),
       );
+    } else {
+      visual = _placeholder(cs, radius);
     }
-    return _placeholder(cs, radius);
+    // When selected, the art slot doubles as the "now playing" indicator
+    // (equalizer glyph / accent) — announce that to screen readers; otherwise
+    // the artwork is decorative and stays excluded.
+    return selected ? Semantics(label: 'Now playing', child: visual) : visual;
   }
 
   Widget _placeholder(ColorScheme cs, BorderRadius radius) => Container(
@@ -472,8 +730,12 @@ class TrackArt extends StatelessWidget {
 }
 
 class TrackListView extends StatefulWidget {
-  const TrackListView({super.key, required this.tracks});
+  const TrackListView({super.key, required this.tracks, this.onEndReached});
   final List<TrackRow> tracks;
+
+  /// Optional infinite-scroll hook: called as the list nears its end so the
+  /// caller can append the next page (it must guard against re-entrancy).
+  final Future<void> Function()? onEndReached;
 
   @override
   State<TrackListView> createState() => _TrackListViewState();
@@ -481,6 +743,96 @@ class TrackListView extends StatefulWidget {
 
 class _TrackListViewState extends State<TrackListView> {
   late List<TrackRow> _tracks = List.of(widget.tracks);
+  final _scroll = ScrollController();
+  // Multi-select (long-press to enter): batch tag-edit / add-to-queue.
+  final Set<int> _selected = {};
+  bool get _selecting => _selected.isNotEmpty;
+
+  void _toggle(int id) => setState(() {
+    if (!_selected.remove(id)) _selected.add(id);
+  });
+
+  void _clearSelection() => setState(_selected.clear);
+
+  void _addSelectedToQueue() {
+    for (final t in _tracks.where((t) => _selected.contains(t.id))) {
+      player.addToQueue(t);
+    }
+    final n = _selected.length;
+    _clearSelection();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Added $n to queue')));
+  }
+
+  Future<void> _batchEdit() async {
+    final updated = await showBatchEditDialog(context, _selected.toList());
+    if (!mounted || updated == null) return;
+    // Reflect the new tags in the visible rows (no full rescan needed).
+    final byId = {for (final r in updated) r.id: r};
+    setState(() {
+      for (var i = 0; i < _tracks.length; i++) {
+        final r = byId[_tracks[i].id];
+        if (r != null) _tracks[i] = r;
+      }
+      _selected.clear();
+    });
+  }
+
+  Widget _selectionBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: 'Clear selection',
+              icon: const Icon(Icons.close),
+              onPressed: _clearSelection,
+            ),
+            Expanded(
+              child: Text(
+                '${_selected.length} selected',
+                style: TextStyle(color: cs.onSecondaryContainer),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Add to queue',
+              icon: const Icon(Icons.add_to_queue),
+              onPressed: _addSelectedToQueue,
+            ),
+            IconButton(
+              tooltip: 'Edit tags',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: _batchEdit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (widget.onEndReached == null || !_scroll.hasClients) return;
+    final p = _scroll.position;
+    if (p.pixels >= p.maxScrollExtent - 800) {
+      widget.onEndReached!.call();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(TrackListView old) {
@@ -495,62 +847,163 @@ class _TrackListViewState extends State<TrackListView> {
     if (_tracks.isEmpty) {
       return const Center(child: Text('Nothing here yet'));
     }
-    return ListenableBuilder(
-      listenable: player,
-      builder: (context, _) => ListView.builder(
-        itemCount: _tracks.length,
-        itemBuilder: (_, i) {
-          final t = _tracks[i];
-          final selected = player.current?.id == t.id;
-          return ListTile(
-            selected: selected,
-            leading: TrackArt(track: t, selected: selected),
-            title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              [
-                if (t.artist.isNotEmpty) t.artist,
-                if (t.album.isNotEmpty) t.album,
-              ].join(' • '),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    return Column(
+      children: [
+        if (_selecting) _selectionBar(context),
+        Expanded(
+          child: ListenableBuilder(
+            listenable: player,
+            builder: (context, _) => ListView.builder(
+              controller: _scroll,
+              itemCount: _tracks.length,
+              itemBuilder: (_, i) {
+                final t = _tracks[i];
+                final nowPlaying = player.current?.id == t.id;
+                final isSel = _selected.contains(t.id);
+                return ListTile(
+                  selected: _selecting ? isSel : nowPlaying,
+                  leading: _selecting
+                      ? Checkbox(value: isSel, onChanged: (_) => _toggle(t.id))
+                      : TrackArt(track: t, selected: nowPlaying),
+                  title: Text(
+                    t.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    [
+                      if (t.artist.isNotEmpty) t.artist,
+                      if (t.album.isNotEmpty) t.album,
+                    ].join(' • '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: _selecting
+                      ? null
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(fmtDuration(t.durationMs)),
+                            PopupMenuButton<String>(
+                              tooltip: 'Track actions',
+                              onSelected: (value) =>
+                                  _handleTrackAction(context, value, t),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'play_next',
+                                  child: Text('Play next'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'add_queue',
+                                  child: Text('Add to queue'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'add_playlist',
+                                  child: Text('Add to playlist'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit metadata'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'select',
+                                  child: Text('Select'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                  onTap: () async {
+                    if (_selecting) {
+                      _toggle(t.id);
+                      return;
+                    }
+                    try {
+                      await player.playQueue(_tracks, i);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Playback failed: $e')),
+                        );
+                      }
+                    }
+                  },
+                  // Long-press: toggle when selecting, else the actions sheet
+                  // (which includes "Select" to start multi-select).
+                  onLongPress: () {
+                    if (_selecting) {
+                      _toggle(t.id);
+                    } else {
+                      _showTrackMenu(context, t);
+                    }
+                  },
+                );
+              },
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(fmtDuration(t.durationMs)),
-                PopupMenuButton<String>(
-                  tooltip: 'Track actions',
-                  onSelected: (value) => _handleTrackAction(context, value, t),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'play_next', child: Text('Play next')),
-                    PopupMenuItem(
-                      value: 'add_queue',
-                      child: Text('Add to queue'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The track action menu as a bottom sheet — the long-press equivalent of the
+  /// trailing ⋮ [PopupMenuButton]. Same actions, same handler.
+  Future<void> _showTrackMenu(BuildContext context, TrackRow track) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: TrackArt(track: track, size: 44),
+              title: Text(
+                track.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: track.artist.isEmpty
+                  ? null
+                  : Text(
+                      track.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    PopupMenuItem(
-                      value: 'add_playlist',
-                      child: Text('Add to playlist'),
-                    ),
-                    PopupMenuItem(value: 'edit', child: Text('Edit metadata')),
-                  ],
-                ),
-              ],
             ),
-            onTap: () async {
-              try {
-                await player.playQueue(_tracks, i);
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Playback failed: $e')),
-                  );
-                }
-              }
-            },
-          );
-        },
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.queue_play_next),
+              title: const Text('Play next'),
+              onTap: () => Navigator.pop(ctx, 'play_next'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_to_queue),
+              title: const Text('Add to queue'),
+              onTap: () => Navigator.pop(ctx, 'add_queue'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_add),
+              title: const Text('Add to playlist'),
+              onTap: () => Navigator.pop(ctx, 'add_playlist'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit metadata'),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.checklist),
+              title: const Text('Select'),
+              onTap: () => Navigator.pop(ctx, 'select'),
+            ),
+          ],
+        ),
       ),
     );
+    if (action != null && context.mounted) {
+      await _handleTrackAction(context, action, track);
+    }
   }
 
   Future<void> _handleTrackAction(
@@ -574,6 +1027,9 @@ class _TrackListViewState extends State<TrackListView> {
           final i = _tracks.indexWhere((x) => x.id == updated.id);
           if (i >= 0) setState(() => _tracks[i] = updated);
         }
+        return;
+      case 'select':
+        setState(() => _selected.add(track.id));
         return;
     }
     if (context.mounted) {
@@ -614,11 +1070,104 @@ class _TracksFutureState extends State<_TracksFuture> {
   }
 }
 
+/// Infinite-scroll list backed by a paged loader. Loads one page up front (fast
+/// even for a 50k library) and appends more as the user scrolls.
+class _PaginatedTracks extends StatefulWidget {
+  const _PaginatedTracks(this.loadPage);
+  final Future<List<TrackRow>> Function(int limit, int offset) loadPage;
+
+  @override
+  State<_PaginatedTracks> createState() => _PaginatedTracksState();
+}
+
+class _PaginatedTracksState extends State<_PaginatedTracks> {
+  static const _pageSize = 300;
+  final List<TrackRow> _tracks = [];
+  bool _loading = false;
+  bool _done = false;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _done) return;
+    _loading = true;
+    try {
+      final page = await widget.loadPage(_pageSize, _tracks.length);
+      if (!mounted) return;
+      setState(() {
+        _tracks.addAll(page);
+        if (page.length < _pageSize) _done = true;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    } finally {
+      _loading = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return Center(child: Text('Failed to load: $_error'));
+    }
+    if (_tracks.isEmpty && !_done) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_tracks.isEmpty && _done) {
+      return const _EmptyLibrary();
+    }
+    // New list identity each page so TrackListView picks up the appended rows.
+    return TrackListView(
+      tracks: List.of(_tracks),
+      onEndReached: _done ? null : _loadMore,
+    );
+  }
+}
+
+/// First-run / empty-library onboarding for the Songs tab.
+class _EmptyLibrary extends StatelessWidget {
+  const _EmptyLibrary();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final canDrop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.library_music_outlined, size: 72, color: cs.primary),
+            const SizedBox(height: 16),
+            Text('Your library is empty', style: text.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              canDrop
+                  ? 'Drag a music folder here, or use the scan button in the top bar to add one.'
+                  : 'Tap the scan button in the top bar to add a music folder.',
+              textAlign: TextAlign.center,
+              style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SongsTab extends StatelessWidget {
   const _SongsTab({super.key});
   @override
-  Widget build(BuildContext context) =>
-      _TracksFuture(() => libraryBrowseSongs(limit: 5000, offset: 0));
+  Widget build(BuildContext context) => _PaginatedTracks(
+    (limit, offset) => libraryBrowseSongs(limit: limit, offset: offset),
+  );
 }
 
 class _RecentTab extends StatelessWidget {

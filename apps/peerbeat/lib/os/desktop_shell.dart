@@ -24,6 +24,7 @@ class DesktopShell with TrayListener, WindowListener {
   bool _started = false;
   bool _trayOk = false;
   bool _quitting = false;
+  String? _trayIconFile;
 
   static bool get isDesktop =>
       !kIsWeb && (Platform.isLinux || Platform.isWindows);
@@ -68,7 +69,19 @@ class DesktopShell with TrayListener, WindowListener {
     final dir = await getTemporaryDirectory();
     final f = File('${dir.path}/peerbeat_tray.png');
     await f.writeAsBytes(data.buffer.asUint8List(), flush: true);
+    _trayIconFile = f.path;
     return f.path;
+  }
+
+  /// Remove the extracted tray icon so it doesn't linger in the temp dir.
+  Future<void> _cleanupTrayIcon() async {
+    final path = _trayIconFile;
+    _trayIconFile = null;
+    if (path == null) return;
+    try {
+      final f = File(path);
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
   }
 
   Menu _menu() => Menu(
@@ -101,6 +114,7 @@ class DesktopShell with TrayListener, WindowListener {
 
   Future<void> _quit() async {
     _quitting = true;
+    await _cleanupTrayIcon();
     try {
       await trayManager.destroy();
     } catch (_) {}
@@ -151,6 +165,7 @@ class DesktopShell with TrayListener, WindowListener {
     try {
       trayManager.removeListener(this);
     } catch (_) {}
+    await _cleanupTrayIcon();
   }
 }
 

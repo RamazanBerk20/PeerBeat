@@ -1,150 +1,75 @@
 # PeerBeat — Data Model
 
-Storage engine: **SQLite** (bundled with `rusqlite`), one database file in the
-app-private data directory, **WAL** journal mode. All persistent state lives here
-except large binaries (album art, audio), which are referenced by path/hash.
-
-> Privacy: every column below is stored **locally only**. Nothing here is uploaded
-> anywhere; the only data that leaves the device is what a peer explicitly streams
-> or downloads over the LAN. See [`privacy.md`](privacy.md).
-
-## Conventions
-
-- All ids are `INTEGER PRIMARY KEY` row-ids unless noted.
-- Times are integer Unix epoch **milliseconds** (UTC).
-- `content_hash` is `xxh3_64(first 64 KiB ‖ last 64 KiB ‖ file_size)` rendered
-  hex — a stable, cheap identity used for dedup, move-detection, and as the
-  **cross-peer track id** for LAN download/party matching.
-
-## Core tables
-
-### `tracks`
-| column | type | notes |
-|--------|------|-------|
-| id | INTEGER PK | |
-| path | TEXT | raw absolute path |
-| normalized_path | TEXT UNIQUE | platform-folded (forward slashes; case-folded on Windows) |
-| content_hash | TEXT | xxh3 identity; indexed |
-| title | TEXT | |
-| album_id | INTEGER FK→albums | nullable |
-| track_no, disc_no | INTEGER | nullable |
-| year | INTEGER | nullable; indexed |
-| duration_ms | INTEGER | |
-| codec | TEXT | `mp3`/`flac`/`wav`/`aac`/`ogg`/`m4a` |
-| bitrate, sample_rate, channels | INTEGER | |
-| replaygain_track_db, replaygain_album_db | REAL | nullable (from tags) |
-| rating | INTEGER | 0–5, default 0 |
-| played_count | INTEGER | default 0 |
-| last_played_at | INTEGER | nullable |
-| added_at | INTEGER | |
-| file_size | INTEGER | |
-| mtime_ns | INTEGER | for the `(size, mtime)` change gate |
-| has_lyrics | INTEGER | 0/1 (embedded or sidecar `.lrc` found) |
-
-Indexes: `content_hash`, `album_id`, `year`, `added_at`, `last_played_at`,
-`played_count`.
-
-### `albums`, `artists`, `genres`
-`albums(id, title, album_artist_id, year, art_id FK→art_cache, sort_title)` ·
-`artists(id, name, sort_name)` · `genres(id, name)`.
-
-### Multi-value joins
-Tracks can have several artists/genres ("feat."), so these are join tables, not
-columns:
-- `track_artists(track_id, artist_id, role)` — `role` ∈ {main, feat, composer, …}
-- `track_genres(track_id, genre_id)`
-
-This makes Artist/Genre browsing correct instead of guessing a single primary.
-
-### `art_cache`
-| column | type | notes |
-|--------|------|-------|
-| id | INTEGER PK | |
-| image_hash | TEXT UNIQUE | content hash of the image bytes |
-| file_path | TEXT | on-disk cached image (not stored in the DB) |
-| width, height, mime | | |
-
-Album art is **deduplicated by image hash** and stored on disk, never inline in
-`tracks` — keeping row reads fast for 50k+ libraries. A generated placeholder /
-palette swatch is used when absent.
-
-### `folders` + `scan_state`
-`folders(id, path, is_watched, added_at)` — the user's library roots.
-`scan_state(folder_id, last_full_scan_at, last_incremental_at, file_count)`.
-
-## Playlists & queue
-
-- `playlists(id, name, created_at, updated_at, sort_order)`
-- `playlist_items(playlist_id, track_id, position)` — ordered; reorder = update
-  `position`.
-- `queue(id, track_id, position, source)` — the live play queue; `source` marks
-  Play-Next vs Add-to-Queue vs from-list.
-- `smart_playlists(id, name, rule_json, sort_json, limit_n, updated_at)` — see
-  below.
-- `favorites(track_id, added_at)`; `play_history(id, track_id, played_at, ms_played)`.
-
-`play_history` is an **event log** (not just a counter) so windowed smart rules
-like "played in the last 30 days" and accurate Most/Recently-Played are possible.
-`played_count` / `last_played_at` on `tracks` are denormalised roll-ups.
-
-### Smart playlists
-
-`rule_json` is a **versioned rule tree**, compiled to parameterised SQL by an
-injection-safe compiler (whitelisted columns + operators; every value bound):
-
-```json
-{
-  "version": 1,
-  "match": "all",                       // all = AND, any = OR
-  "rules": [
-    { "field": "played_count", "op": ">",  "value": 10 },
-    { "field": "rating",       "op": ">=", "value": 4 },
-    { "match": "any", "rules": [
-      { "field": "genre", "op": "is", "value": "Jazz" },
-      { "field": "genre", "op": "is", "value": "Blues" }
-    ]}
-  ]
-}
-```
-
-Allowed `field`s map to whitelisted columns/joins; allowed `op`s:
-`is, is_not, contains, starts_with, >, >=, <, <=, between, in_last_days, is_true`.
-Unknown fields/ops are rejected at parse time. The four **auto-lists** (Recently
-Played, Most Played, Never Played, Favorites) are pre-baked rule trees, not
-special-cased code.
-
-## Network tables
-
-- `known_hosts(id, host_id, display_name, color, spki_sha256, first_seen_at,
-  last_seen_at)` — **TOFU pins**: the SHA-256 of the peer's certificate SPKI.
-- `remembered_peers(host_id, peer_id, decision, decided_at)` — Approved-mode
-  allow/deny memory.
-- `shares(id, playlist_id, permission, mode, pin_hash, enabled)` — what *this*
-  host shares; `permission` ∈ {stream, stream_download}; `mode` ∈ {open, pin,
-  approved}.
-- `transfer_log(id, peer_id, track_id, kind, bytes, started_at, ended_at,
-  state)` — the host's safety/audit dashboard feed (`kind` ∈ {stream, download}).
-
-## Full-text search
-
-A contentless-external FTS5 virtual table indexes a denormalised search column
-(title ‖ artists ‖ album ‖ album-artist ‖ genre ‖ year) using the **trigram**
-tokenizer with **bm25** ranking — giving substring + typo-tolerant matching that
-`unicode61` cannot. Triggers keep it in sync on insert/update/delete; all writes
-go through the DAO layer so triggers always fire. Queries < 3 chars (trigram's
-minimum) fall back to a folded-ASCII `LIKE` scan with `LIMIT`. A maintenance
-command rebuilds the index (`INSERT INTO fts(fts) VALUES('rebuild')`).
-
-## Performance (50k+ tracks < 2 s)
-
-- DB on a dedicated worker thread; UI never blocks on SQL.
-- **Two-pass scan**: pass 1 inserts path + basic tags (library browsable almost
-  immediately); pass 2 extracts art + computes hashes lazily.
-- Batched transactions (~500 rows); `(size, mtime)` gate skips unchanged files so
-  rescans are near-instant.
-- Browse/search queries are paginated and streamed to a virtualised list.
+All persistent state is local **SQLite** (one file per install), created and
+migrated by `rust/peerbeat_core/src/db/schema.rs`. There are no remote
+databases and no accounts. Times are Unix epoch **milliseconds** unless noted.
 
 ## Migrations
 
-`user_version`-based linear migrations in `db/schema`. M1 ships v1 (core +
-playlists + FTS); M2 adds the network tables and the smart-playlist columns.
+The schema is versioned with SQLite's `PRAGMA user_version`. `migrate()` applies
+the `V1` batch on a fresh database and bumps the version; future changes append
+`V2`, `V3`, … rather than mutating `V1`. Current `SCHEMA_VERSION = 1`.
+
+## Library
+
+| Table | Purpose / key columns |
+|-------|----------------------|
+| `artists` | `id`, `name` (unique), `sort_name`. |
+| `genres` | `id`, `name` (unique). |
+| `albums` | `id`, `title`, `album_artist_id → artists`, `year`, `art_id → art_cache`; unique `(title, album_artist_id)`. |
+| `art_cache` | Deduplicated cover art by `image_hash` (unique); `file_path` on disk, plus `width/height/mime`. |
+| `tracks` | The core row. `normalized_path` (unique) identifies a file; `content_hash` enables move-detection; audio facts (`duration_ms`, `codec`, `bitrate`, `sample_rate`, `channels`); `replaygain_track_db`/`replaygain_album_db`; user state (`rating`, `played_count`, `last_played_at`); `added_at`, `file_size`, `mtime_ns` (incremental scan); `has_lyrics`. |
+| `track_artists` | Many-to-many `track ↔ artist` with a `role` (`main`, …). |
+| `track_genres` | Many-to-many `track ↔ genre`. |
+
+Indices on `tracks`: `album_id`, `content_hash`, `year`, `added_at`,
+`played_count`, `last_played_at` — the columns the browse axes and smart-playlist
+rules sort/filter on.
+
+## Watch-folders + scan state
+
+| Table | Purpose |
+|-------|---------|
+| `folders` | A library root: `path` (unique), `is_watched`, `added_at`. |
+| `scan_state` | Per-folder `last_full_scan_at`, `last_incremental_at`, `file_count`. |
+
+Scanning is incremental: a file is re-read only when its `mtime_ns`/`file_size`
+changed. A filesystem watcher (the `notify` crate) debounces events ~800 ms and
+rescans+prunes the affected root.
+
+## Playlists, queue, history, favorites
+
+| Table | Purpose |
+|-------|---------|
+| `playlists` | Manual playlists: `name`, `created_at`, `updated_at`, `sort_order`. |
+| `playlist_items` | Ordered membership, PK `(playlist_id, position)`; cascades on track/playlist delete. |
+| `smart_playlists` | Rule-based: `rule_json` (the rule tree), optional `sort_json`, `limit_n`. Rules compile to **parameterized** SQL against a field whitelist (`db/smart.rs`). |
+| `queue` | Persisted play queue: `track_id`, `position`, `source` (`list`/`next`/…). |
+| `favorites` | `track_id` (PK) + `added_at`. Drives the Favorites auto-list. |
+| `play_history` | One row per play: `track_id`, `played_at`, `ms_played`. Drives Recently/Most/Never-Played. |
+| `eq_presets` | Named 10-band EQ presets: `bands` (JSON of 10 dB gains), `preamp`, `builtin` flag. |
+| `settings` | Key/value store for app preferences and the resume bookmark (last `track_id` + `position_ms`, volume, EQ, theme, etc.). |
+
+## Search
+
+`tracks_fts` is an **FTS5** virtual table (`title, artist, album, genre`) with a
+**trigram** tokenizer, maintained programmatically by the track DAO
+(`rowid == tracks.id`). Queries ≥3 chars use trigram + `bm25` ranking; shorter
+queries fall back to a `LIKE` prefix match (with escaped patterns). It stores its
+own copy of the join-derived artist/genre text for correctness.
+
+## LAN / network
+
+| Table | Purpose |
+|-------|---------|
+| `known_hosts` | TOFU trust store: `host_id` (unique), `display_name`, `color`, `spki_sha256` (the pinned certificate digest), `first_seen_at`, `last_seen_at`. |
+| `remembered_peers` | Per-host approved-peer decisions: PK `(host_id, peer_id)`, `decision` (`allow`/`deny`), `decided_at`. |
+| `shares` | What this host exposes: `playlist_id` (`NULL` = whole library), `permission` (`stream`/`stream_download`), `mode` (`open`/`pin`/`approved`), `pin_hash` (Argon2id PHC string, never the PIN), `enabled`. |
+| `transfer_log` | Host visibility into activity: `peer_id`, `track_id`, `kind` (`stream`/`download`), `bytes`, `started_at`, `ended_at`, `state`. Powers the host's "who's streaming what" dashboard + revoke. |
+
+## What is **not** stored
+
+No cloud identifiers, no analytics/telemetry, no third-party service tokens, no
+listener accounts. PINs are stored only as Argon2id hashes; LAN session bearer
+tokens live in memory (as SHA-256 digests), never on disk. See
+[`privacy.md`](privacy.md) for the full inventory.

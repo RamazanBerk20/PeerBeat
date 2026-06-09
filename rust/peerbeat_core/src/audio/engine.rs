@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::eq::{EqHandle, EqSource};
+use super::spectrum::SpectrumTap;
 #[cfg(not(target_os = "windows"))]
 use super::timestretch::TimeStretchSource;
 use super::timestretch::{SpeedHandle, MAX_SPEED, MIN_SPEED};
@@ -238,7 +239,9 @@ impl SymphoniaFileSource {
             hint.with_extension(ext);
         }
         let format_opts = FormatOptions {
-            enable_gapless: false,
+            // Trim encoder delay/padding so consecutive compressed tracks
+            // (MP3/AAC) play without the inserted silence — the usual audible gap.
+            enable_gapless: true,
             ..Default::default()
         };
         let metadata_opts = MetadataOptions::default();
@@ -426,15 +429,16 @@ fn with_dsp(
     speed: SpeedHandle,
     ended: Arc<AtomicBool>,
 ) -> Box<dyn rodio::Source<Item = i16> + Send> {
-    // EQ → stereo widen → pitch-preserving time-stretch → end-notify. The
-    // stretcher is a no-op (pure passthrough) while speed == 1.0.
-    Box::new(EndNotifySource::new(
+    // EQ → stereo widen → pitch-preserving time-stretch → end-notify →
+    // visualizer tap (audio unchanged). The stretcher is a no-op (pure
+    // passthrough) while speed == 1.0.
+    Box::new(SpectrumTap::new(EndNotifySource::new(
         TimeStretchSource::new(
             StereoWidenSource::new(EqSource::new(source, eq), widen),
             speed,
         ),
         ended,
-    ))
+    )))
 }
 
 // Windows: Signalsmith Stretch's cxx bridge doesn't compile under MSVC, so there's
@@ -448,10 +452,10 @@ fn with_dsp(
     _speed: SpeedHandle,
     ended: Arc<AtomicBool>,
 ) -> Box<dyn rodio::Source<Item = i16> + Send> {
-    Box::new(EndNotifySource::new(
+    Box::new(SpectrumTap::new(EndNotifySource::new(
         StereoWidenSource::new(EqSource::new(source, eq), widen),
         ended,
-    ))
+    )))
 }
 
 // Apply the current speed to a freshly-created sink / on a speed change. On
@@ -662,6 +666,8 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
     let mut speed_anchor = Duration::ZERO;
     let mut current_path: Option<String> = None;
     let mut base_position_ms = 0u64;
+    // Fractional-millisecond carry so repeated speed changes don't truncate-drift.
+    let mut frac_ms = 0f64;
     let mut force_position_ms: Option<u64> = None;
     let mut current_duration = Duration::ZERO;
     // Crossfade state (inert while `crossfade_secs == 0`, i.e. the default):
@@ -704,6 +710,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     current_path = Some(path.clone());
                     current_duration = dur;
                     base_position_ms = 0;
+                    frac_ms = 0.0;
                     speed_anchor = Duration::ZERO; // fresh sink: get_pos() restarts at 0
                     force_position_ms = None; // drop any pending seek from a prior track
                     engage_speed(&sink, speed, &speed_handle);
@@ -738,12 +745,14 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     sink = s;
                     sink.set_volume(volume);
                 }
+                super::spectrum::clear(); // visualizer settles to silence
                 speed_anchor = Duration::ZERO;
                 fade_in = None;
                 fading_out.clear();
                 current_path = None;
                 current_duration = Duration::ZERO;
                 base_position_ms = 0;
+                frac_ms = 0.0;
                 force_position_ms = None;
                 shared.ended.store(false, Ordering::Release);
                 shared.duration_ms.store(0, Ordering::Relaxed);
@@ -792,6 +801,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                         sink.pause();
                     }
                     base_position_ms = target_ms;
+                    frac_ms = 0.0;
                     shared.position_ms.store(visible_ms, Ordering::Relaxed);
                     force_position_ms = Some(visible_ms);
                     set_last_error(&last_error, None);
@@ -812,7 +822,10 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 // speed in the time-stretch stage (no pitch-shifting sink.set_speed).
                 let out = sink.get_pos();
                 let since = out.saturating_sub(speed_anchor);
-                base_position_ms += (since.as_secs_f64() * speed as f64 * 1000.0) as u64;
+                let advance = since.as_secs_f64() * speed as f64 * 1000.0 + frac_ms;
+                let whole = advance.floor();
+                base_position_ms += whole as u64;
+                frac_ms = advance - whole;
                 speed_anchor = out;
                 speed = s;
                 engage_speed(&sink, s, &speed_handle);
@@ -852,6 +865,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                         )?;
                         sink.append(source);
                         base_position_ms = target.as_millis() as u64;
+                        frac_ms = 0.0;
                         force_position_ms = Some(base_position_ms);
                         if was_playing {
                             sink.play();

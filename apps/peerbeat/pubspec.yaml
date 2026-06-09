@@ -1,7 +1,7 @@
 name: peerbeat
 description: "Local-first music player with LAN peer-to-peer sharing"
 publish_to: 'none'
-version: 0.1.1+2
+version: 0.3.0+4
 
 resolution: workspace
 
@@ -17,11 +17,15 @@ dependencies:
   flutter_rust_bridge: 2.12.0
   path_provider: ^2.1.5
   just_audio: ^0.10.5
+  palette_generator: ^0.3.3 # album-art dynamic theming
+  audio_service: ^0.18.18 # Android media session: lockscreen/notification + background
   file_picker: ^10.3.7
+  desktop_drop: ^0.6.0 # drag a folder onto the library to add + scan it
   dbus: ^0.7.10 # MPRIS media-key/lockscreen integration on Linux
   crypto: ^3.0.7
   window_manager: ^0.4.3 # desktop close-to-tray (hide on close)
   tray_manager: ^0.3.2 # desktop system-tray icon + menu
+  smtc_windows: ^1.0.1 # Windows System Media Transport Controls
 
 dev_dependencies:
   flutter_test:

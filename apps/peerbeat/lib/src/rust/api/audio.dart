@@ -25,14 +25,22 @@ void audioSeekMs({required PlatformInt64 ms}) =>
 void audioSetVolume({required double volume}) =>
     RustLib.instance.api.crateApiAudioAudioSetVolume(volume: volume);
 
-/// Playback speed 0.25–4.0 (1.0 = normal). NOTE: rodio's speed also shifts
-/// pitch; pitch-preserving speed arrives with the P4 custom engine.
+/// Playback speed; the engine clamps to 0.5–2.0 (1.0 = normal). On Linux/macOS
+/// this is pitch-preserving via Signalsmith Stretch; on Windows (MSVC) the
+/// stretch stage is disabled and speed falls back to rodio's pitch-shifting
+/// resample.
 void audioSetSpeed({required double speed}) =>
     RustLib.instance.api.crateApiAudioAudioSetSpeed(speed: speed);
 
 /// Crossfade duration between tracks, in seconds (0–12; 0 disables — the default).
 void audioSetCrossfade({required double secs}) =>
     RustLib.instance.api.crateApiAudioAudioSetCrossfade(secs: secs);
+
+/// Latest Now-Playing visualizer spectrum: `bands` log-spaced magnitudes, each
+/// roughly 0..1. Cheap (one cached 1024-pt FFT); poll at the UI frame rate.
+/// All-zero when idle, and on Android (no desktop engine).
+Float32List audioSpectrum({required int bands}) =>
+    RustLib.instance.api.crateApiAudioAudioSpectrum(bands: bands);
 
 /// 10-band graphic EQ, using ISO octave centers from 31 Hz to 16 kHz.
 /// `gains` must contain exactly 10 dB values. Values are clamped by the engine

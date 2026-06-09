@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../playback/player.dart';
 import '../src/rust/api/network.dart';
 import '../src/rust/db/tracks.dart';
+import '../util/log.dart';
 import 'tofu.dart';
 
 /// Drives synchronized party mode on both ends.
@@ -54,7 +55,9 @@ class PartyController extends ChangeNotifier {
         positionMs: player.position.inMilliseconds,
         playing: player.playing,
       );
-    } catch (_) {}
+    } catch (e) {
+      logErr('party.broadcast', e);
+    }
   }
 
   Future<void> stopHosting() async {
@@ -65,7 +68,9 @@ class PartyController extends ChangeNotifier {
     player.removeListener(_onHostChange);
     try {
       await netPartyStop();
-    } catch (_) {}
+    } catch (e) {
+      logErr('party.stop', e);
+    }
     notifyListeners();
   }
 
@@ -78,9 +83,19 @@ class PartyController extends ChangeNotifier {
   String? _base;
   String? _token;
   int _offset = 0;
-  int _bestRtt = 1 << 30;
+  // Sentinel for "no round-trip measured yet" — any real LAN RTT is far below it.
+  static const int _noRtt = 1 << 30;
+  int _bestRtt = _noRtt;
   String _curKey = '';
   Timer? _peerTick;
+
+  // Reconnection state: distinguish a user/host-initiated leave (no retry) from
+  // a transient socket drop (retry with capped exponential backoff).
+  bool _intentionalLeave = false;
+  Timer? _reconnectTimer;
+  int _retryMs = 500;
+  int _retryCount = 0;
+  static const int _maxRetries = 8;
 
   int _now() => DateTime.now().millisecondsSinceEpoch;
 
@@ -88,13 +103,27 @@ class PartyController extends ChangeNotifier {
   /// (authenticate to the whole library, then join).
   Future<void> joinParty(String base, String token, String hostName) async {
     await leaveParty();
+    _intentionalLeave = false;
     _base = base;
     _token = token;
     _hostName = hostName;
     _offset = 0;
-    _bestRtt = 1 << 30;
+    _bestRtt = _noRtt;
     _curKey = '';
-    final wsUrl = '${base.replaceFirst('https://', 'wss://')}/v1/party';
+    _retryMs = 500;
+    _retryCount = 0;
+    await _connect(); // throws on the first attempt so the UI can report failure
+    notifyListeners();
+  }
+
+  /// Open the party WebSocket and start the clock-sync + drift timers. Reused by
+  /// both [joinParty] and the reconnect path.
+  Future<void> _connect() async {
+    final base = _base!, token = _token!;
+    // The party WS is token-gated server-side; carry the library-scope token in
+    // the query (the host's Auth extractor reads `?token=` for header-less clients).
+    final wsUrl =
+        '${base.replaceFirst('https://', 'wss://')}/v1/party?token=$token';
     final client = await tofuStreamClient();
     try {
       _ws = await WebSocket.connect(wsUrl, customClient: client);
@@ -103,10 +132,12 @@ class PartyController extends ChangeNotifier {
       rethrow;
     }
     _joined = true;
+    _retryMs = 500; // a successful connect resets the backoff
+    _retryCount = 0;
     _ws!.listen(
       _onMessage,
-      onDone: () => unawaited(leaveParty()),
-      onError: (_) => unawaited(leaveParty()),
+      onDone: _onSocketClosed,
+      onError: (_) => _onSocketClosed(),
       cancelOnError: true,
     );
     // Prime the clock estimate with a burst of pings, then keep it fresh.
@@ -118,23 +149,78 @@ class PartyController extends ChangeNotifier {
       _sendPing();
       _correctDrift();
     });
-    notifyListeners();
   }
 
+  /// Called when the socket closes unexpectedly. Schedules a reconnect unless
+  /// the disconnect was deliberate (user left, or host ended the party).
+  void _onSocketClosed() {
+    _peerTick?.cancel();
+    _peerTick = null;
+    _ws = null;
+    if (_intentionalLeave) return;
+    _scheduleReconnect();
+  }
+
+  void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    if (_retryCount >= _maxRetries) {
+      logErr('party.reconnect', 'gave up after $_maxRetries attempts');
+      unawaited(leaveParty());
+      return;
+    }
+    final delay = _retryMs;
+    _retryMs = (_retryMs * 2).clamp(500, 15000);
+    _retryCount++;
+    notifyListeners(); // surface "reconnecting" to the UI
+    _reconnectTimer = Timer(Duration(milliseconds: delay), () async {
+      if (_intentionalLeave) return;
+      try {
+        await _connect();
+        notifyListeners();
+      } catch (e) {
+        logErr('party.reconnect', e);
+        _scheduleReconnect();
+      }
+    });
+  }
+
+  /// True while the peer is mid-reconnect (socket dropped, retrying).
+  bool get reconnecting => _joined && _ws == null && _reconnectTimer != null;
+
   Future<void> leaveParty() async {
-    if (!_joined && _ws == null) return;
+    if (!_joined && _ws == null && _reconnectTimer == null) return;
+    _intentionalLeave = true;
     _joined = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _peerTick?.cancel();
     _peerTick = null;
     final ws = _ws;
     _ws = null;
     try {
       await ws?.close();
-    } catch (_) {}
+    } catch (e) {
+      logErr('party.leave', e);
+    }
     notifyListeners();
   }
 
-  void _sendPing() => _ws?.add(jsonEncode({'type': 'ping', 't0': _now()}));
+  void _sendPing() {
+    final ws = _ws;
+    if (ws == null) return; // socket dropped — the reconnect path will recover
+    ws.add(jsonEncode({'type': 'ping', 't0': _now()}));
+  }
+
+  /// Ask the host to play one of its tracks (party "request a track"). No-op if
+  /// not currently joined to a party.
+  void requestTrack(int hostTrackId) {
+    final ws = _ws;
+    if (ws == null) {
+      logErr('party.requestTrack', 'not connected');
+      return;
+    }
+    ws.add(jsonEncode({'type': 'request', 'track_id': hostTrackId}));
+  }
 
   void _onMessage(dynamic data) {
     if (data is! String) return;
@@ -142,12 +228,15 @@ class PartyController extends ChangeNotifier {
     if (msg is! Map) return;
     switch (msg['type']) {
       case 'pong':
+        // Capture the receive time ONCE and reuse it for both the round-trip
+        // estimate and the offset, or the two diverge (Cristian's algorithm).
+        final t1 = _now();
         final t0 = (msg['t0'] as num?)?.toInt() ?? 0;
         final th = (msg['th'] as num?)?.toInt() ?? 0;
-        final rtt = _now() - t0;
-        if (rtt < _bestRtt) {
-          _bestRtt = rtt;
-          _offset = th - ((t0 + _now()) ~/ 2);
+        final s = cristianSync(t0, th, t1);
+        if (s.rttMs < _bestRtt) {
+          _bestRtt = s.rttMs;
+          _offset = s.offsetMs;
         }
         break;
       case 'state':
@@ -191,8 +280,9 @@ class PartyController extends ChangeNotifier {
         playedCount: 0,
         path: '$_base/v1/stream/$key?token=$_token',
       );
-      await player.playQueue([row], 0);
-      await player.seek(Duration(milliseconds: target));
+      // Load already positioned at the target so the peer never audibly plays
+      // from 0 before the seek lands.
+      await player.playQueue([row], 0, startAt: Duration(milliseconds: target));
     } else {
       _resyncTo(target);
     }
@@ -222,6 +312,14 @@ class PartyController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// Cristian's algorithm: estimate the host-clock offset and round-trip time
+/// from one ping/pong. [t0] = local send time, [th] = host's stamp, [t1] =
+/// local receive time (captured once). Offset assumes a symmetric path:
+/// host_time ≈ local_time + offset.
+@visibleForTesting
+({int offsetMs, int rttMs}) cristianSync(int t0, int th, int t1) =>
+    (offsetMs: th - ((t0 + t1) ~/ 2), rttMs: t1 - t0);
 
 /// Process-wide party controller.
 final PartyController party = PartyController();

@@ -59,6 +59,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EqPresetRow dco_decode_eq_preset_row(dynamic raw);
 
   @protected
+  double dco_decode_f_32(dynamic raw);
+
+  @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
@@ -95,10 +98,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HostInfo> dco_decode_list_host_info(dynamic raw);
 
   @protected
+  List<List<TrackRow>> dco_decode_list_list_track_row(dynamic raw);
+
+  @protected
   List<OutputDeviceRow> dco_decode_list_output_device_row(dynamic raw);
 
   @protected
+  List<PartyRequestDto> dco_decode_list_party_request_dto(dynamic raw);
+
+  @protected
+  List<PendingApprovalDto> dco_decode_list_pending_approval_dto(dynamic raw);
+
+  @protected
   List<PlaylistRow> dco_decode_list_playlist_row(dynamic raw);
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
 
   @protected
   List<double> dco_decode_list_prim_f_64_loose(dynamic raw);
@@ -144,6 +159,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OutputDeviceRow dco_decode_output_device_row(dynamic raw);
+
+  @protected
+  PartyRequestDto dco_decode_party_request_dto(dynamic raw);
+
+  @protected
+  PendingApprovalDto dco_decode_pending_approval_dto(dynamic raw);
 
   @protected
   PlaylistImportReport dco_decode_playlist_import_report(dynamic raw);
@@ -212,6 +233,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EqPresetRow sse_decode_eq_preset_row(SseDeserializer deserializer);
 
   @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
@@ -248,12 +272,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HostInfo> sse_decode_list_host_info(SseDeserializer deserializer);
 
   @protected
+  List<List<TrackRow>> sse_decode_list_list_track_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<OutputDeviceRow> sse_decode_list_output_device_row(
     SseDeserializer deserializer,
   );
 
   @protected
+  List<PartyRequestDto> sse_decode_list_party_request_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<PendingApprovalDto> sse_decode_list_pending_approval_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PlaylistRow> sse_decode_list_playlist_row(SseDeserializer deserializer);
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
 
   @protected
   List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer);
@@ -301,6 +343,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OutputDeviceRow sse_decode_output_device_row(SseDeserializer deserializer);
+
+  @protected
+  PartyRequestDto sse_decode_party_request_dto(SseDeserializer deserializer);
+
+  @protected
+  PendingApprovalDto sse_decode_pending_approval_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlaylistImportReport sse_decode_playlist_import_report(
@@ -380,6 +430,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_eq_preset_row(EqPresetRow self, SseSerializer serializer);
 
   @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -425,14 +478,38 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_host_info(List<HostInfo> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_list_track_row(
+    List<List<TrackRow>> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_output_device_row(
     List<OutputDeviceRow> self,
     SseSerializer serializer,
   );
 
   @protected
+  void sse_encode_list_party_request_dto(
+    List<PartyRequestDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_pending_approval_dto(
+    List<PendingApprovalDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_playlist_row(
     List<PlaylistRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
     SseSerializer serializer,
   );
 
@@ -505,6 +582,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_output_device_row(
     OutputDeviceRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_party_request_dto(
+    PartyRequestDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_pending_approval_dto(
+    PendingApprovalDto self,
     SseSerializer serializer,
   );
 

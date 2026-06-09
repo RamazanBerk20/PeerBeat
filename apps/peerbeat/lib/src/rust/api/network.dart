@@ -21,6 +21,23 @@ Future<int> netStartHost({
   displayName: displayName,
 );
 
+/// Peers currently awaiting an allow/deny decision from the host.
+Future<List<PendingApprovalDto>> netPendingApprovals() =>
+    RustLib.instance.api.crateApiNetworkNetPendingApprovals();
+
+/// Allow or deny a pending peer by its `challenge`. With `remember`, the decision
+/// is persisted (so the peer is auto-handled next time). False if not hosting or
+/// the challenge is unknown.
+Future<bool> netDecidePeer({
+  required String challenge,
+  required bool allow,
+  required bool remember,
+}) => RustLib.instance.api.crateApiNetworkNetDecidePeer(
+  challenge: challenge,
+  allow: allow,
+  remember: remember,
+);
+
 /// Revoke every peer session token (they must re-authenticate). Used by the
 /// host's "revoke all access" control. Returns false if not currently hosting.
 Future<bool> netRevokeAll() =>
@@ -54,6 +71,11 @@ Future<bool> netPartyUpdate({
 Future<bool> netPartyStop() =>
     RustLib.instance.api.crateApiNetworkNetPartyStop();
 
+/// Drain pending party track-requests, resolving each to a title from the host's
+/// library. Drained entries are removed, so the UI should accumulate them.
+Future<List<PartyRequestDto>> netPartyRequests() =>
+    RustLib.instance.api.crateApiNetworkNetPartyRequests();
+
 /// Whether a party session is currently active on this host.
 Future<bool> netPartyActive() =>
     RustLib.instance.api.crateApiNetworkNetPartyActive();
@@ -69,3 +91,65 @@ Future<int?> netHostPort() => RustLib.instance.api.crateApiNetworkNetHostPort();
 /// Browse the LAN for hosts for `timeout_ms`, returning the resolved peers.
 Future<List<HostInfo>> netDiscover({required PlatformInt64 timeoutMs}) =>
     RustLib.instance.api.crateApiNetworkNetDiscover(timeoutMs: timeoutMs);
+
+/// A peer's pending request to play a track during a party (host side).
+class PartyRequestDto {
+  final String peer;
+  final PlatformInt64 trackId;
+  final String title;
+  final PlatformInt64 atMs;
+
+  const PartyRequestDto({
+    required this.peer,
+    required this.trackId,
+    required this.title,
+    required this.atMs,
+  });
+
+  @override
+  int get hashCode =>
+      peer.hashCode ^ trackId.hashCode ^ title.hashCode ^ atMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PartyRequestDto &&
+          runtimeType == other.runtimeType &&
+          peer == other.peer &&
+          trackId == other.trackId &&
+          title == other.title &&
+          atMs == other.atMs;
+}
+
+/// A peer waiting for the host to allow/deny it (approved-peers share mode),
+/// surfaced to the host UI.
+class PendingApprovalDto {
+  final String challenge;
+  final String peer;
+  final String label;
+  final PlatformInt64 requestedAtMs;
+
+  const PendingApprovalDto({
+    required this.challenge,
+    required this.peer,
+    required this.label,
+    required this.requestedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      challenge.hashCode ^
+      peer.hashCode ^
+      label.hashCode ^
+      requestedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PendingApprovalDto &&
+          runtimeType == other.runtimeType &&
+          challenge == other.challenge &&
+          peer == other.peer &&
+          label == other.label &&
+          requestedAtMs == other.requestedAtMs;
+}

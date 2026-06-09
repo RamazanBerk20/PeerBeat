@@ -1,150 +1,76 @@
-# PeerBeat — LAN Wire Protocol
+# PeerBeat — LAN Protocol
 
-Everything here is **local-network only**. There is no cloud, no account, no
-relay. A host serves; peers pull. Transport is **TLS 1.3** on a single port that
-carries both the REST API and the WebSocket control channel.
+The differentiator: a host shares playlists (or its whole library) with peers on
+the same LAN. Everything is local — nothing is sent to the internet. Transport
+is **HTTPS over a per-host self-signed TLS certificate**, pinned on first use
+(TOFU — see [`security.md`](security.md)).
 
-- Service type (mDNS/DNS-SD): `_peerbeat._tcp`
-- API base: `https://<host>:<port>/v1`
-- Protocol version: `1` (sent in `info`, the mDNS TXT record, and the WS hello)
+## Discovery
 
-## 1. Discovery
+- Hosts advertise `_peerbeat._tcp` via mDNS/DNS-SD using `mdns-sd` (no Avahi
+  daemon dependency). The TXT record carries `name` (display name), `id`
+  (stable host id), and `fp` (certificate SHA-256 fingerprint).
+- Peers browse the same service type; both IPv4 and (non-loopback) IPv6
+  addresses are surfaced.
+- **Manual fallback:** the user types `ip:port`. If that address matches an
+  already-discovered host, its identity is reused so no duplicate trust anchor
+  is created.
 
-Hosts advertise via `mdns-sd` with TXT records:
+## REST API
 
-| key | value |
-|-----|-------|
-| `id` | stable host id (random, persisted) |
-| `name` | user display name |
-| `color` | avatar accent (hex) |
-| `proto` | protocol version |
-| `fp` | first 8 bytes of the cert SPKI SHA-256 (hex) — short hint only |
-| `auth` | `open` \| `pin` \| `approved` |
+Versioned under `/v1`, served by axum/hyper. All but `/v1/info`, `/v1/shares`,
+and `/v1/auth/session` require a bearer token (`Authorization: Bearer <token>`,
+or `?token=` for clients that can't set headers, e.g. the WebSocket).
 
-Peers browse the same type to populate the Network screen. **Fallbacks** when
-mDNS is blocked (client-isolation Wi-Fi, VPNs, Android multicast limits):
-
-- **Manual** `host:port` entry.
-- **QR pairing** — the host shows a QR encoding `peerbeat://<host>:<port>/<full
-  SPKI fingerprint>`; scanning bootstraps the pin out-of-band (MITM-resistant
-  from first contact).
-
-## 2. TLS & trust (TOFU)
-
-Each host generates a self-signed certificate (`rcgen`) once and persists it.
-Peers **pin the SHA-256 of the certificate's SPKI** (public key), not the whole
-cert, on first connection (so the host can rotate the cert without re-pinning).
-
-- First sight → show the fingerprint, store the pin after the user proceeds
-  (or automatically if QR-paired, since the QR carried the full fingerprint).
-- Later mismatch → **hard fail** with a prominent MITM warning; never auto-trust.
-- The fingerprint is shown in both peers' UIs for optional verbal verification.
-
-## 3. Authentication
-
-A peer obtains a **session bearer token** before streaming/downloading. The token
-is bound to the pinned fingerprint and scoped to the shares it was granted;
-preview endpoints (metadata/art) are readable by any pinned peer without a token.
-
-```
-POST /v1/auth/session
-  body: { "peerId": "...", "name": "...", "color": "#...", "pin": "1234"? }
-  → 200 { "token": "...", "expiresAt": <ms>, "shares": [<shareId>...] }
-  → 401 (bad/again PIN)   → 403 (denied)   → 202 (approval pending, then WS push)
-```
-
-- **Open**: token issued immediately.
-- **PIN**: one 4–6 digit PIN per host session; verified once, then the token
-  carries the grant.
-- **Approved**: host is prompted to allow/deny (remembered per peer); until then
-  `202` and the decision arrives over the WS control channel.
-
-`Authorization: Bearer <token>` is sent on stream/download requests and in the WS
-hello frame. **Revoke** (host one-tap) invalidates the token immediately.
-
-## 4. REST API
-
-| method · path | auth | purpose |
+| Method · Path | Auth | Purpose |
 |---|---|---|
-| `GET /v1/info` | none | host id, name, color, proto, auth mode, capabilities (codecs, transcode?) |
-| `GET /v1/playlists` | token | shareable playlists `[ {id, name, trackCount, permission} ]` |
-| `GET /v1/playlists/{id}` | token | track list with metadata |
-| `GET /v1/tracks/{id}/meta` | pinned | full metadata (preview before streaming) |
-| `GET /v1/tracks/{id}/art` | pinned | album art bytes (preview) |
-| `GET /v1/tracks/{id}/stream` | token | audio bytes, **HTTP Range** (`206`) |
-| `GET /v1/playlists/{id}/download` | token (stream_download) | ZIP of tracks, each with embedded tags + cover |
-| `GET /v1/tracks/{id}/download` | token (stream_download) | single file with tags + cover |
+| `GET /v1/info` | public | Host display name, id, capabilities. |
+| `GET /v1/shares` | public | List shareable scopes: label, `mode`, `permission`, `requires_pin`. |
+| `POST /v1/auth/session` | public | Authenticate to a scope → a scoped bearer token. PIN shares require the PIN; approved-peer shares return a pending challenge to poll while the host decides. |
+| `GET /v1/tracks` | token | Tracks in the granted scope. |
+| `GET /v1/playlists` | token | Shared playlists. |
+| `GET /v1/playlists/{id}` | token | A playlist's tracks. |
+| `GET /v1/stream/{id}` | token | Stream a track — **original bytes, no transcode**, honouring HTTP `Range` (206 partial content) for seeking. |
+| `GET /v1/tracks/{id}/download` | token (download perm) | Download the original file; `403` if the share is stream-only. |
+| `GET /v1/tracks/{id}/meta` | token | Track metadata (title/artist/album/duration…). |
+| `GET /v1/tracks/{id}/art` | token | Album art bytes. |
+| `GET /v1/party` | token | Upgrade to the party-mode WebSocket (below). |
 
-`{id}` is the **content hash**, so a peer's download dedups against tracks it
-already has and party-mode can match tracks across libraries.
+A track id is always resolved to a file path through a DB lookup, never from
+client input, so the file routes cannot be used to escape the library.
 
-### Streaming details
+## Party mode (WebSocket)
 
-- `Accept-Ranges: bytes`; the server honours `Range:` and replies `206` with
-  `Content-Range` — this is what makes seek/scrub on a remote stream cheap.
-- **Original bytes by default** (no transcode) when the peer's `/info` codec list
-  covers the track. **Transcode** is best-effort and **desktop-host only**
-  (symphonia/ffmpeg), negotiated via a `?codec=` hint; if a host can't transcode
-  an unsupported codec it returns `415` and the peer falls back to download.
-- Per-peer concurrency + bandwidth caps; every stream/download is written to
-  `transfer_log` for the host's live dashboard and one-tap revoke.
+`GET /v1/party` upgrades to a WebSocket carrying the scoped token. The host
+broadcasts playback state; peers follow in sync. Distinct from independent
+pull-streaming (each peer playing on its own).
 
-## 5. WebSocket control channel (`/v1/ws`)
+Messages are small JSON objects:
 
-JSON frames, `{ "type": ..., ... }`. Used for presence, host events, and party
-mode. After upgrade the peer sends:
+| From | Message | Meaning |
+|---|---|---|
+| host → peers | `{"type":"state","state":{track_key, position_ms, playing, host_time_ms}}` | The authoritative now-playing snapshot (also sent once on join). |
+| peer → host | `{"type":"ping","t0":<local ms>}` | Clock-sync probe. |
+| host → peer | `{"type":"pong","t0":<echo>,"th":<host ms>}` | Reply stamped with host time. |
+| peer → host | `{"type":"request","track_id":N}` | "Please play this" (if the host enables requests). |
+| host → peers | `{"type":"ended"}` | Party stopped. |
 
-```json
-{ "type": "hello", "token": "...", "proto": 1 }
-```
+**Clock sync (Cristian's algorithm).** The peer sends `t0`, records the receive
+time `t1` once on the `pong`, and computes `rtt = t1 − t0` and
+`offset = th − (t0 + t1)/2`. It keeps the offset from the *lowest-RTT* sample.
+The target play position is `position_ms + ((now + offset) − host_time_ms)`; the
+peer hard-seeks only when it drifts past ~100 ms.
 
-Server → peer events:
+**Reliability.** The token is re-validated live (every ~5 s) so a revoke tears
+down the socket. A peer that falls behind the broadcast buffer is resent the
+latest snapshot rather than silently dropped. The peer auto-reconnects with
+capped exponential backoff on a transient drop.
 
-- `{ "type": "peers", "peers": [ {id, name, color} ] }` — connected peers list
-  (only if the host enabled "peers can see each other").
-- `{ "type": "approval", "granted": true }` — Approved-mode decision.
-- `{ "type": "revoked" }` — access revoked; peer must stop.
-- `{ "type": "share-changed", ... }` — a share was added/removed/permission-changed.
+## Transport notes
 
-## 6. Party mode
-
-A **separate session role** layered on the control channel; clearly distinct from
-independent pull-streaming (where each peer plays whatever it wants).
-
-### Clock sync (Cristian / NTP-style)
-
-```
-peer → host : { "type":"ping", "t0":<peerMono> }
-host → peer : { "type":"pong", "t0":<echo>, "t1":<hostRecv>, "t2":<hostSend> }
-peer        : t3 = now
-  offset = ((t1 - t0) + (t2 - t3)) / 2
-  rtt    = (t3 - t0) - (t2 - t1)
-```
-
-Samples with RTT above a rolling threshold are discarded; the min-RTT sample's
-offset is kept and smoothed with an EWMA. Re-sync every ~5 s and on network
-change.
-
-### Synchronized playback
-
-```
-host → all : { "type":"party-state",
-               "trackId":"<hash>", "hostStartTs":<hostMono>, "posMs":<n>,
-               "paused":false }
-```
-
-Each peer maps `hostStartTs` into its own clock via `offset` and schedules
-play/seek so playback position matches. If measured drift exceeds ~80 ms a peer
-nudges rate or micro-seeks to converge — keeping the room within the **~100 ms**
-budget. Party peers that lack the track locally pull-stream it from the host in
-parallel.
-
-- **Host controls** playback for everyone.
-- Peers may **request** tracks only if the host enabled requests
-  (`{ "type":"request", "trackId":"..." }` → host queue).
-
-## 7. Error model
-
-Standard HTTP status + `{ "error": "code", "message": "..." }`. Codes include
-`unauthorized`, `forbidden`, `pin_required`, `pin_invalid`, `approval_pending`,
-`not_shared`, `revoked`, `unsupported_codec`, `rate_limited`.
+- One TLS port per host (rustls + ring; cert/key generated by `rcgen` at first
+  run and persisted).
+- The desktop streaming client caches a pinned stream to a size-capped temp
+  file before playback; the cache is swept on startup.
+- Transcoding is not implemented — original bytes only (every supported codec is
+  decodable by the desktop engine and `just_audio`).

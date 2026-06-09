@@ -1,5 +1,6 @@
 //! FRB LAN API: host (advertise + serve over TLS) and discover peers.
 
+use crate::db::remembered_peers;
 use crate::net::discovery::{self, HostInfo};
 use crate::net::party::PartyState;
 use crate::net::server::{self, ServerConfig};
@@ -7,6 +8,7 @@ use crate::net::tls;
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
 use mdns_sd::ServiceDaemon;
+use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread::JoinHandle;
@@ -19,6 +21,9 @@ struct Host {
     port: u16,
     sessions: server::Sessions,
     party: server::PartyHub,
+    approvals: server::Approvals,
+    db_path: PathBuf,
+    host_id: String,
 }
 
 static HOST: Mutex<Option<Host>> = Mutex::new(None);
@@ -70,6 +75,8 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
     );
     let sessions = cfg.sessions.clone();
     let party = cfg.party.clone();
+    let approvals = cfg.approvals.clone();
+    let host_id = cfg.host_id.clone();
     let handle: Handle<std::net::SocketAddr> = Handle::new();
     let handle_thread = handle.clone();
     let thread = std::thread::Builder::new()
@@ -99,8 +106,80 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
         port,
         sessions,
         party,
+        approvals,
+        db_path: PathBuf::from(&db_path),
+        host_id,
     });
     Ok(port)
+}
+
+/// A peer waiting for the host to allow/deny it (approved-peers share mode),
+/// surfaced to the host UI.
+pub struct PendingApprovalDto {
+    pub challenge: String,
+    pub peer: String,
+    pub label: String,
+    pub requested_at_ms: i64,
+}
+
+/// Peers currently awaiting an allow/deny decision from the host.
+pub fn net_pending_approvals() -> Vec<PendingApprovalDto> {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            if let Ok(a) = h.approvals.lock() {
+                return a
+                    .iter()
+                    .filter(|p| p.decision.is_none())
+                    .map(|p| PendingApprovalDto {
+                        challenge: p.challenge.clone(),
+                        peer: p.peer.clone(),
+                        label: p.label.clone(),
+                        requested_at_ms: p.requested_at_ms,
+                    })
+                    .collect();
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// Allow or deny a pending peer by its `challenge`. With `remember`, the decision
+/// is persisted (so the peer is auto-handled next time). False if not hosting or
+/// the challenge is unknown.
+pub fn net_decide_peer(challenge: String, allow: bool, remember: bool) -> bool {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            let peer = {
+                let Ok(mut a) = h.approvals.lock() else {
+                    return false;
+                };
+                let Some(p) = a.iter_mut().find(|p| p.challenge == challenge) else {
+                    return false;
+                };
+                p.decision = Some(allow);
+                p.peer.clone()
+            };
+            if remember {
+                // Best-effort persistence; if it fails the in-memory decision
+                // still stands for this session — but don't swallow the error,
+                // or the peer silently re-prompts next time.
+                match Connection::open(&h.db_path) {
+                    Ok(conn) => {
+                        if let Err(e) =
+                            remembered_peers::set(&conn, &h.host_id, &peer, allow, unix_ms())
+                        {
+                            eprintln!("peerbeat: failed to remember peer decision: {e}");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("peerbeat: cannot open db to remember peer: {e}")
+                    }
+                }
+            }
+            return true;
+        }
+    }
+    false
 }
 
 /// Revoke every peer session token (they must re-authenticate). Used by the
@@ -185,6 +264,53 @@ pub fn net_party_update(track_key: String, position_ms: i64, playing: bool) -> b
 /// End the party session (peers get an `ended` message).
 pub fn net_party_stop() -> bool {
     with_host(|h| h.party.stop())
+}
+
+/// A peer's pending request to play a track during a party (host side).
+pub struct PartyRequestDto {
+    pub peer: String,
+    pub track_id: i64,
+    pub title: String,
+    pub at_ms: i64,
+}
+
+/// Drain pending party track-requests, resolving each to a title from the host's
+/// library. Drained entries are removed, so the UI should accumulate them.
+pub fn net_party_requests() -> Vec<PartyRequestDto> {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            let reqs = h.party.drain_requests();
+            if reqs.is_empty() {
+                return Vec::new();
+            }
+            let conn = match Connection::open(&h.db_path) {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    // Titles fall back to "Track {id}" below; log so a locked or
+                    // missing DB isn't a silent mystery.
+                    eprintln!("peerbeat: party_requests cannot open db: {e}");
+                    None
+                }
+            };
+            return reqs
+                .into_iter()
+                .map(|r| {
+                    let title = conn
+                        .as_ref()
+                        .and_then(|c| crate::db::tracks::track_by_id(c, r.track_id).ok().flatten())
+                        .map(|t| t.title)
+                        .unwrap_or_else(|| format!("Track {}", r.track_id));
+                    PartyRequestDto {
+                        peer: r.peer,
+                        track_id: r.track_id,
+                        title,
+                        at_ms: r.at_ms,
+                    }
+                })
+                .collect();
+        }
+    }
+    Vec::new()
 }
 
 /// Whether a party session is currently active on this host.

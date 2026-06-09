@@ -1,6 +1,11 @@
+import 'dart:io' show Platform;
+import 'dart:typed_data' show Float32List;
+
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/scheduler.dart' show Ticker;
 
 import '../playback/player.dart';
+import '../src/rust/api/audio.dart' show audioSpectrum;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
 import 'library_home.dart' show TrackArt, fmtDuration;
@@ -15,9 +20,36 @@ class NowPlayingScreen extends StatefulWidget {
   State<NowPlayingScreen> createState() => _NowPlayingScreenState();
 }
 
+/// Collapsed height of the "Up next" sheet on Now Playing (fraction of height).
+const double _kQueuePeek = 0.14;
+
 class _NowPlayingScreenState extends State<NowPlayingScreen> {
   static const _endSeekEpsilon = Duration(milliseconds: 250);
   double? _dragMs;
+
+  // Drives the YouTube-Music-style swipe-up: the queue sheet rises while the
+  // player content fades. `_queueExtent` mirrors the sheet size (0.14–1.0).
+  final DraggableScrollableController _sheetCtl =
+      DraggableScrollableController();
+  final ValueNotifier<double> _queueExtent = ValueNotifier(_kQueuePeek);
+
+  @override
+  void initState() {
+    super.initState();
+    _sheetCtl.addListener(_onSheet);
+  }
+
+  void _onSheet() {
+    if (_sheetCtl.isAttached) _queueExtent.value = _sheetCtl.size;
+  }
+
+  @override
+  void dispose() {
+    _sheetCtl.removeListener(_onSheet);
+    _sheetCtl.dispose();
+    _queueExtent.dispose();
+    super.dispose();
+  }
 
   void _showLyrics(BuildContext context, int trackId) {
     showModalBottomSheet(
@@ -30,6 +62,20 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         maxChildSize: 0.92,
         builder: (_, controller) =>
             _LyricsPanel(trackId: trackId, scrollController: controller),
+      ),
+    );
+  }
+
+  void _showQueue(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        builder: (_, controller) => _QueueList(scrollController: controller),
       ),
     );
   }
@@ -49,8 +95,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           });
           return const Scaffold(body: SizedBox.shrink());
         }
+        final cs = Theme.of(context).colorScheme;
         return Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBodyBehindAppBar: true,
           appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
             leading: IconButton(
               tooltip: 'Close',
               icon: const Icon(Icons.expand_more),
@@ -59,6 +111,28 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             title: const Text('Now Playing'),
             centerTitle: true,
             actions: [
+              PopupMenuButton<int>(
+                tooltip: player.sleepActive
+                    ? 'Sleep timer: ${_fmtRemaining(player.sleepRemaining)}'
+                    : 'Sleep timer',
+                icon: Icon(
+                  player.sleepActive ? Icons.bedtime : Icons.bedtime_outlined,
+                  color: player.sleepActive ? cs.primary : null,
+                ),
+                onSelected: (m) =>
+                    player.setSleepTimer(m == 0 ? null : Duration(minutes: m)),
+                itemBuilder: (_) => [
+                  if (player.sleepActive)
+                    const PopupMenuItem(value: 0, child: Text('Turn off')),
+                  for (final m in [15, 30, 45, 60, 90])
+                    PopupMenuItem(value: m, child: Text('$m minutes')),
+                ],
+              ),
+              IconButton(
+                tooltip: 'Queue',
+                icon: const Icon(Icons.queue_music),
+                onPressed: () => _showQueue(context),
+              ),
               if (!t.path.startsWith('http'))
                 IconButton(
                   tooltip: 'Lyrics',
@@ -67,34 +141,84 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 ),
             ],
           ),
-          body: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 720;
-                final art = _Artwork(track: t);
-                final controls = _Controls(
-                  track: t,
-                  dragMs: _dragMs,
-                  onDragChanged: (v) => setState(() => _dragMs = v),
-                  onDragEnd: _onSeekEnd,
-                );
-                if (wide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+          // Album-art-forward backdrop: the theme's primary is already derived
+          // from the current art (dynamic theming), so this wash reflects it.
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  cs.primaryContainer.withValues(alpha: 0.55),
+                  cs.surface,
+                ],
+                stops: const [0.0, 0.6],
+              ),
+            ),
+            child: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 720;
+                  final art = _Artwork(track: t);
+                  final controls = _Controls(
+                    track: t,
+                    dragMs: _dragMs,
+                    onDragChanged: (v) => setState(() => _dragMs = v),
+                    onDragEnd: _onSeekEnd,
+                  );
+                  if (wide) {
+                    // Wide: art beside controls; queue stays on the app-bar icon.
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: Center(child: art)),
+                        Expanded(child: controls),
+                      ],
+                    );
+                  }
+                  // Portrait: player content with the "Up next" sheet peeking at
+                  // the bottom. Swipe it up → the player fades out as the queue
+                  // rises to full screen (YouTube-Music style).
+                  final player = Column(
                     children: [
-                      Expanded(child: Center(child: art)),
-                      const VerticalDivider(width: 1),
-                      Expanded(child: controls),
+                      Expanded(flex: 5, child: Center(child: art)),
+                      Expanded(flex: 6, child: controls),
                     ],
                   );
-                }
-                return Column(
-                  children: [
-                    Expanded(flex: 5, child: Center(child: art)),
-                    Expanded(flex: 6, child: controls),
-                  ],
-                );
-              },
+                  return Stack(
+                    children: [
+                      ValueListenableBuilder<double>(
+                        valueListenable: _queueExtent,
+                        builder: (_, ext, child) {
+                          // Fully visible at the peek; faded out by ~55% drag.
+                          final t = ((ext - _kQueuePeek) / (0.55 - _kQueuePeek))
+                              .clamp(0.0, 1.0);
+                          return Opacity(
+                            opacity: 1 - t,
+                            child: IgnorePointer(
+                              ignoring: t > 0.95,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: player,
+                      ),
+                      DraggableScrollableSheet(
+                        controller: _sheetCtl,
+                        initialChildSize: _kQueuePeek,
+                        minChildSize: _kQueuePeek,
+                        maxChildSize: 1.0,
+                        snap: true,
+                        snapSizes: const [_kQueuePeek, 1.0],
+                        builder: (ctx, sc) => _QueuePanel(
+                          scrollController: sc,
+                          controller: _sheetCtl,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         );
@@ -123,6 +247,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 }
 
+String _fmtRemaining(Duration? d) {
+  if (d == null) return '';
+  final m = d.inMinutes;
+  return m >= 1 ? '$m min left' : '<1 min left';
+}
+
 class _Artwork extends StatelessWidget {
   const _Artwork({required this.track});
   final TrackRow track;
@@ -134,9 +264,12 @@ class _Artwork extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           final side = c.biggest.shortestSide.clamp(120.0, 420.0);
+          // Match TrackArt's own corner radius (size * 0.2) so the artwork fills
+          // the clipped Material edge-to-edge — otherwise the squarer Material
+          // shows dark gaps in the corners behind TrackArt's rounder shape.
           return Material(
             elevation: 8,
-            borderRadius: BorderRadius.circular(side * 0.06),
+            borderRadius: BorderRadius.circular(side * 0.2),
             clipBehavior: Clip.antiAlias,
             child: TrackArt(track: track, size: side),
           );
@@ -165,7 +298,6 @@ class _Controls extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final durMs = player.duration.inMilliseconds;
     final maxMs = durMs <= 0 ? 1 : durMs;
-    final upNext = player.upNext;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -226,20 +358,18 @@ class _Controls extends StatelessWidget {
               );
             },
           ),
+          // The visualizer is fed by the desktop engine's FFT tap; Android/iOS
+          // have no spectrum source, so it would just sit flat — omit it there.
+          if (!Platform.isAndroid && !Platform.isIOS) ...[
+            const SizedBox(height: 8),
+            _Visualizer(color: cs.primary),
+          ],
           const SizedBox(height: 8),
           _transportRow(cs),
           const SizedBox(height: 8),
           _volumeRow(context, cs),
-          if (upNext.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Up next', style: text.titleSmall),
-            ),
-            const SizedBox(height: 4),
-            Expanded(child: _UpNextList(tracks: upNext)),
-          ] else
-            const Spacer(),
+          // The queue lives in the swipe-up "Up next" sheet (peeking below).
+          const Spacer(),
         ],
       ),
     );
@@ -265,6 +395,7 @@ class _Controls extends StatelessWidget {
           icon: const Icon(Icons.skip_previous),
         ),
         IconButton.filled(
+          tooltip: player.playing ? 'Pause' : 'Play',
           iconSize: 44,
           onPressed: player.toggle,
           icon: Icon(player.playing ? Icons.pause : Icons.play_arrow),
@@ -281,6 +412,10 @@ class _Controls extends StatelessWidget {
             RepeatMode.all => 'Repeat all',
             RepeatMode.one => 'Repeat one',
           },
+          // isSelected gives a non-colour (filled background) cue, and the glyph
+          // changes for repeat-one, so the three states are distinguishable
+          // without relying on colour.
+          isSelected: player.repeat != RepeatMode.off,
           onPressed: player.cycleRepeat,
           icon: Icon(
             player.repeat == RepeatMode.one ? Icons.repeat_one : Icons.repeat,
@@ -324,8 +459,16 @@ class _Controls extends StatelessWidget {
         for (final s in presets)
           PopupMenuItem(value: s, child: Text('${_fmtSpeed(s)}×')),
       ],
-      child: Padding(
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        // When a non-1× speed is active, draw an outline so the state reads
+        // without relying on colour (the speed value itself also changes).
+        decoration: active
+            ? BoxDecoration(
+                border: Border.all(color: cs.primary),
+                borderRadius: BorderRadius.circular(20),
+              )
+            : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -345,28 +488,150 @@ class _Controls extends StatelessWidget {
       s.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
 }
 
-class _UpNextList extends StatelessWidget {
-  const _UpNextList({required this.tracks});
-  final List<TrackRow> tracks;
+/// The swipe-up "Up next" panel behind Now Playing: a grab handle + header that
+/// drag the [DraggableScrollableSheet] (peek ⇄ full), over the reorderable queue.
+class _QueuePanel extends StatelessWidget {
+  const _QueuePanel({required this.scrollController, required this.controller});
+
+  final ScrollController scrollController;
+  final DraggableScrollableController controller;
+
+  void _drag(BuildContext context, double dy) {
+    if (!controller.isAttached) return;
+    final h = MediaQuery.of(context).size.height;
+    final next = (controller.size - dy / h).clamp(_kQueuePeek, 1.0);
+    controller.jumpTo(next);
+  }
+
+  void _settle() {
+    if (!controller.isAttached) return;
+    final mid = (_kQueuePeek + 1.0) / 2;
+    controller.animateTo(
+      controller.size >= mid ? 1.0 : _kQueuePeek,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final base = player.currentIndex;
-    return ListView.builder(
-      padding: EdgeInsets.zero,
-      itemCount: tracks.length,
-      itemBuilder: (context, i) {
-        final t = tracks[i];
-        return ListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          leading: TrackArt(track: t, size: 36),
-          title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: t.artist.isEmpty
-              ? null
-              : Text(t.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: Text(fmtDuration(t.durationMs)),
-          onTap: () => player.playQueueIndex(base + 1 + i),
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: cs.surfaceContainer,
+      elevation: 12,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Grab handle + header: drag to expand/collapse, or tap to toggle.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (d) => _drag(context, d.delta.dy),
+            onVerticalDragEnd: (_) => _settle(),
+            onTap: _settle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+              child: Column(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text('Up next', style: text.titleMedium),
+                      const Spacer(),
+                      ListenableBuilder(
+                        listenable: player,
+                        builder: (_, _) => Text(
+                          '${player.upNext.length}',
+                          style: text.labelLarge?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: _QueueList(scrollController: scrollController)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The reorderable up-next list (shared body of the swipe-up panel).
+class _QueueList extends StatelessWidget {
+  const _QueueList({this.scrollController});
+  final ScrollController? scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        final upNext = player.upNext;
+        final base = player.currentIndex;
+        if (upNext.isEmpty) {
+          return ListView(
+            controller: scrollController,
+            children: const [
+              SizedBox(height: 40),
+              Center(child: Text('Queue is empty')),
+            ],
+          );
+        }
+        return ReorderableListView.builder(
+          scrollController: scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          itemCount: upNext.length,
+          onReorderItem: player.reorderUpNext,
+          itemBuilder: (context, i) {
+            final t = upNext[i];
+            return ListTile(
+              key: ValueKey(i),
+              leading: TrackArt(track: t, size: 40),
+              title: Text(
+                t.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: t.artist.isEmpty
+                  ? null
+                  : Text(
+                      t.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Remove',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => player.removeFromUpNext(i),
+                  ),
+                  ReorderableDragStartListener(
+                    index: i,
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(Icons.drag_handle),
+                    ),
+                  ),
+                ],
+              ),
+              onTap: () => player.playQueueIndex(base + 1 + i),
+            );
+          },
         );
       },
     );
@@ -468,11 +733,67 @@ class _LyricsPanelState extends State<_LyricsPanel> {
   String? _raw;
   List<_LrcLine>? _synced;
   bool _loading = true;
+  // The active line index, updated only when it actually changes — so the
+  // synced ListView rebuilds per lyric line, not on every ~5 Hz position tick.
+  final ValueNotifier<int> _active = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
+    player.positionNotifier.addListener(_onTick);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(_LyricsPanel old) {
+    super.didUpdateWidget(old);
+    if (old.trackId != widget.trackId) {
+      _active.value = 0;
+      _loading = true;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    player.positionNotifier.removeListener(_onTick);
+    _active.dispose();
+    super.dispose();
+  }
+
+  void _onTick() {
+    final synced = _synced;
+    if (synced == null || synced.isEmpty) return;
+    final pos = player.positionNotifier.value;
+    var idx = 0;
+    for (var i = 0; i < synced.length; i++) {
+      if (synced[i].t <= pos) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    if (idx != _active.value) {
+      _active.value = idx;
+      _scrollToActive(idx);
+    }
+  }
+
+  /// Keep the active lyric line roughly centred as playback advances. Best-effort
+  /// (line heights vary), and a no-op until the list is laid out.
+  void _scrollToActive(int idx) {
+    final c = widget.scrollController;
+    if (c == null || !c.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!c.hasClients) return;
+      const approxLineExtent = 34.0; // ~text + vertical padding
+      final target = idx * approxLineExtent - 120.0; // sit upper-middle
+      c.animateTo(
+        target.clamp(0.0, c.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   Future<void> _load() async {
@@ -511,17 +832,9 @@ class _LyricsPanelState extends State<_LyricsPanel> {
         child: Text(raw, style: Theme.of(context).textTheme.bodyLarge),
       );
     }
-    return ValueListenableBuilder<Duration>(
-      valueListenable: player.positionNotifier,
-      builder: (context, pos, _) {
-        var active = 0;
-        for (var i = 0; i < synced.length; i++) {
-          if (synced[i].t <= pos) {
-            active = i;
-          } else {
-            break;
-          }
-        }
+    return ValueListenableBuilder<int>(
+      valueListenable: _active,
+      builder: (context, active, _) {
         final cs = Theme.of(context).colorScheme;
         return ListView.builder(
           controller: widget.scrollController,
@@ -529,15 +842,20 @@ class _LyricsPanelState extends State<_LyricsPanel> {
           itemCount: synced.length,
           itemBuilder: (context, i) {
             final on = i == active;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                synced[i].text.isEmpty ? '♪' : synced[i].text,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: on ? 18 : 15,
-                  fontWeight: on ? FontWeight.bold : FontWeight.normal,
-                  color: on ? cs.primary : null,
+            // Tap a line to seek there.
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => player.seek(synced[i].t),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                child: Text(
+                  synced[i].text.isEmpty ? '♪' : synced[i].text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: on ? 18 : 15,
+                    fontWeight: on ? FontWeight.bold : FontWeight.normal,
+                    color: on ? cs.primary : null,
+                  ),
                 ),
               ),
             );
@@ -546,4 +864,105 @@ class _LyricsPanelState extends State<_LyricsPanel> {
       },
     );
   }
+}
+
+/// A lightweight real-time spectrum visualizer. Polls the Rust desktop engine's
+/// FFT each frame with fast-attack / slow-release smoothing; flat when paused or
+/// on platforms without the desktop engine (the spectrum reads as silence).
+class _Visualizer extends StatefulWidget {
+  const _Visualizer({required this.color});
+
+  final Color color;
+
+  static const int _bands = 28;
+  static const double _height = 40;
+
+  @override
+  State<_Visualizer> createState() => _VisualizerState();
+}
+
+class _VisualizerState extends State<_Visualizer>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  final List<double> _levels = List.filled(_Visualizer._bands, 0.0);
+  final ValueNotifier<List<double>> _frame = ValueNotifier(const []);
+
+  @override
+  void initState() {
+    super.initState();
+    _frame.value = List.of(_levels);
+    _ticker = createTicker(_tick)..start();
+  }
+
+  void _tick(Duration _) {
+    Float32List raw;
+    try {
+      raw = player.playing
+          ? audioSpectrum(bands: _Visualizer._bands)
+          : Float32List(0);
+    } catch (_) {
+      raw = Float32List(0);
+    }
+    var changed = false;
+    for (var i = 0; i < _Visualizer._bands; i++) {
+      final target = i < raw.length ? raw[i].clamp(0.0, 1.0).toDouble() : 0.0;
+      final cur = _levels[i];
+      // Fast attack, slow release → lively but not jittery.
+      final next = target > cur ? target : cur + (target - cur) * 0.18;
+      if ((next - cur).abs() > 0.001) changed = true;
+      _levels[i] = next;
+    }
+    if (changed) _frame.value = List.of(_levels);
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _frame.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _Visualizer._height,
+      width: double.infinity,
+      child: ValueListenableBuilder<List<double>>(
+        valueListenable: _frame,
+        builder: (_, levels, _) =>
+            CustomPaint(painter: _BarsPainter(levels, widget.color)),
+      ),
+    );
+  }
+}
+
+class _BarsPainter extends CustomPainter {
+  _BarsPainter(this.levels, this.color);
+
+  final List<double> levels;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = levels.length;
+    if (n == 0) return;
+    const gap = 2.0;
+    final barW = (size.width - gap * (n - 1)) / n;
+    if (barW <= 0) return;
+    final paint = Paint();
+    for (var i = 0; i < n; i++) {
+      final lvl = levels[i].clamp(0.0, 1.0);
+      final h = lvl * size.height;
+      final x = i * (barW + gap);
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, size.height - h, barW, h < 2 ? 2 : h),
+        const Radius.circular(2),
+      );
+      paint.color = color.withValues(alpha: 0.30 + 0.60 * lvl);
+      canvas.drawRRect(rect, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BarsPainter old) => !identical(old.levels, levels);
 }

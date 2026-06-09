@@ -1,99 +1,92 @@
-# PeerBeat — Implementation Status
+# PeerBeat — Status
 
-Honest snapshot of what is built today vs. on the roadmap. `✅ done` ·
-`🟡 partial` · `⛔ planned`. The README and module docs link here; the long-form
-build-out is tracked in the project plan.
+Honest done / partial / planned matrix against the original specification, as of
+the **0.3.0 beta** push (the alpha→RC audit + fix pass). Legend: ✅ done ·
+⚠️ partial · 🔭 planned · ❌ not yet.
 
-## 1. Core playback
-| Feature | Status | Notes |
-|---|---|---|
-| Play/pause/prev/next/seek, volume, mute | ✅ | `playback/player.dart`, `audio/engine.rs` |
-| Shuffle, repeat (off/all/one) | ✅ | |
-| Resume from last position | ✅ | persisted track id + position |
-| Variable speed (pitch-preserving) | ✅ | Signalsmith time-stretch (`audio/timestretch.rs`); UI 0.5–2×; bypassed bit-exact at 1.0× |
-| Gapless playback | ⛔ | rodio interim; fresh sink per track |
-| Configurable crossfade (0–12 s) | ✅ | dual-sink equal-time fade, opt-in (`audio.crossfade`; default 0 = unchanged) |
+## By spec area
 
-## 2. Library
-| Feature | Status | Notes |
-|---|---|---|
-| Import MP3/FLAC/WAV/AAC/OGG/M4A | ✅ | `library/scan.rs`, lofty |
-| Read & edit tags | ✅ | `library/metadata.rs` write-back |
-| Embedded art + fallback | ✅ | `library/art.rs`, cached per album |
-| Browse Songs/Albums/Artists/Genres/Years/Recent | ✅ | `db/browse.rs` |
-| Fast fuzzy search | ✅ | FTS5 trigram + bm25 |
-| Manual rescan / prune | ✅ | `library_rescan_all` |
-| Active watch-folders | ✅ | `notify` watcher: debounced incremental rescan/prune on file changes (UI refreshes on next navigation) |
+### 0. Project setup — ✅
+Docker reproducible build, git, Melos/pub workspace, FRB bridge, clean module
+structure, app icon pipeline.
 
-## 3. Playlists & queue
-| Feature | Status | Notes |
-|---|---|---|
-| Create/rename/reorder/duplicate/delete | ✅ | `db/playlists.rs` |
-| Drag-drop queue, Play-Next, Add-to-Queue | ✅ | |
-| Smart playlists (rules → parameterized SQL) | ✅ | `db/smart.rs` |
-| M3U/PLS import-export | ✅ | `library/playlist_io.rs` |
-| Auto-lists (Recently/Most/Never-Played, Favorites) | ✅ | play tracking + favorites DAO/API + browse tiles + heart toggle |
+### 1. Core playback — ✅ (one caveat)
+Play/pause/seek/prev/next, volume + mute, shuffle, repeat (off/all/one), gapless
+(symphonia), configurable crossfade 0–12 s, resume-on-restart. Variable speed
+0.5–2× is **pitch-preserving on Linux/macOS** (Signalsmith Stretch); ⚠️ on
+**Windows** it currently falls back to a pitch-shifting resample.
 
-## 4. LAN sharing (the differentiator)
-| Feature | Status | Notes |
-|---|---|---|
-| mDNS discovery + manual IP | ✅ | `net/discovery.rs` |
-| Per-host TLS + TOFU cert pinning | ✅ | `net/tls.rs`, `net/tofu.dart` |
-| HTTP-Range streaming of host library | ✅ | `net/server.rs` `/v1/stream/{id}` |
-| LAN-only made explicit in UI | ✅ | network screen banner |
-| Display name in discovery | ✅ | (avatar/color advertised: ⛔) |
-| Mark playlists/library shareable | ✅ | `db/shares.rs` + Sharing screen |
-| Open / PIN access modes | ✅ | token-scoped server auth (`net/server.rs`) |
-| Approved-peer access mode | ⛔ | pends the WebSocket control channel |
-| Per-playlist stream-vs-download permissions | ✅ | enforced server-side per token scope |
-| List shared playlists / pick a scope | ✅ | `/v1/shares` + `/v1/playlists` + peer picker |
-| Pre-stream metadata / art preview | 🟡 | `/v1/tracks/{id}/meta` + `/art` endpoints; dedicated preview UI pending |
-| Download tracks (tags + art) | ✅ | per-track download + import into a local folder (playlist ZIP pending) |
-| See connected peers (peer↔peer) | ⛔ | needs the WebSocket control channel |
-| Host activity dashboard + revoke | ✅ | active peers + recent stream/download log; per-peer **and** revoke-all |
-| WebSocket control channel | ✅ | host `/v1/party` WS (state broadcast + clock-sync pong) + Dart peer client |
-| Party mode (sync ≤100 ms, host control) | 🟡 | full host broadcast + peer clock-sync/follow built — **experimental**, needs 2-device verification |
-| Party: peer track requests | ⛔ | optional per spec; not built |
+### 2. Local library — ✅
+Import MP3/FLAC/WAV/AAC/OGG/M4A; read + edit ID3/Vorbis/MP4 tags (with mojibake
+recovery); embedded art + fallback; browse Songs/Albums/Artists/Genres/Years/
+Recently-Added; FTS5 trigram fuzzy search; on-demand rescan + active watch-folders
+with a per-folder watch toggle; duplicate detection (Find duplicates); 50k-track
+scale covered by a test; batch tag editing across a multi-selection.
 
-> Note: the desktop "stream" path currently downloads the TOFU-verified stream to a
-> temp cache file and plays that; true incremental Range streaming straight to the
-> decoder is a roadmap item.
+### 3. Playlists & queue — ✅
+Full CRUD + duplicate + drag-reorder; queue with Play-Next / Add-to-Queue;
+rule-based smart playlists (whitelisted, parameterized SQL); auto-lists
+(Recently/Most/Never-Played, Favorites); M3U/PLS import-export.
 
-## 5. Audio quality
-| Feature | Status | Notes |
-|---|---|---|
-| 10-band graphic EQ + built-in & custom presets | ✅ | `audio/eq.rs`, `db/eq_presets.rs` |
-| ReplayGain / loudness normalization | ✅ | `audio/replay_gain.dart` |
-| Output-device selection (desktop) | ✅ | cpal enumeration |
-| Stereo widening | ✅ | `audio/widen.rs` |
+### 4. LAN sharing — ✅ (polish ⚠️)
+mDNS discovery (+ IPv6 fallback, + manual IP), host name/color, Open/PIN/
+Approved-peers modes (remembered), per-playlist stream vs stream+download,
+streaming (HTTP Range) + downloads, transfer log + one-tap revoke, TLS + TOFU
+pinning, explicit LAN-only UI, **party mode** with corrected Cristian clock-sync
++ auto-reconnect. ⚠️ Remaining polish: remote volume control, metadata/art
+preview *before* streaming, and a host toggle for peer-visibility.
 
-## 6. UI
-| Feature | Status | Notes |
-|---|---|---|
-| Now Playing (art, scrubber, up-next) | ✅ | `ui/now_playing.dart` |
-| Persistent mini-player | ✅ | |
-| Light/dark Material 3 | ✅ | |
-| Responsive desktop/phone/tablet | ✅ | |
-| Lyrics panel (`.lrc` / embedded) | ✅ | sidecar `.lrc` + embedded tag; synced highlighting in Now Playing |
-| Dynamic theming from album art | ⛔ | reverted — the async per-track root-`MaterialApp` rebuild reparented overlay render objects mid-transition (red-screen crash); needs a non-root-rebuild approach (e.g. theme a region below the Navigator) |
-| Keyboard shortcuts | ✅ | global play/pause, seek, prev/next, volume, mute, shuffle, repeat |
-| Gestures (mobile) | ⛔ | |
-| WCAG 2.1 AA (screen-reader/keyboard) | 🟡 | tooltips + keyboard nav + slider value announcements + decorative-art exclusion; full audit still pending |
+### 5. Audio quality — ✅ (widening/output-device desktop-only)
+10-band EQ + presets, ReplayGain, output-device selection, stereo widening in the
+desktop Rust engine. On Android the 10-band EQ is applied via `just_audio`'s
+`AndroidEqualizer` (the curve is interpolated onto the device's own bands), and
+ReplayGain works on every platform (it folds into the player volume). ⚠️ Stereo
+widening and per-app output-device selection remain desktop-only.
 
-## 7. OS integration
-| Feature | Status | Notes |
-|---|---|---|
-| MPRIS media controls + media keys (Linux) | ✅ | `os/os_media_controller.dart` |
-| Android lockscreen/notification/background | 🟡 | just_audio/ExoPlayer baseline |
-| Windows SMTC | ⛔ | |
-| System tray menu + close-to-tray (Win/Linux) | ✅ | tray icon + Play/Pause/Next/Prev/Show/Quit; close hides to tray (armed only if the tray initializes, so a tray-less compositor isn't stranded) |
-| Custom sliding notification + positioned mini-player popup | ⛔ | X11-only by nature; intentionally omitted on Wayland (the compositor controls window position) — tray menu + system notifications used instead |
-| Bluetooth / wired headset controls | 🟡 | via platform defaults (MPRIS / ExoPlayer) |
-| Android Auto | ⛔ | |
+### 6. UI / UX — ✅ (full WCAG pass ⚠️)
+Now Playing (large art, scrubber, auto-scrolling synced `.lrc`/embedded lyrics,
+real-time spectrum **visualizer**, up-next), persistent mini-player, light/dark +
+album-art dynamic theming **plus a System/Light/Dark selector and accent picker**,
+responsive desktop/phone/tablet layouts, desktop keyboard shortcuts.
+Accessibility: tap
+targets ≥48 dp, non-colour state cues, screen-reader labels and an efficient
+synced-lyrics view are done; ⚠️ a full WCAG 2.1 AA pass (keyboard focus
+traversal everywhere, contrast audit) is in progress.
 
-## 9. Publish
-| Item | Status | Notes |
-|---|---|---|
-| Public GitHub repo | ✅ | |
-| Release CI: Windows `.exe`, Android apk+aab, Linux AppImage+deb | ✅ | `.github/workflows/release.yml` |
-| AUR `peerbeat` / `peerbeat-bin` | ✅ | `packaging/aur/` |
+### 7. OS integration — ✅ core / ❌ extras
+MPRIS (Linux, spec-correct Volume + clean name handling), SMTC (Windows),
+Android lockscreen/notification/background, system tray + close-to-tray, Wayland
+fallback to system notifications. ❌ Not yet: the custom sliding notification
+popup + tray-anchored mini-player (X11/Windows), and Android Auto. ⚠️ Headset/BT
+controls rely on the OS media session.
+
+### 8. Non-functional — ✅
+Offline-first, SQLite data model documented, 50k-track load covered by a test.
+Scrub-latency and LAN first-audio targets are plausible but not yet benchmarked
+(RC).
+
+### 9. Publish — ✅ (Flatpak ❌, version sync pending)
+Public GitHub repo + Releases workflow building Windows `.exe`, Android
+`.apk`/`.aab`, Linux AppImage/`.deb`; AUR `peerbeat` + `peerbeat-bin`.
+❌ Flatpak is specified but not yet built. Version strings across
+Cargo/Inno/metainfo/AUR are being synced to the release version.
+
+## Known-not-bugs (audit false positives, intentionally unchanged)
+
+The audit's adversarial verification refuted several "races": the SQLite store is
+serialized behind a process-wide mutex, and Dart's single-threaded event loop
+makes the pause-vs-advance microtask ordering safe. These are documented here so
+they aren't "re-fixed" later.
+
+## Tracked for the RC hardening pass
+
+- Pitch-preserving speed on Windows (or documented fallback).
+- Custom sliding notification + tray mini-player; Android Auto.
+- Flatpak packaging; full version sync; AUR bump at release.
+- Per-peer streaming byte-rate limit.
+- Full WCAG 2.1 AA verification + scrub/first-audio benchmarks.
+- 100× feature themes — shipped: spectrum visualizer + lyrics auto-scroll +
+  tap-to-seek, smarter library (per-folder watch toggle, duplicate detection,
+  batch tag editing), personalization (theme selector, accent picker, more
+  shortcuts). Remaining: an `.lrc` lyrics editor, and party/social polish
+  (reconnect UI, chat/reactions, transfer dashboard — needs 2-device verify).

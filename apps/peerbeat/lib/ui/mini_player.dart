@@ -59,6 +59,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         min: 0,
                         max: maxMs.toDouble(),
                         value: posMs,
+                        semanticFormatterCallback: (v) =>
+                            'Position ${fmtDuration(v.round())}',
                         onChanged: (v) => setState(() => _dragMs = v),
                         onChangeEnd: (v) async {
                           final requested = Duration(milliseconds: v.toInt());
@@ -139,22 +141,31 @@ class _MiniPlayerState extends State<MiniPlayer> {
                           ),
                         ),
                       ),
-                      IconButton(
-                        tooltip: 'Shuffle',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => player.setShuffle(!player.shuffle),
-                        icon: Icon(
-                          Icons.shuffle,
-                          color: player.shuffle ? cs.primary : null,
-                        ),
-                      ),
+                      // Compact transport only — prev · play/pause · next. The
+                      // full set (shuffle, repeat, favourite, volume, speed)
+                      // lives on the Now Playing screen (tap the bar to open).
+                      const SizedBox(width: 4),
                       IconButton(
                         tooltip: 'Previous',
+                        iconSize: 22,
                         visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
                         onPressed: player.hasPrevious ? player.previous : null,
                         icon: const Icon(Icons.skip_previous),
                       ),
                       IconButton.filled(
+                        tooltip: player.playing ? 'Pause' : 'Play',
+                        iconSize: 22,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
                         onPressed: player.toggle,
                         icon: Icon(
                           player.playing ? Icons.pause : Icons.play_arrow,
@@ -162,34 +173,15 @@ class _MiniPlayerState extends State<MiniPlayer> {
                       ),
                       IconButton(
                         tooltip: 'Next',
+                        iconSize: 22,
                         visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
                         onPressed: player.hasNext ? player.next : null,
                         icon: const Icon(Icons.skip_next),
-                      ),
-                      IconButton(
-                        tooltip: switch (player.repeat) {
-                          RepeatMode.off => 'Repeat off',
-                          RepeatMode.all => 'Repeat all',
-                          RepeatMode.one => 'Repeat one',
-                        },
-                        visualDensity: VisualDensity.compact,
-                        onPressed: player.cycleRepeat,
-                        icon: Icon(
-                          player.repeat == RepeatMode.one
-                              ? Icons.repeat_one
-                              : Icons.repeat,
-                          color: player.repeat == RepeatMode.off
-                              ? null
-                              : cs.primary,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: player.muted ? 'Unmute' : 'Mute',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: player.toggleMute,
-                        icon: Icon(
-                          player.muted ? Icons.volume_off : Icons.volume_up,
-                        ),
                       ),
                     ],
                   ),
