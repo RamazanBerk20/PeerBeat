@@ -235,6 +235,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get settingsAbout => 'حول';
 
   @override
+  String get supportDevelopment => 'ادعم التطوير';
+
+  @override
+  String get sponsorOnGithub => 'ارعَ على GitHub';
+
+  @override
   String get settingsTheme => 'السمة';
 
   @override

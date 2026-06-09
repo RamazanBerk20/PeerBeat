@@ -225,6 +225,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAbout => '关于';
 
   @override
+  String get supportDevelopment => '支持开发';
+
+  @override
+  String get sponsorOnGithub => '在 GitHub 上赞助';
+
+  @override
   String get settingsTheme => '主题';
 
   @override

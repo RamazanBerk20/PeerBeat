@@ -225,6 +225,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get settingsAbout => '정보';
 
   @override
+  String get supportDevelopment => '개발 지원';
+
+  @override
+  String get sponsorOnGithub => 'GitHub에서 후원';
+
+  @override
   String get settingsTheme => '테마';
 
   @override

@@ -225,6 +225,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsAbout => '情報';
 
   @override
+  String get supportDevelopment => '開発を支援';
+
+  @override
+  String get sponsorOnGithub => 'GitHub でスポンサーになる';
+
+  @override
   String get settingsTheme => 'テーマ';
 
   @override

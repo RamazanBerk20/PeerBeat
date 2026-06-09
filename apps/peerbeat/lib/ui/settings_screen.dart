@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../playback/player.dart';
@@ -255,6 +256,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: const Icon(Icons.music_note),
                 title: const Text('PeerBeat'),
                 subtitle: Text(l10n.appTagline),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.favorite_outline),
+                title: Text(l10n.supportDevelopment),
+                subtitle: Text(l10n.sponsorOnGithub),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () => launchUrl(
+                  Uri.parse('https://github.com/sponsors/RamazanBerk20'),
+                  mode: LaunchMode.externalApplication,
+                ),
               ),
             ),
             const SizedBox(height: 8),

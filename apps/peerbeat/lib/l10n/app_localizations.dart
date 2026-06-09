@@ -498,6 +498,18 @@ abstract class AppLocalizations {
   /// **'About'**
   String get settingsAbout;
 
+  /// No description provided for @supportDevelopment.
+  ///
+  /// In en, this message translates to:
+  /// **'Support development'**
+  String get supportDevelopment;
+
+  /// No description provided for @sponsorOnGithub.
+  ///
+  /// In en, this message translates to:
+  /// **'Sponsor on GitHub'**
+  String get sponsorOnGithub;
+
   /// No description provided for @settingsTheme.
   ///
   /// In en, this message translates to:

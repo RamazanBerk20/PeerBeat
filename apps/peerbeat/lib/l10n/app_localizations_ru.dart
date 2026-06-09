@@ -234,6 +234,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsAbout => 'О приложении';
 
   @override
+  String get supportDevelopment => 'Поддержать разработку';
+
+  @override
+  String get sponsorOnGithub => 'Спонсировать на GitHub';
+
+  @override
   String get settingsTheme => 'Тема';
 
   @override

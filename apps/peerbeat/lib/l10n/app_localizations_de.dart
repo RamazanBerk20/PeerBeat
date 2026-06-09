@@ -232,6 +232,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsAbout => 'Über';
 
   @override
+  String get supportDevelopment => 'Entwicklung unterstützen';
+
+  @override
+  String get sponsorOnGithub => 'Auf GitHub sponsern';
+
+  @override
   String get settingsTheme => 'Design';
 
   @override

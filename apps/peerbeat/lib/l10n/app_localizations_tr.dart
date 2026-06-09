@@ -232,6 +232,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get settingsAbout => 'Hakkında';
 
   @override
+  String get supportDevelopment => 'Geliştirmeyi destekle';
+
+  @override
+  String get sponsorOnGithub => 'GitHub\'da sponsor ol';
+
+  @override
   String get settingsTheme => 'Tema';
 
   @override

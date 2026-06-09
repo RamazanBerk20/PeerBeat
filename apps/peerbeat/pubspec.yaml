@@ -28,6 +28,8 @@ dependencies:
   smtc_windows: ^1.0.1 # Windows System Media Transport Controls
   http: ^1.2.0 # in-app updater: query GitHub Releases + download the installer
   package_info_plus: ^8.0.0 # current app version (drives the update check)
+  url_launcher: ^6.3.0 # open the GitHub Sponsors page from Settings
+
   flutter_localizations:
     sdk: flutter
   intl: any # version pinned by flutter_localizations

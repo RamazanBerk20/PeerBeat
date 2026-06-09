@@ -9,6 +9,7 @@ Windows · Linux · Android — no cloud, no accounts, nothing leaves your netwo
 
 [![CI](https://github.com/RamazanBerk20/PeerBeat/actions/workflows/ci.yml/badge.svg)](https://github.com/RamazanBerk20/PeerBeat/actions/workflows/ci.yml)
 &nbsp;·&nbsp; License: GPL-3.0-or-later
+&nbsp;·&nbsp; [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/RamazanBerk20)
 
 </div>
 
@@ -113,6 +114,13 @@ users: `peerbeat` / `peerbeat-bin` on the AUR.
 No accounts, no cloud, no telemetry, no internet connections. Everything is local;
 LAN sharing is opt-in and encrypted. Full inventory in
 [`docs/privacy.md`](docs/privacy.md).
+
+## Support
+
+PeerBeat is free and open source, built in the open. If it's useful to you,
+consider **[sponsoring on GitHub](https://github.com/sponsors/RamazanBerk20)** —
+it funds the time that goes into new features, platform testing, and releases.
+Every bit helps, and starring the repo is appreciated too. 💜
 
 ## License
 
