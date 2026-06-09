@@ -3,16 +3,18 @@ import 'dart:io';
 
 import 'package:dbus/dbus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:smtc_windows/smtc_windows.dart' hide RepeatMode;
 
 import '../playback/player.dart';
 import '../src/rust/db/tracks.dart';
 
 /// Bridges the [player] to the OS media controls (lockscreen/media-keys).
-/// Linux uses MPRIS over D-Bus; other desktops/Android are no-ops here
-/// (Android playback controls come from just_audio's own session).
+/// Linux uses MPRIS over D-Bus; Windows uses SMTC; Android controls come from
+/// just_audio's own session (no-op here).
 abstract class OsMediaController {
   factory OsMediaController.forPlatform() {
     if (Platform.isLinux) return MprisController();
+    if (Platform.isWindows) return SmtcController();
     return _NoopOsMediaController();
   }
 
@@ -29,6 +31,98 @@ class _NoopOsMediaController implements OsMediaController {
   Future<void> start() async {}
   @override
   Future<void> dispose() async {}
+}
+
+/// Windows: System Media Transport Controls (the volume-flyout / lockscreen
+/// media widget + hardware media keys), via the `smtc_windows` plugin.
+class SmtcController implements OsMediaController {
+  SMTCWindows? _smtc;
+  StreamSubscription<PressedButton>? _sub;
+  int _lastTrackId = -1;
+  PlaybackStatus? _lastStatus;
+
+  @override
+  Future<void> start() async {
+    try {
+      await SMTCWindows.initialize();
+      final smtc = SMTCWindows(
+        config: const SMTCConfig(
+          playEnabled: true,
+          pauseEnabled: true,
+          stopEnabled: false,
+          nextEnabled: true,
+          prevEnabled: true,
+          fastForwardEnabled: false,
+          rewindEnabled: false,
+        ),
+      );
+      _smtc = smtc;
+      _sub = smtc.buttonPressStream.listen(_onButton);
+      player.addListener(_onPlayerChanged);
+      _onPlayerChanged(); // push initial state
+    } catch (e) {
+      // SMTC can fail to register on locked-down systems — degrade silently.
+      debugPrint('SMTC unavailable: $e');
+      player.removeListener(_onPlayerChanged);
+      _smtc = null;
+    }
+  }
+
+  void _onButton(PressedButton b) {
+    switch (b) {
+      case PressedButton.play:
+        if (!player.playing) player.toggle();
+      case PressedButton.pause:
+      case PressedButton.stop:
+        if (player.playing) player.toggle();
+      case PressedButton.next:
+        unawaited(player.next());
+      case PressedButton.previous:
+        unawaited(player.previous());
+      default:
+        break;
+    }
+  }
+
+  void _onPlayerChanged() {
+    final smtc = _smtc;
+    if (smtc == null) return;
+    final t = player.current;
+    final status = t == null
+        ? PlaybackStatus.stopped
+        : (player.playing ? PlaybackStatus.playing : PlaybackStatus.paused);
+    if (status != _lastStatus) {
+      _lastStatus = status;
+      unawaited(smtc.setPlaybackStatus(status));
+    }
+    final trackId = t?.id ?? -1;
+    if (trackId != _lastTrackId) {
+      _lastTrackId = trackId;
+      final art = t?.artPath;
+      unawaited(
+        smtc.updateMetadata(
+          MusicMetadata(
+            title: (t == null || t.title.isEmpty) ? 'PeerBeat' : t.title,
+            artist: (t?.artist.isNotEmpty ?? false) ? t!.artist : null,
+            album: (t?.album.isNotEmpty ?? false) ? t!.album : null,
+            thumbnail: (art != null && art.isNotEmpty)
+                ? Uri.file(art).toString()
+                : null,
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> dispose() async {
+    player.removeListener(_onPlayerChanged);
+    await _sub?.cancel();
+    _sub = null;
+    final smtc = _smtc;
+    _smtc = null;
+    if (smtc != null) await smtc.dispose();
+  }
 }
 
 const _mp2 = 'org.mpris.MediaPlayer2';
