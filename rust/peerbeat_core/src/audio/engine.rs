@@ -238,7 +238,9 @@ impl SymphoniaFileSource {
             hint.with_extension(ext);
         }
         let format_opts = FormatOptions {
-            enable_gapless: false,
+            // Trim encoder delay/padding so consecutive compressed tracks
+            // (MP3/AAC) play without the inserted silence — the usual audible gap.
+            enable_gapless: true,
             ..Default::default()
         };
         let metadata_opts = MetadataOptions::default();

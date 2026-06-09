@@ -543,8 +543,12 @@ class TrackArt extends StatelessWidget {
 }
 
 class TrackListView extends StatefulWidget {
-  const TrackListView({super.key, required this.tracks});
+  const TrackListView({super.key, required this.tracks, this.onEndReached});
   final List<TrackRow> tracks;
+
+  /// Optional infinite-scroll hook: called as the list nears its end so the
+  /// caller can append the next page (it must guard against re-entrancy).
+  final Future<void> Function()? onEndReached;
 
   @override
   State<TrackListView> createState() => _TrackListViewState();
@@ -552,6 +556,27 @@ class TrackListView extends StatefulWidget {
 
 class _TrackListViewState extends State<TrackListView> {
   late List<TrackRow> _tracks = List.of(widget.tracks);
+  final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (widget.onEndReached == null || !_scroll.hasClients) return;
+    final p = _scroll.position;
+    if (p.pixels >= p.maxScrollExtent - 800) {
+      widget.onEndReached!.call();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(TrackListView old) {
@@ -569,6 +594,7 @@ class _TrackListViewState extends State<TrackListView> {
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) => ListView.builder(
+        controller: _scroll,
         itemCount: _tracks.length,
         itemBuilder: (_, i) {
           final t = _tracks[i];
@@ -743,11 +769,68 @@ class _TracksFutureState extends State<_TracksFuture> {
   }
 }
 
+/// Infinite-scroll list backed by a paged loader. Loads one page up front (fast
+/// even for a 50k library) and appends more as the user scrolls.
+class _PaginatedTracks extends StatefulWidget {
+  const _PaginatedTracks(this.loadPage);
+  final Future<List<TrackRow>> Function(int limit, int offset) loadPage;
+
+  @override
+  State<_PaginatedTracks> createState() => _PaginatedTracksState();
+}
+
+class _PaginatedTracksState extends State<_PaginatedTracks> {
+  static const _pageSize = 300;
+  final List<TrackRow> _tracks = [];
+  bool _loading = false;
+  bool _done = false;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _done) return;
+    _loading = true;
+    try {
+      final page = await widget.loadPage(_pageSize, _tracks.length);
+      if (!mounted) return;
+      setState(() {
+        _tracks.addAll(page);
+        if (page.length < _pageSize) _done = true;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    } finally {
+      _loading = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return Center(child: Text('Failed to load: $_error'));
+    }
+    if (_tracks.isEmpty && !_done) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    // New list identity each page so TrackListView picks up the appended rows.
+    return TrackListView(
+      tracks: List.of(_tracks),
+      onEndReached: _done ? null : _loadMore,
+    );
+  }
+}
+
 class _SongsTab extends StatelessWidget {
   const _SongsTab({super.key});
   @override
-  Widget build(BuildContext context) =>
-      _TracksFuture(() => libraryBrowseSongs(limit: 5000, offset: 0));
+  Widget build(BuildContext context) => _PaginatedTracks(
+    (limit, offset) => libraryBrowseSongs(limit: limit, offset: offset),
+  );
 }
 
 class _RecentTab extends StatelessWidget {
