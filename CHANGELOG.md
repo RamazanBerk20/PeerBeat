@@ -7,6 +7,10 @@ release candidate, plus a documentation rebuild and the first personalization
 features.
 
 ### Features
+- **Android audio**: the 10-band EQ now applies on Android via `just_audio`'s
+  `AndroidEqualizer` (the curve is interpolated onto the device's bands) —
+  previously a no-op. ReplayGain already worked on Android (it folds into the
+  player volume). Stereo widening stays desktop-only.
 - **Personalization**: a Theme selector (System / Light / Dark — previously
   dark-only) and an accent-colour picker (8 presets + the default) under
   Settings → Appearance; the chosen accent is the fallback when dynamic

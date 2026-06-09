@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:just_audio_background/just_audio_background.dart';
@@ -301,7 +302,30 @@ class RustDesktopEngine implements AudioEngine {
 
 /// Android: ExoPlayer via just_audio.
 class ExoPlayerEngine implements AudioEngine {
-  final ja.AudioPlayer _player = ja.AudioPlayer();
+  // The platform graphic EQ, inserted into the player's audio pipeline. Its
+  // `parameters` (and per-band gains) only resolve once a source has activated
+  // the effect, so we cache the desired curve and (re)apply it after each load.
+  final ja.AndroidEqualizer _eq = ja.AndroidEqualizer();
+  late final ja.AudioPlayer _player = ja.AudioPlayer(
+    audioPipeline: ja.AudioPipeline(androidAudioEffects: [_eq]),
+  );
+
+  // 10-band ISO octave centres (Hz), matching the desktop engine + the UI.
+  static const _centers = <double>[
+    31.25,
+    62.5,
+    125,
+    250,
+    500,
+    1000,
+    2000,
+    4000,
+    8000,
+    16000,
+  ];
+  List<double> _eqGains = List<double>.filled(10, 0.0);
+  double _eqPreampDb = 0.0;
+  bool _eqOn = false;
 
   @override
   Future<void> playPath(
@@ -310,6 +334,7 @@ class ExoPlayerEngine implements AudioEngine {
     MediaTag? tag,
   }) async {
     await _player.setAudioSource(_source(Uri.file(path), tag, duration));
+    unawaited(_pushEq()); // (re)apply once the effect activates on this source
     unawaited(
       _player.play(),
     ); // do not await: completes only when playback ends
@@ -318,6 +343,7 @@ class ExoPlayerEngine implements AudioEngine {
   @override
   Future<void> playUrl(String url, {Duration? duration, MediaTag? tag}) async {
     await _player.setAudioSource(_source(Uri.parse(url), tag, duration));
+    unawaited(_pushEq());
     unawaited(
       _player.play(),
     ); // do not await: completes only when playback ends
@@ -364,8 +390,46 @@ class ExoPlayerEngine implements AudioEngine {
 
   @override
   Future<void> setEq(List<double> gains, double preampDb) async {
-    // Android platform EQ lands with the Android audio-effects pass. Persisting
-    // and exposing the same controls now keeps settings cross-platform.
+    _eqGains = gains.length == 10 ? gains : List<double>.filled(10, 0.0);
+    _eqPreampDb = preampDb;
+    _eqOn = preampDb.abs() > 0.01 || _eqGains.any((g) => g.abs() > 0.01);
+    await _pushEq();
+  }
+
+  /// Interpolate the desired gain (dB) at [freq] from the 10-band curve, on a
+  /// log-frequency axis (so it lands sensibly on the device's own band centres).
+  double _gainAt(double freq) {
+    if (freq <= _centers.first) return _eqGains.first;
+    if (freq >= _centers.last) return _eqGains.last;
+    for (var i = 0; i < _centers.length - 1; i++) {
+      final lo = _centers[i], hi = _centers[i + 1];
+      if (freq >= lo && freq <= hi) {
+        final t = (_logf(freq) - _logf(lo)) / (_logf(hi) - _logf(lo));
+        return _eqGains[i] + (_eqGains[i + 1] - _eqGains[i]) * t;
+      }
+    }
+    return 0.0;
+  }
+
+  static double _logf(double x) => math.log(x) / math.ln10;
+
+  /// Push the cached EQ curve onto the device equalizer. `parameters` resolves
+  /// only after a source activates the effect; before then this just pends.
+  Future<void> _pushEq() async {
+    try {
+      final params = await _eq.parameters;
+      await _eq.setEnabled(_eqOn);
+      if (!_eqOn) return;
+      for (final band in params.bands) {
+        final g = (_gainAt(band.centerFrequency) + _eqPreampDb).clamp(
+          params.minDecibels,
+          params.maxDecibels,
+        );
+        await band.setGain(g);
+      }
+    } catch (e) {
+      logErr('android.eq', e);
+    }
   }
 
   @override

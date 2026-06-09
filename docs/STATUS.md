@@ -36,10 +36,12 @@ pinning, explicit LAN-only UI, **party mode** with corrected Cristian clock-sync
 + auto-reconnect. ⚠️ Remaining polish: remote volume control, metadata/art
 preview *before* streaming, and a host toggle for peer-visibility.
 
-### 5. Audio quality — ✅ desktop / ❌ Android
-10-band EQ + presets, ReplayGain, output-device selection, stereo widening — all
-in the desktop Rust engine. ❌ On Android the engine is a stub; wiring
-`just_audio`'s `AndroidEqualizer`/`LoudnessEnhancer` is planned for RC.
+### 5. Audio quality — ✅ (widening/output-device desktop-only)
+10-band EQ + presets, ReplayGain, output-device selection, stereo widening in the
+desktop Rust engine. On Android the 10-band EQ is applied via `just_audio`'s
+`AndroidEqualizer` (the curve is interpolated onto the device's own bands), and
+ReplayGain works on every platform (it folds into the player volume). ⚠️ Stereo
+widening and per-app output-device selection remain desktop-only.
 
 ### 6. UI / UX — ✅ (full WCAG pass ⚠️)
 Now Playing (large art, scrubber, auto-scrolling synced `.lrc`/embedded lyrics,
@@ -79,7 +81,6 @@ they aren't "re-fixed" later.
 ## Tracked for the RC hardening pass
 
 - Pitch-preserving speed on Windows (or documented fallback).
-- Android EQ/ReplayGain via `just_audio`.
 - Custom sliding notification + tray mini-player; Android Auto.
 - Flatpak packaging; full version sync; AUR bump at release.
 - Per-peer streaming byte-rate limit.
