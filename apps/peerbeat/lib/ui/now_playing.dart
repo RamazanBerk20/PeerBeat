@@ -662,7 +662,27 @@ class _LyricsPanelState extends State<_LyricsPanel> {
         break;
       }
     }
-    if (idx != _active.value) _active.value = idx;
+    if (idx != _active.value) {
+      _active.value = idx;
+      _scrollToActive(idx);
+    }
+  }
+
+  /// Keep the active lyric line roughly centred as playback advances. Best-effort
+  /// (line heights vary), and a no-op until the list is laid out.
+  void _scrollToActive(int idx) {
+    final c = widget.scrollController;
+    if (c == null || !c.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!c.hasClients) return;
+      const approxLineExtent = 34.0; // ~text + vertical padding
+      final target = idx * approxLineExtent - 120.0; // sit upper-middle
+      c.animateTo(
+        target.clamp(0.0, c.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   Future<void> _load() async {
