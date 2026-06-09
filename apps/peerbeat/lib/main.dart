@@ -1,13 +1,14 @@
 import 'dart:io';
 import 'dart:ui' show AppExitResponse;
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
-import 'package:just_audio_background/just_audio_background.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app_config.dart';
+import 'os/audio_handler.dart';
 import 'os/desktop_shell.dart';
 import 'os/os_media_controller.dart';
 import 'playback/player.dart';
@@ -19,14 +20,20 @@ import 'ui/theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (Platform.isAndroid) {
-    // Attach a MediaSession + foreground service so Android shows lockscreen /
-    // notification controls and keeps playback alive in the background. Must run
-    // before the first AudioPlayer is created (i.e. before the player singleton).
+    // Media session + foreground service for lockscreen/notification controls
+    // and background playback. Our custom handler exposes exactly
+    // previous · play/pause · next (no stop) and drives the app player.
     try {
-      await JustAudioBackground.init(
-        androidNotificationChannelId: 'io.github.ramazanberk20.peerbeat.audio',
-        androidNotificationChannelName: 'PeerBeat playback',
-        androidNotificationOngoing: true,
+      await AudioService.init(
+        builder: () => PeerBeatAudioHandler(),
+        config: const AudioServiceConfig(
+          androidNotificationChannelId:
+              'io.github.ramazanberk20.peerbeat.audio',
+          androidNotificationChannelName: 'PeerBeat playback',
+          androidNotificationOngoing: true,
+          androidNotificationIcon: 'drawable/ic_notification',
+          androidStopForegroundOnPause: true,
+        ),
       );
     } catch (_) {}
   }

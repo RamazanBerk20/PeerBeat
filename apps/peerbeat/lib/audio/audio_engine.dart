@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:just_audio/just_audio.dart' as ja;
-import 'package:just_audio_background/just_audio_background.dart';
 
 import '../net/tofu.dart';
 import '../src/rust/api/audio.dart' as rust;
@@ -327,13 +326,16 @@ class ExoPlayerEngine implements AudioEngine {
   double _eqPreampDb = 0.0;
   bool _eqOn = false;
 
+  // Metadata for the OS media session is published by PeerBeatAudioHandler
+  // (audio_service) straight from the player, so the just_audio sources need no
+  // MediaItem tag here.
   @override
   Future<void> playPath(
     String path, {
     Duration? duration,
     MediaTag? tag,
   }) async {
-    await _player.setAudioSource(_source(Uri.file(path), tag, duration));
+    await _player.setAudioSource(ja.AudioSource.uri(Uri.file(path)));
     unawaited(_pushEq()); // (re)apply once the effect activates on this source
     unawaited(
       _player.play(),
@@ -342,33 +344,11 @@ class ExoPlayerEngine implements AudioEngine {
 
   @override
   Future<void> playUrl(String url, {Duration? duration, MediaTag? tag}) async {
-    await _player.setAudioSource(_source(Uri.parse(url), tag, duration));
+    await _player.setAudioSource(ja.AudioSource.uri(Uri.parse(url)));
     unawaited(_pushEq());
     unawaited(
       _player.play(),
     ); // do not await: completes only when playback ends
-  }
-
-  /// Build an [AudioSource] carrying a [MediaItem]. just_audio_background
-  /// requires every source to have a tag, so we always synthesise one (falling
-  /// back to placeholder text) even when the caller didn't supply metadata.
-  ja.AudioSource _source(Uri uri, MediaTag? tag, Duration? duration) {
-    final d = tag != null && tag.durationMs > 0
-        ? Duration(milliseconds: tag.durationMs)
-        : duration;
-    return ja.AudioSource.uri(
-      uri,
-      tag: MediaItem(
-        id: tag?.id ?? uri.toString(),
-        title: (tag?.title.isNotEmpty ?? false) ? tag!.title : 'PeerBeat',
-        // Empty (not null) when unknown — Android's media applet renders a null
-        // artist/album as the literal text "null".
-        artist: (tag?.artist.isNotEmpty ?? false) ? tag!.artist : '',
-        album: (tag?.album.isNotEmpty ?? false) ? tag!.album : '',
-        artUri: tag?.artUri,
-        duration: d,
-      ),
-    );
   }
 
   @override
