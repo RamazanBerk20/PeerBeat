@@ -817,10 +817,46 @@ class _PaginatedTracksState extends State<_PaginatedTracks> {
     if (_tracks.isEmpty && !_done) {
       return const Center(child: CircularProgressIndicator());
     }
+    if (_tracks.isEmpty && _done) {
+      return const _EmptyLibrary();
+    }
     // New list identity each page so TrackListView picks up the appended rows.
     return TrackListView(
       tracks: List.of(_tracks),
       onEndReached: _done ? null : _loadMore,
+    );
+  }
+}
+
+/// First-run / empty-library onboarding for the Songs tab.
+class _EmptyLibrary extends StatelessWidget {
+  const _EmptyLibrary();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final canDrop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.library_music_outlined, size: 72, color: cs.primary),
+            const SizedBox(height: 16),
+            Text('Your library is empty', style: text.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              canDrop
+                  ? 'Drag a music folder here, or use the scan button in the top bar to add one.'
+                  : 'Tap the scan button in the top bar to add a music folder.',
+              textAlign: TextAlign.center,
+              style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
