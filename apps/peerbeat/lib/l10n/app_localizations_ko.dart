@@ -411,6 +411,54 @@ class AppLocalizationsKo extends AppLocalizations {
   String get name => '이름';
 
   @override
+  String get rfTitle => '제목';
+
+  @override
+  String get rfArtist => '아티스트';
+
+  @override
+  String get rfAlbum => '앨범';
+
+  @override
+  String get rfGenre => '장르';
+
+  @override
+  String get rfYear => '연도';
+
+  @override
+  String get rfRating => '평점';
+
+  @override
+  String get rfPlayCount => '재생 횟수';
+
+  @override
+  String get rfDuration => '길이 (ms)';
+
+  @override
+  String get rfDateAdded => '추가 날짜';
+
+  @override
+  String get opContains => '포함';
+
+  @override
+  String get opIs => '일치';
+
+  @override
+  String get opIsNot => '불일치';
+
+  @override
+  String get opStartsWith => '로 시작';
+
+  @override
+  String get opEndsWith => '로 끝남';
+
+  @override
+  String get opNotContains => '포함 안 함';
+
+  @override
+  String get opInLastDays => '최근 N일 이내';
+
+  @override
   String get ruleMatch => '일치';
 
   @override

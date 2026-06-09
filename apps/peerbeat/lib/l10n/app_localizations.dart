@@ -828,6 +828,102 @@ abstract class AppLocalizations {
   /// **'Name'**
   String get name;
 
+  /// No description provided for @rfTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get rfTitle;
+
+  /// No description provided for @rfArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'Artist'**
+  String get rfArtist;
+
+  /// No description provided for @rfAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Album'**
+  String get rfAlbum;
+
+  /// No description provided for @rfGenre.
+  ///
+  /// In en, this message translates to:
+  /// **'Genre'**
+  String get rfGenre;
+
+  /// No description provided for @rfYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get rfYear;
+
+  /// No description provided for @rfRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating'**
+  String get rfRating;
+
+  /// No description provided for @rfPlayCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Play count'**
+  String get rfPlayCount;
+
+  /// No description provided for @rfDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration (ms)'**
+  String get rfDuration;
+
+  /// No description provided for @rfDateAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Date added'**
+  String get rfDateAdded;
+
+  /// No description provided for @opContains.
+  ///
+  /// In en, this message translates to:
+  /// **'contains'**
+  String get opContains;
+
+  /// No description provided for @opIs.
+  ///
+  /// In en, this message translates to:
+  /// **'is'**
+  String get opIs;
+
+  /// No description provided for @opIsNot.
+  ///
+  /// In en, this message translates to:
+  /// **'is not'**
+  String get opIsNot;
+
+  /// No description provided for @opStartsWith.
+  ///
+  /// In en, this message translates to:
+  /// **'starts with'**
+  String get opStartsWith;
+
+  /// No description provided for @opEndsWith.
+  ///
+  /// In en, this message translates to:
+  /// **'ends with'**
+  String get opEndsWith;
+
+  /// No description provided for @opNotContains.
+  ///
+  /// In en, this message translates to:
+  /// **'doesn\'t contain'**
+  String get opNotContains;
+
+  /// No description provided for @opInLastDays.
+  ///
+  /// In en, this message translates to:
+  /// **'in last N days'**
+  String get opInLastDays;
+
   /// No description provided for @ruleMatch.
   ///
   /// In en, this message translates to:

@@ -424,6 +424,54 @@ class AppLocalizationsFr extends AppLocalizations {
   String get name => 'Nom';
 
   @override
+  String get rfTitle => 'Titre';
+
+  @override
+  String get rfArtist => 'Artiste';
+
+  @override
+  String get rfAlbum => 'Album';
+
+  @override
+  String get rfGenre => 'Genre';
+
+  @override
+  String get rfYear => 'Année';
+
+  @override
+  String get rfRating => 'Note';
+
+  @override
+  String get rfPlayCount => 'Lectures';
+
+  @override
+  String get rfDuration => 'Durée (ms)';
+
+  @override
+  String get rfDateAdded => 'Date d\'ajout';
+
+  @override
+  String get opContains => 'contient';
+
+  @override
+  String get opIs => 'est';
+
+  @override
+  String get opIsNot => 'n\'est pas';
+
+  @override
+  String get opStartsWith => 'commence par';
+
+  @override
+  String get opEndsWith => 'se termine par';
+
+  @override
+  String get opNotContains => 'ne contient pas';
+
+  @override
+  String get opInLastDays => 'au cours des N derniers jours';
+
+  @override
   String get ruleMatch => 'Correspondance';
 
   @override

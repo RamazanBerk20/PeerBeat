@@ -423,6 +423,54 @@ class AppLocalizationsTr extends AppLocalizations {
   String get name => 'Ad';
 
   @override
+  String get rfTitle => 'Başlık';
+
+  @override
+  String get rfArtist => 'Sanatçı';
+
+  @override
+  String get rfAlbum => 'Albüm';
+
+  @override
+  String get rfGenre => 'Tür';
+
+  @override
+  String get rfYear => 'Yıl';
+
+  @override
+  String get rfRating => 'Puan';
+
+  @override
+  String get rfPlayCount => 'Çalınma sayısı';
+
+  @override
+  String get rfDuration => 'Süre (ms)';
+
+  @override
+  String get rfDateAdded => 'Eklenme tarihi';
+
+  @override
+  String get opContains => 'içerir';
+
+  @override
+  String get opIs => 'eşittir';
+
+  @override
+  String get opIsNot => 'eşit değil';
+
+  @override
+  String get opStartsWith => 'ile başlar';
+
+  @override
+  String get opEndsWith => 'ile biter';
+
+  @override
+  String get opNotContains => 'içermez';
+
+  @override
+  String get opInLastDays => 'son N günde';
+
+  @override
   String get ruleMatch => 'Eşleştir';
 
   @override

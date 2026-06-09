@@ -24,6 +24,7 @@
 pub mod api;
 pub mod audio;
 pub mod db;
+pub mod i18n;
 pub mod library;
 pub mod net;
 

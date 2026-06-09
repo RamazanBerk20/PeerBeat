@@ -49,6 +49,11 @@ pub struct ScanReport {
 /// Open (creating if needed) the library database at `db_path`.
 pub fn library_open(db_path: String) -> Result<(), String> {
     let db = Db::open(&PathBuf::from(db_path)).map_err(|e| e.to_string())?;
+    // Prime the core's locale from the persisted UI language so error messages
+    // localize from the first call (before any settings_set this session).
+    if let Ok(Some(loc)) = crate::db::settings::get(db.conn(), "ui.locale") {
+        crate::i18n::set_locale(&loc);
+    }
     *DB.lock().map_err(|_| "db lock poisoned".to_string())? = Some(db);
     Ok(())
 }
@@ -266,7 +271,7 @@ pub fn share_set(
     // on a "pin" share means "keep the existing one", so only validate a new value.
     if let Some(p) = pin.as_deref() {
         if !p.trim().is_empty() && !shares::pin_is_valid_format(p) {
-            return Err("PIN must be 4–6 digits".to_string());
+            return Err(crate::i18n::tr(crate::i18n::Msg::PinFormat));
         }
     }
     with_db(|db| {
@@ -373,7 +378,7 @@ pub struct TrackTags {
 pub fn library_track_tags(track_id: i64) -> Result<TrackTags, String> {
     with_db(|db| {
         let row = tracks::track_by_id(db.conn(), track_id)?
-            .ok_or_else(|| anyhow::anyhow!("track not found"))?;
+            .ok_or_else(|| anyhow::anyhow!(crate::i18n::tr(crate::i18n::Msg::TrackNotFound)))?;
         let nt = metadata::read_tags(Path::new(&row.path), 0, 0, 0)?;
         Ok::<TrackTags, anyhow::Error>(TrackTags {
             title: nt.title,
@@ -403,7 +408,7 @@ pub fn library_update_tags(
 ) -> Result<TrackRow, String> {
     with_db(|db| {
         let row = tracks::track_by_id(db.conn(), track_id)?
-            .ok_or_else(|| anyhow::anyhow!("track not found"))?;
+            .ok_or_else(|| anyhow::anyhow!(crate::i18n::tr(crate::i18n::Msg::TrackNotFound)))?;
         let edit = metadata::TagEdit {
             title,
             artist,
@@ -416,7 +421,7 @@ pub fn library_update_tags(
         metadata::write_tags(Path::new(&row.path), &edit)?;
         library::scan::rescan_file(db.conn(), Path::new(&row.path), db.art_dir(), now_ms())?;
         tracks::track_by_id(db.conn(), track_id)?
-            .ok_or_else(|| anyhow::anyhow!("track vanished after edit"))
+            .ok_or_else(|| anyhow::anyhow!(crate::i18n::tr(crate::i18n::Msg::TrackVanished)))
     })
 }
 
@@ -446,7 +451,7 @@ pub fn eq_preset_list() -> Result<Vec<EqPresetRow>, String> {
 pub fn eq_preset_create(name: String, bands: Vec<f64>, preamp: f64) -> Result<i64, String> {
     let clean = name.trim().to_string();
     if clean.is_empty() {
-        return Err("preset name cannot be empty".to_string());
+        return Err(crate::i18n::tr(crate::i18n::Msg::PresetNameEmpty));
     }
     with_db(|db| eq_presets::create(db.conn(), &clean, &bands, preamp))
 }
@@ -459,7 +464,7 @@ pub fn eq_preset_update(
 ) -> Result<(), String> {
     let clean = name.trim().to_string();
     if clean.is_empty() {
-        return Err("preset name cannot be empty".to_string());
+        return Err(crate::i18n::tr(crate::i18n::Msg::PresetNameEmpty));
     }
     with_db(|db| eq_presets::update(db.conn(), preset_id, &clean, &bands, preamp))
 }
@@ -523,7 +528,7 @@ pub fn playlist_list() -> Result<Vec<PlaylistRow>, String> {
 pub fn playlist_create(name: String) -> Result<i64, String> {
     let clean = name.trim().to_string();
     if clean.is_empty() {
-        return Err("playlist name cannot be empty".to_string());
+        return Err(crate::i18n::tr(crate::i18n::Msg::PlaylistNameEmpty));
     }
     with_db(|db| playlists::create(db.conn(), &clean, now_ms()))
 }
@@ -531,7 +536,7 @@ pub fn playlist_create(name: String) -> Result<i64, String> {
 pub fn playlist_rename(playlist_id: i64, name: String) -> Result<(), String> {
     let clean = name.trim().to_string();
     if clean.is_empty() {
-        return Err("playlist name cannot be empty".to_string());
+        return Err(crate::i18n::tr(crate::i18n::Msg::PlaylistNameEmpty));
     }
     with_db(|db| playlists::rename(db.conn(), playlist_id, &clean, now_ms()))
 }
@@ -543,7 +548,7 @@ pub fn playlist_delete(playlist_id: i64) -> Result<(), String> {
 pub fn playlist_duplicate(playlist_id: i64, name: String) -> Result<i64, String> {
     let clean = name.trim().to_string();
     if clean.is_empty() {
-        return Err("playlist name cannot be empty".to_string());
+        return Err(crate::i18n::tr(crate::i18n::Msg::PlaylistNameEmpty));
     }
     with_db(|db| playlists::duplicate(db.conn(), playlist_id, &clean, now_ms()))
 }
@@ -651,7 +656,7 @@ pub fn smart_playlist_create(
 ) -> Result<i64, String> {
     let clean = name.trim().to_string();
     if clean.is_empty() {
-        return Err("playlist name cannot be empty".to_string());
+        return Err(crate::i18n::tr(crate::i18n::Msg::PlaylistNameEmpty));
     }
     smart::validate(&rule_json, now_ms())?;
     with_db(|db| smart::create(db.conn(), &clean, &rule_json, limit_n, now_ms()))
@@ -665,7 +670,7 @@ pub fn smart_playlist_update(
 ) -> Result<(), String> {
     let clean = name.trim().to_string();
     if clean.is_empty() {
-        return Err("playlist name cannot be empty".to_string());
+        return Err(crate::i18n::tr(crate::i18n::Msg::PlaylistNameEmpty));
     }
     smart::validate(&rule_json, now_ms())?;
     with_db(|db| smart::update(db.conn(), smart_id, &clean, &rule_json, limit_n, now_ms()))
@@ -678,8 +683,9 @@ pub fn smart_playlist_delete(smart_id: i64) -> Result<(), String> {
 /// Resolve a saved smart playlist to its current matching tracks.
 pub fn smart_playlist_tracks(smart_id: i64) -> Result<Vec<TrackRow>, String> {
     with_db(|db| {
-        let sp = smart::get(db.conn(), smart_id)?
-            .ok_or_else(|| anyhow::anyhow!("smart playlist not found"))?;
+        let sp = smart::get(db.conn(), smart_id)?.ok_or_else(|| {
+            anyhow::anyhow!(crate::i18n::tr(crate::i18n::Msg::SmartPlaylistNotFound))
+        })?;
         smart::tracks_for_rules(db.conn(), &sp.rule_json, sp.limit_n, now_ms())
     })
 }

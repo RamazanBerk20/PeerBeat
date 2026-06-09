@@ -425,6 +425,54 @@ class AppLocalizationsRu extends AppLocalizations {
   String get name => 'Название';
 
   @override
+  String get rfTitle => 'Название';
+
+  @override
+  String get rfArtist => 'Исполнитель';
+
+  @override
+  String get rfAlbum => 'Альбом';
+
+  @override
+  String get rfGenre => 'Жанр';
+
+  @override
+  String get rfYear => 'Год';
+
+  @override
+  String get rfRating => 'Оценка';
+
+  @override
+  String get rfPlayCount => 'Число проигрываний';
+
+  @override
+  String get rfDuration => 'Длительность (мс)';
+
+  @override
+  String get rfDateAdded => 'Дата добавления';
+
+  @override
+  String get opContains => 'содержит';
+
+  @override
+  String get opIs => 'равно';
+
+  @override
+  String get opIsNot => 'не равно';
+
+  @override
+  String get opStartsWith => 'начинается с';
+
+  @override
+  String get opEndsWith => 'заканчивается на';
+
+  @override
+  String get opNotContains => 'не содержит';
+
+  @override
+  String get opInLastDays => 'за последние N дней';
+
+  @override
   String get ruleMatch => 'Совпадение';
 
   @override

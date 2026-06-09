@@ -411,6 +411,54 @@ class AppLocalizationsJa extends AppLocalizations {
   String get name => '名前';
 
   @override
+  String get rfTitle => 'タイトル';
+
+  @override
+  String get rfArtist => 'アーティスト';
+
+  @override
+  String get rfAlbum => 'アルバム';
+
+  @override
+  String get rfGenre => 'ジャンル';
+
+  @override
+  String get rfYear => '年';
+
+  @override
+  String get rfRating => '評価';
+
+  @override
+  String get rfPlayCount => '再生回数';
+
+  @override
+  String get rfDuration => '長さ (ms)';
+
+  @override
+  String get rfDateAdded => '追加日';
+
+  @override
+  String get opContains => 'を含む';
+
+  @override
+  String get opIs => 'と一致';
+
+  @override
+  String get opIsNot => 'と不一致';
+
+  @override
+  String get opStartsWith => 'で始まる';
+
+  @override
+  String get opEndsWith => 'で終わる';
+
+  @override
+  String get opNotContains => 'を含まない';
+
+  @override
+  String get opInLastDays => '過去 N 日以内';
+
+  @override
   String get ruleMatch => '一致';
 
   @override

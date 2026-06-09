@@ -11,41 +11,43 @@ import 'library_home.dart' show TrackListView;
 import 'mini_player.dart';
 
 /// Selectable rule fields → display label. Text fields use text operators,
-/// numeric fields use comparison operators (mirrors the Rust whitelist).
-const _fieldLabels = <String, String>{
-  'title': 'Title',
-  'artist': 'Artist',
-  'album': 'Album',
-  'genre': 'Genre',
-  'year': 'Year',
-  'rating': 'Rating',
-  'played_count': 'Play count',
-  'duration_ms': 'Duration (ms)',
-  'added_at': 'Date added',
+/// numeric fields use comparison operators (mirrors the Rust whitelist). The
+/// keys are the DSL tokens (stable); only the labels are localized.
+Map<String, String> _fieldLabels(AppLocalizations l) => {
+  'title': l.rfTitle,
+  'artist': l.rfArtist,
+  'album': l.rfAlbum,
+  'genre': l.rfGenre,
+  'year': l.rfYear,
+  'rating': l.rfRating,
+  'played_count': l.rfPlayCount,
+  'duration_ms': l.rfDuration,
+  'added_at': l.rfDateAdded,
 };
 const _textFields = {'title', 'artist', 'album', 'genre'};
 
-const _textOps = <String, String>{
-  'contains': 'contains',
-  'is': 'is',
-  'isNot': 'is not',
-  'startsWith': 'starts with',
-  'endsWith': 'ends with',
-  'notContains': "doesn't contain",
+Map<String, String> _textOps(AppLocalizations l) => {
+  'contains': l.opContains,
+  'is': l.opIs,
+  'isNot': l.opIsNot,
+  'startsWith': l.opStartsWith,
+  'endsWith': l.opEndsWith,
+  'notContains': l.opNotContains,
 };
-const _numOps = <String, String>{
+// Comparison symbols are universal; only "in last N days" is localized.
+Map<String, String> _numOps(AppLocalizations l) => {
   'eq': '=',
   'neq': '≠',
   'gt': '>',
   'lt': '<',
   'gte': '≥',
   'lte': '≤',
-  'inLastDays': 'in last N days',
+  'inLastDays': l.opInLastDays,
 };
 
 bool _isText(String field) => _textFields.contains(field);
-Map<String, String> _opsFor(String field) =>
-    _isText(field) ? _textOps : _numOps;
+Map<String, String> _opsFor(AppLocalizations l, String field) =>
+    _isText(field) ? _textOps(l) : _numOps(l);
 
 class _RuleRow {
   _RuleRow({this.field = 'artist', String? op, this.value = ''})
@@ -250,7 +252,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
   Widget _ruleRow(int i) {
     final l10n = AppLocalizations.of(context);
     final r = _rules[i];
-    final ops = _opsFor(r.field);
+    final ops = _opsFor(l10n, r.field);
     final isText = _isText(r.field);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -264,14 +266,14 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
               isExpanded: true,
               decoration: const InputDecoration(isDense: true),
               items: [
-                for (final e in _fieldLabels.entries)
+                for (final e in _fieldLabels(l10n).entries)
                   DropdownMenuItem(value: e.key, child: Text(e.value)),
               ],
               onChanged: (v) {
                 if (v == null) return;
                 setState(() {
                   r.field = v;
-                  final valid = _opsFor(v);
+                  final valid = _opsFor(l10n, v);
                   if (!valid.containsKey(r.op)) r.op = valid.keys.first;
                 });
               },

@@ -16,6 +16,11 @@ pub fn set(conn: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![key, value],
     )?;
+    // Mirror the UI language into the core so its own error messages localize
+    // (the Flutter side persists the chosen locale under this key).
+    if key == "ui.locale" {
+        crate::i18n::set_locale(value);
+    }
     Ok(())
 }
 

@@ -409,6 +409,54 @@ class AppLocalizationsZh extends AppLocalizations {
   String get name => '名称';
 
   @override
+  String get rfTitle => '标题';
+
+  @override
+  String get rfArtist => '艺人';
+
+  @override
+  String get rfAlbum => '专辑';
+
+  @override
+  String get rfGenre => '流派';
+
+  @override
+  String get rfYear => '年份';
+
+  @override
+  String get rfRating => '评分';
+
+  @override
+  String get rfPlayCount => '播放次数';
+
+  @override
+  String get rfDuration => '时长（毫秒）';
+
+  @override
+  String get rfDateAdded => '添加日期';
+
+  @override
+  String get opContains => '包含';
+
+  @override
+  String get opIs => '等于';
+
+  @override
+  String get opIsNot => '不等于';
+
+  @override
+  String get opStartsWith => '开头为';
+
+  @override
+  String get opEndsWith => '结尾为';
+
+  @override
+  String get opNotContains => '不包含';
+
+  @override
+  String get opInLastDays => '最近 N 天内';
+
+  @override
   String get ruleMatch => '匹配';
 
   @override

@@ -424,6 +424,54 @@ class AppLocalizationsAr extends AppLocalizations {
   String get name => 'الاسم';
 
   @override
+  String get rfTitle => 'العنوان';
+
+  @override
+  String get rfArtist => 'الفنان';
+
+  @override
+  String get rfAlbum => 'الألبوم';
+
+  @override
+  String get rfGenre => 'النوع';
+
+  @override
+  String get rfYear => 'السنة';
+
+  @override
+  String get rfRating => 'التقييم';
+
+  @override
+  String get rfPlayCount => 'عدد التشغيل';
+
+  @override
+  String get rfDuration => 'المدة (مللي ثانية)';
+
+  @override
+  String get rfDateAdded => 'تاريخ الإضافة';
+
+  @override
+  String get opContains => 'يحتوي على';
+
+  @override
+  String get opIs => 'يساوي';
+
+  @override
+  String get opIsNot => 'لا يساوي';
+
+  @override
+  String get opStartsWith => 'يبدأ بـ';
+
+  @override
+  String get opEndsWith => 'ينتهي بـ';
+
+  @override
+  String get opNotContains => 'لا يحتوي على';
+
+  @override
+  String get opInLastDays => 'في آخر N يوم';
+
+  @override
   String get ruleMatch => 'المطابقة';
 
   @override
