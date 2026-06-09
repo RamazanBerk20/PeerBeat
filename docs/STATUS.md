@@ -76,10 +76,10 @@ The UI is localized into 10 languages — English (template), Turkish, Spanish,
 French, German, Russian, Arabic (RTL-verified), Japanese, Chinese, Korean — via
 Flutter `gen-l10n` (~230 keys, ICU plurals + placeholders). Settings → Language
 picks System default or any language (each shown in its own script); persisted and
-applied live. ⚠️ Still English (documented): the smart-playlist rule field/operator
-DSL tokens, the desktop tray menu (built without a `BuildContext`), and error
-strings surfaced from the Rust core. Translations are model-generated — native
-review welcome.
+applied live — including the desktop tray menu, which resolves the locale without a
+`BuildContext`. ⚠️ Still English (documented): the smart-playlist rule field/operator
+DSL tokens and error strings surfaced from the Rust core. Translations are
+model-generated — native review welcome.
 
 ### 11. Auto-update — ✅ Windows/Android · n/a Linux (RC feature)
 Side-loaded Windows + Android builds check GitHub Releases on launch (throttled

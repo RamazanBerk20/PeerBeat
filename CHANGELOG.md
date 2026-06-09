@@ -7,10 +7,10 @@
   Turkish, Spanish, French, German, Russian, Arabic (right-to-left), Japanese,
   Chinese, and Korean. Built with Flutter `gen-l10n` (~230 message keys, ICU plurals
   + placeholders). Settings → Language offers System default + each language shown in
-  its own script; the choice applies live and persists. Translations are
-  machine-generated and welcome native review. Known gaps (still English): the
-  smart-playlist rule field/operator tokens, the desktop tray menu, and error text
-  returned from the Rust core.
+  its own script; the choice applies live and persists — including the desktop tray
+  menu (resolved without a widget context). Translations are machine-generated and
+  welcome native review. Known gaps (still English): the smart-playlist rule
+  field/operator tokens, and error text returned from the Rust core.
 - **Auto-update (Windows + Android)** — side-loaded builds check GitHub Releases on
   launch (throttled to once a day) and via a manual button in Settings, then download
   the matching asset and hand it to the OS installer — the Inno `.exe` (with a UAC
