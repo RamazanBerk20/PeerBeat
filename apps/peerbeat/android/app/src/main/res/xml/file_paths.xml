@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dirs the FileProvider may share with the system package installer. The
+     updater downloads the APK into the app cache (path_provider's
+     getTemporaryDirectory == context.cacheDir). -->
+<paths>
+    <cache-path name="cache" path="." />
+    <external-cache-path name="external_cache" path="." />
+    <files-path name="files" path="." />
+</paths>

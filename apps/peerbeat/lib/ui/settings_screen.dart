@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../playback/player.dart';
+import '../update/updater.dart';
 import '../src/rust/api/audio.dart' show OutputDeviceRow;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/eq_presets.dart';
 import 'text_input_dialog.dart';
 import 'theme.dart' show kDefaultSeed;
+import 'update_sheet.dart' show runUpdateFlow;
 
 /// Fixed accent choices offered in Settings → Appearance (null = the default).
 const _accentPresets = <Color>[
@@ -248,9 +250,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: Text('Local + LAN music player'),
               ),
             ),
+            const SizedBox(height: 8),
+            const _UpdateCard(),
           ],
         );
       },
+    );
+  }
+}
+
+/// Version line + update controls. On Windows/Android the app self-updates from
+/// GitHub Releases; on Linux updates are owned by the package manager.
+class _UpdateCard extends StatefulWidget {
+  const _UpdateCard();
+
+  @override
+  State<_UpdateCard> createState() => _UpdateCardState();
+}
+
+class _UpdateCardState extends State<_UpdateCard> {
+  String _version = '';
+  bool _autoCheck = true;
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final v = await updater.currentVersion();
+    final auto = await updater.autoCheckEnabled();
+    if (mounted) {
+      setState(() {
+        _version = v;
+        _autoCheck = auto;
+      });
+    }
+  }
+
+  Future<void> _check() async {
+    setState(() => _checking = true);
+    try {
+      final info = await updater.check();
+      if (!mounted) return;
+      if (info == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("You're on the latest version")),
+        );
+      } else {
+        await runUpdateFlow(context, info);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final managed = !updater.supported;
+    return Card(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Version'),
+            subtitle: Text(_version.isEmpty ? '…' : _version),
+          ),
+          if (managed)
+            const ListTile(
+              leading: Icon(Icons.verified_outlined),
+              title: Text('Updates'),
+              subtitle: Text(
+                'Managed by your package manager (AUR / .deb / AppImage).',
+              ),
+            )
+          else ...[
+            SwitchListTile(
+              secondary: const Icon(Icons.update_outlined),
+              title: const Text('Check for updates automatically'),
+              value: _autoCheck,
+              onChanged: (v) async {
+                await updater.setAutoCheck(v);
+                if (mounted) setState(() => _autoCheck = v);
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonalIcon(
+                  onPressed: _checking ? null : _check,
+                  icon: _checking
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: const Text('Check for updates'),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

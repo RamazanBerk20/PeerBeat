@@ -26,6 +26,11 @@ dependencies:
   window_manager: ^0.4.3 # desktop close-to-tray (hide on close)
   tray_manager: ^0.3.2 # desktop system-tray icon + menu
   smtc_windows: ^1.0.1 # Windows System Media Transport Controls
+  http: ^1.2.0 # in-app updater: query GitHub Releases + download the installer
+  package_info_plus: ^8.0.0 # current app version (drives the update check)
+  flutter_localizations:
+    sdk: flutter
+  intl: any # version pinned by flutter_localizations
 
 dev_dependencies:
   flutter_test:
@@ -35,6 +40,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true # gen-l10n: build AppLocalizations from lib/l10n/*.arb
   assets:
     # Bundled so the Linux GTK runner can set the window/taskbar icon from a file
     # (theme-name icons aren't available when running from the bundle).

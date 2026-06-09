@@ -7,6 +7,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show Int64List;
 
 import '../playback/player.dart';
+import '../update/updater.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/db/browse.dart';
 import '../src/rust/db/folders.dart';
@@ -19,6 +20,7 @@ import 'network_screen.dart';
 import 'settings_screen.dart';
 import 'smart_playlist.dart';
 import 'text_input_dialog.dart';
+import 'update_sheet.dart';
 
 String fmtDuration(int ms) {
   final s = (ms / 1000).round();
@@ -44,6 +46,18 @@ class _LibraryHomeState extends State<LibraryHome> {
   void initState() {
     super.initState();
     _refreshCount();
+    _checkForUpdatesOnLaunch();
+  }
+
+  /// Throttled, best-effort launch update check (Windows/Android only). Shows a
+  /// dismissible banner if a newer release is available.
+  void _checkForUpdatesOnLaunch() {
+    if (!updater.supported) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await updater.maybeCheckOnLaunch();
+      final info = updater.available.value;
+      if (info != null && mounted) showUpdateBanner(context, info);
+    });
   }
 
   Future<void> _refreshCount() async {
