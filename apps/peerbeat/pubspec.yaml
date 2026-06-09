@@ -1,7 +1,7 @@
 name: peerbeat
 description: "Local-first music player with LAN peer-to-peer sharing"
 publish_to: 'none'
-version: 0.3.0+4
+version: 0.5.0+5
 
 resolution: workspace
 

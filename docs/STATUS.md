@@ -1,8 +1,8 @@
 # PeerBeat — Status
 
 Honest done / partial / planned matrix against the original specification, as of
-the **0.3.0 beta** push (the alpha→RC audit + fix pass). Legend: ✅ done ·
-⚠️ partial · 🔭 planned · ❌ not yet.
+**0.5.0** (the 0.3.0 audit + fix pass, then localization + auto-update). Legend:
+✅ done · ⚠️ partial · 🔭 planned · ❌ not yet.
 
 ## By spec area
 
@@ -68,18 +68,21 @@ Scrub-latency and LAN first-audio targets are plausible but not yet benchmarked
 ### 9. Publish — ✅ (Flatpak ❌, version sync pending)
 Public GitHub repo + Releases workflow building Windows `.exe`, Android
 `.apk`/`.aab`, Linux AppImage/`.deb`; AUR `peerbeat` + `peerbeat-bin`.
-❌ Flatpak is specified but not yet built. Version strings across
-Cargo/Inno/metainfo/AUR are being synced to the release version.
+❌ Flatpak is specified but not yet built. pubspec / Cargo / Inno / metainfo are
+synced to 0.5.0; the AUR `pkgver` + checksums are bumped when the release tag is
+cut (they track the published tarball).
 
-### 10. Localization — ✅ (RC feature)
+### 10. Localization — ✅
 The UI is localized into 10 languages — English (template), Turkish, Spanish,
 French, German, Russian, Arabic (RTL-verified), Japanese, Chinese, Korean — via
-Flutter `gen-l10n` (~230 keys, ICU plurals + placeholders). Settings → Language
+Flutter `gen-l10n` (~290 keys, ICU plurals + placeholders). Settings → Language
 picks System default or any language (each shown in its own script); persisted and
-applied live — including the desktop tray menu, which resolves the locale without a
-`BuildContext`. ⚠️ Still English (documented): the smart-playlist rule field/operator
-DSL tokens and error strings surfaced from the Rust core. Translations are
-model-generated — native review welcome.
+applied live — including the desktop tray menu (resolves the locale without a
+`BuildContext`), the smart-playlist rule builder, and the **Rust core's own
+deliberate error messages** (the core reads the chosen language from the shared
+`ui.locale` settings key — no extra FRB surface). ⚠️ Only deep transitive library
+errors (SQLite/IO/codec) stay technical English, inside a localized wrapper.
+Translations are model-generated — native review welcome.
 
 ### 11. Auto-update — ✅ Windows/Android · n/a Linux (RC feature)
 Side-loaded Windows + Android builds check GitHub Releases on launch (throttled
