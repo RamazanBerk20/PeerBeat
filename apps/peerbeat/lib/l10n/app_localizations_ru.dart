@@ -1018,6 +1018,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get duplicatePlaylist => 'Дублировать плейлист';
 
   @override
+  String duplicateCopyName(String name) {
+    return '$name копия';
+  }
+
+  @override
   String exportedPlaylist(String name) {
     return '«$name» экспортирован';
   }

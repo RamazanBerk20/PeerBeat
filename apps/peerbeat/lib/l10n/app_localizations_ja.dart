@@ -972,6 +972,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get duplicatePlaylist => 'プレイリストを複製';
 
   @override
+  String duplicateCopyName(String name) {
+    return '$name のコピー';
+  }
+
+  @override
   String exportedPlaylist(String name) {
     return '「$name」をエクスポートしました';
   }

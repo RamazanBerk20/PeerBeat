@@ -282,6 +282,7 @@
   "noTracksInPlaylist": "该播放列表中没有曲目",
   "renamePlaylist": "重命名播放列表",
   "duplicatePlaylist": "复制播放列表",
+  "duplicateCopyName": "{name} 副本",
   "exportedPlaylist": "已导出“{name}”",
   "deletePlaylistQuestion": "删除播放列表？",
   "addedTrackToPlaylist": "已将“{title}”添加到 {playlist}",

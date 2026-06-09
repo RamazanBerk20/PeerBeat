@@ -1806,6 +1806,12 @@ abstract class AppLocalizations {
   /// **'Duplicate playlist'**
   String get duplicatePlaylist;
 
+  /// No description provided for @duplicateCopyName.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} copy'**
+  String duplicateCopyName(String name);
+
   /// No description provided for @exportedPlaylist.
   ///
   /// In en, this message translates to:

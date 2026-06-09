@@ -973,6 +973,11 @@ class AppLocalizationsKo extends AppLocalizations {
   String get duplicatePlaylist => '재생목록 복제';
 
   @override
+  String duplicateCopyName(String name) {
+    return '$name 사본';
+  }
+
+  @override
   String exportedPlaylist(String name) {
     return '\"$name\"을(를) 내보냈습니다';
   }

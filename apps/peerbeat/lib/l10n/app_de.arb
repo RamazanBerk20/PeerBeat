@@ -282,6 +282,7 @@
   "noTracksInPlaylist": "Keine Titel in dieser Playlist",
   "renamePlaylist": "Playlist umbenennen",
   "duplicatePlaylist": "Playlist duplizieren",
+  "duplicateCopyName": "{name} Kopie",
   "exportedPlaylist": "„{name}“ exportiert",
   "deletePlaylistQuestion": "Playlist löschen?",
   "addedTrackToPlaylist": "\"{title}\" zu {playlist} hinzugefügt",

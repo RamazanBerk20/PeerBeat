@@ -241,7 +241,7 @@ class _LibraryHomeState extends State<LibraryHome> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Center(
                     child: Text(
-                      '$_count tracks',
+                      l10n.trackCount(_count),
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                   ),
@@ -1649,7 +1649,7 @@ Future<void> _handlePlaylistAction(
       final name = await _playlistNameDialog(
         context,
         title: l10n.duplicatePlaylist,
-        initial: '${playlist.name} copy',
+        initial: l10n.duplicateCopyName(playlist.name),
       );
       if (name != null) {
         await playlistDuplicate(playlistId: playlist.id, name: name);

@@ -1010,6 +1010,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get duplicatePlaylist => 'Duplicar lista';
 
   @override
+  String duplicateCopyName(String name) {
+    return '$name copia';
+  }
+
+  @override
   String exportedPlaylist(String name) {
     return '\"$name\" exportada';
   }

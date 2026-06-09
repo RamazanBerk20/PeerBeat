@@ -1004,6 +1004,11 @@ class AppLocalizationsTr extends AppLocalizations {
   String get duplicatePlaylist => 'Çalma listesini çoğalt';
 
   @override
+  String duplicateCopyName(String name) {
+    return '$name kopya';
+  }
+
+  @override
   String exportedPlaylist(String name) {
     return '\"$name\" dışa aktarıldı';
   }

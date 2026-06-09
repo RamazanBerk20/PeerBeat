@@ -282,6 +282,7 @@
   "noTracksInPlaylist": "لا توجد مقاطع في قائمة التشغيل هذه",
   "renamePlaylist": "إعادة تسمية قائمة التشغيل",
   "duplicatePlaylist": "تكرار قائمة التشغيل",
+  "duplicateCopyName": "{name} نسخة",
   "exportedPlaylist": "تم تصدير «{name}»",
   "deletePlaylistQuestion": "حذف قائمة التشغيل؟",
   "addedTrackToPlaylist": "تمت إضافة «{title}» إلى {playlist}",

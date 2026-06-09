@@ -282,6 +282,7 @@
   "noTracksInPlaylist": "Bu çalma listesinde parça yok",
   "renamePlaylist": "Çalma listesini yeniden adlandır",
   "duplicatePlaylist": "Çalma listesini çoğalt",
+  "duplicateCopyName": "{name} kopya",
   "exportedPlaylist": "\"{name}\" dışa aktarıldı",
   "deletePlaylistQuestion": "Çalma listesi silinsin mi?",
   "addedTrackToPlaylist": "\"{title}\", {playlist} listesine eklendi",

@@ -968,6 +968,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get duplicatePlaylist => '复制播放列表';
 
   @override
+  String duplicateCopyName(String name) {
+    return '$name 副本';
+  }
+
+  @override
   String exportedPlaylist(String name) {
     return '已导出“$name”';
   }

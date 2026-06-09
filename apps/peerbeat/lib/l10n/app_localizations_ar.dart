@@ -1011,6 +1011,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get duplicatePlaylist => 'تكرار قائمة التشغيل';
 
   @override
+  String duplicateCopyName(String name) {
+    return '$name نسخة';
+  }
+
+  @override
   String exportedPlaylist(String name) {
     return 'تم تصدير «$name»';
   }

@@ -282,6 +282,7 @@
   "noTracksInPlaylist": "No hay pistas en esta lista",
   "renamePlaylist": "Cambiar nombre de la lista",
   "duplicatePlaylist": "Duplicar lista",
+  "duplicateCopyName": "{name} copia",
   "exportedPlaylist": "\"{name}\" exportada",
   "deletePlaylistQuestion": "¿Eliminar lista?",
   "addedTrackToPlaylist": "\"{title}\" añadida a {playlist}",

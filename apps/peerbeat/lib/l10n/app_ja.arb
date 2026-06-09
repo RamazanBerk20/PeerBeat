@@ -282,6 +282,7 @@
   "noTracksInPlaylist": "このプレイリストに曲はありません",
   "renamePlaylist": "プレイリストの名前を変更",
   "duplicatePlaylist": "プレイリストを複製",
+  "duplicateCopyName": "{name} のコピー",
   "exportedPlaylist": "「{name}」をエクスポートしました",
   "deletePlaylistQuestion": "プレイリストを削除しますか？",
   "addedTrackToPlaylist": "「{title}」を {playlist} に追加しました",

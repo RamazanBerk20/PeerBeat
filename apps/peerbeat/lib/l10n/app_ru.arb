@@ -282,6 +282,7 @@
   "noTracksInPlaylist": "В этом плейлисте нет треков",
   "renamePlaylist": "Переименовать плейлист",
   "duplicatePlaylist": "Дублировать плейлист",
+  "duplicateCopyName": "{name} копия",
   "exportedPlaylist": "«{name}» экспортирован",
   "deletePlaylistQuestion": "Удалить плейлист?",
   "addedTrackToPlaylist": "«{title}» добавлен в {playlist}",

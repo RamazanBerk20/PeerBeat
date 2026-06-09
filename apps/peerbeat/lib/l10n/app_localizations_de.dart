@@ -1008,6 +1008,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get duplicatePlaylist => 'Playlist duplizieren';
 
   @override
+  String duplicateCopyName(String name) {
+    return '$name Kopie';
+  }
+
+  @override
   String exportedPlaylist(String name) {
     return '„$name“ exportiert';
   }

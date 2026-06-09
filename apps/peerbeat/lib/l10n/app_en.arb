@@ -490,6 +490,10 @@
   "noTracksInPlaylist": "No tracks in this playlist",
   "renamePlaylist": "Rename playlist",
   "duplicatePlaylist": "Duplicate playlist",
+  "duplicateCopyName": "{name} copy",
+  "@duplicateCopyName": {
+    "placeholders": { "name": { "type": "String" } }
+  },
   "exportedPlaylist": "Exported \"{name}\"",
   "@exportedPlaylist": {
     "placeholders": { "name": { "type": "String" } }
