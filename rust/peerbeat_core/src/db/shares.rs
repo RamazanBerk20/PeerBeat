@@ -402,6 +402,33 @@ mod tests {
     }
 
     #[test]
+    fn hash_pin_round_trips_and_rejects_wrong_pin() {
+        let h = hash_pin("1234");
+        assert!(h.starts_with("$argon2"), "expected a PHC Argon2 string");
+        assert!(verify_pin(&h, "1234"));
+        assert!(!verify_pin(&h, "1235"));
+    }
+
+    #[test]
+    fn verify_pin_rejects_legacy_sha256_hashes() {
+        // Pre-hardening PINs were stored as bare SHA-256 hex. These are not PHC
+        // strings, so they must fail to verify — forcing a one-time re-entry.
+        let legacy_sha256 = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // sha256("1234")
+        assert!(!verify_pin(legacy_sha256, "1234"));
+        assert!(!verify_pin("", "1234"));
+        assert!(!verify_pin("not-a-hash", "1234"));
+    }
+
+    #[test]
+    fn pin_format_requires_4_to_6_digits() {
+        assert!(pin_is_valid_format("1234"));
+        assert!(pin_is_valid_format("123456"));
+        assert!(!pin_is_valid_format("123")); // too short
+        assert!(!pin_is_valid_format("1234567")); // too long
+        assert!(!pin_is_valid_format("12a4")); // non-digit
+    }
+
+    #[test]
     fn set_update_and_toggle_a_playlist_share() {
         let db = Db::open_in_memory().unwrap();
         let c = db.conn();

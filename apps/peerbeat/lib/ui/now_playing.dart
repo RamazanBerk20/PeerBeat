@@ -344,6 +344,10 @@ class _Controls extends StatelessWidget {
             RepeatMode.all => 'Repeat all',
             RepeatMode.one => 'Repeat one',
           },
+          // isSelected gives a non-colour (filled background) cue, and the glyph
+          // changes for repeat-one, so the three states are distinguishable
+          // without relying on colour.
+          isSelected: player.repeat != RepeatMode.off,
           onPressed: player.cycleRepeat,
           icon: Icon(
             player.repeat == RepeatMode.one ? Icons.repeat_one : Icons.repeat,
@@ -387,8 +391,16 @@ class _Controls extends StatelessWidget {
         for (final s in presets)
           PopupMenuItem(value: s, child: Text('${_fmtSpeed(s)}×')),
       ],
-      child: Padding(
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        // When a non-1× speed is active, draw an outline so the state reads
+        // without relying on colour (the speed value itself also changes).
+        decoration: active
+            ? BoxDecoration(
+                border: Border.all(color: cs.primary),
+                borderRadius: BorderRadius.circular(20),
+              )
+            : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -610,11 +622,47 @@ class _LyricsPanelState extends State<_LyricsPanel> {
   String? _raw;
   List<_LrcLine>? _synced;
   bool _loading = true;
+  // The active line index, updated only when it actually changes — so the
+  // synced ListView rebuilds per lyric line, not on every ~5 Hz position tick.
+  final ValueNotifier<int> _active = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
+    player.positionNotifier.addListener(_onTick);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(_LyricsPanel old) {
+    super.didUpdateWidget(old);
+    if (old.trackId != widget.trackId) {
+      _active.value = 0;
+      _loading = true;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    player.positionNotifier.removeListener(_onTick);
+    _active.dispose();
+    super.dispose();
+  }
+
+  void _onTick() {
+    final synced = _synced;
+    if (synced == null || synced.isEmpty) return;
+    final pos = player.positionNotifier.value;
+    var idx = 0;
+    for (var i = 0; i < synced.length; i++) {
+      if (synced[i].t <= pos) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    if (idx != _active.value) _active.value = idx;
   }
 
   Future<void> _load() async {
@@ -653,17 +701,9 @@ class _LyricsPanelState extends State<_LyricsPanel> {
         child: Text(raw, style: Theme.of(context).textTheme.bodyLarge),
       );
     }
-    return ValueListenableBuilder<Duration>(
-      valueListenable: player.positionNotifier,
-      builder: (context, pos, _) {
-        var active = 0;
-        for (var i = 0; i < synced.length; i++) {
-          if (synced[i].t <= pos) {
-            active = i;
-          } else {
-            break;
-          }
-        }
+    return ValueListenableBuilder<int>(
+      valueListenable: _active,
+      builder: (context, active, _) {
         final cs = Theme.of(context).colorScheme;
         return ListView.builder(
           controller: widget.scrollController,

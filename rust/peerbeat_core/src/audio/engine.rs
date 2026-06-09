@@ -664,6 +664,8 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
     let mut speed_anchor = Duration::ZERO;
     let mut current_path: Option<String> = None;
     let mut base_position_ms = 0u64;
+    // Fractional-millisecond carry so repeated speed changes don't truncate-drift.
+    let mut frac_ms = 0f64;
     let mut force_position_ms: Option<u64> = None;
     let mut current_duration = Duration::ZERO;
     // Crossfade state (inert while `crossfade_secs == 0`, i.e. the default):
@@ -706,6 +708,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                     current_path = Some(path.clone());
                     current_duration = dur;
                     base_position_ms = 0;
+                    frac_ms = 0.0;
                     speed_anchor = Duration::ZERO; // fresh sink: get_pos() restarts at 0
                     force_position_ms = None; // drop any pending seek from a prior track
                     engage_speed(&sink, speed, &speed_handle);
@@ -746,6 +749,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 current_path = None;
                 current_duration = Duration::ZERO;
                 base_position_ms = 0;
+                frac_ms = 0.0;
                 force_position_ms = None;
                 shared.ended.store(false, Ordering::Release);
                 shared.duration_ms.store(0, Ordering::Relaxed);
@@ -794,6 +798,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                         sink.pause();
                     }
                     base_position_ms = target_ms;
+                    frac_ms = 0.0;
                     shared.position_ms.store(visible_ms, Ordering::Relaxed);
                     force_position_ms = Some(visible_ms);
                     set_last_error(&last_error, None);
@@ -814,7 +819,10 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                 // speed in the time-stretch stage (no pitch-shifting sink.set_speed).
                 let out = sink.get_pos();
                 let since = out.saturating_sub(speed_anchor);
-                base_position_ms += (since.as_secs_f64() * speed as f64 * 1000.0) as u64;
+                let advance = since.as_secs_f64() * speed as f64 * 1000.0 + frac_ms;
+                let whole = advance.floor();
+                base_position_ms += whole as u64;
+                frac_ms = advance - whole;
                 speed_anchor = out;
                 speed = s;
                 engage_speed(&sink, s, &speed_handle);
@@ -854,6 +862,7 @@ fn run_loop(rx: Receiver<Cmd>, shared: Arc<Shared>, last_error: Arc<Mutex<Option
                         )?;
                         sink.append(source);
                         base_position_ms = target.as_millis() as u64;
+                        frac_ms = 0.0;
                         force_position_ms = Some(base_position_ms);
                         if was_playing {
                             sink.play();

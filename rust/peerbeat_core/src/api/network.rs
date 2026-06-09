@@ -160,8 +160,20 @@ pub fn net_decide_peer(challenge: String, allow: bool, remember: bool) -> bool {
                 p.peer.clone()
             };
             if remember {
-                if let Ok(conn) = Connection::open(&h.db_path) {
-                    let _ = remembered_peers::set(&conn, &h.host_id, &peer, allow, unix_ms());
+                // Best-effort persistence; if it fails the in-memory decision
+                // still stands for this session — but don't swallow the error,
+                // or the peer silently re-prompts next time.
+                match Connection::open(&h.db_path) {
+                    Ok(conn) => {
+                        if let Err(e) =
+                            remembered_peers::set(&conn, &h.host_id, &peer, allow, unix_ms())
+                        {
+                            eprintln!("peerbeat: failed to remember peer decision: {e}");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("peerbeat: cannot open db to remember peer: {e}")
+                    }
                 }
             }
             return true;
@@ -271,7 +283,15 @@ pub fn net_party_requests() -> Vec<PartyRequestDto> {
             if reqs.is_empty() {
                 return Vec::new();
             }
-            let conn = Connection::open(&h.db_path).ok();
+            let conn = match Connection::open(&h.db_path) {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    // Titles fall back to "Track {id}" below; log so a locked or
+                    // missing DB isn't a silent mystery.
+                    eprintln!("peerbeat: party_requests cannot open db: {e}");
+                    None
+                }
+            };
             return reqs
                 .into_iter()
                 .map(|r| {

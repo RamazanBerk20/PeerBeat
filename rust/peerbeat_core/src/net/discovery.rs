@@ -61,7 +61,21 @@ pub fn browse(timeout: Duration) -> Vec<HostInfo> {
         }
         match rx.recv_timeout(remaining) {
             Ok(ServiceEvent::ServiceResolved(info)) => {
-                if let Some(addr) = info.get_addresses_v4().into_iter().next() {
+                // Prefer IPv4; fall back to a non-loopback IPv6 (bracketed so it
+                // composes into a `https://{address}:{port}` URL) so IPv6-only
+                // hosts still appear.
+                let addrs = info.get_addresses();
+                let address = addrs
+                    .iter()
+                    .find(|a| a.is_ipv4())
+                    .map(|a| a.to_ip_addr().to_string())
+                    .or_else(|| {
+                        addrs
+                            .iter()
+                            .find(|a| a.is_ipv6() && !a.is_loopback())
+                            .map(|a| format!("[{}]", a.to_ip_addr()))
+                    });
+                if let Some(address) = address {
                     let txt = |k| {
                         info.txt_properties
                             .get_property_val_str(k)
@@ -70,7 +84,6 @@ pub fn browse(timeout: Duration) -> Vec<HostInfo> {
                     let name = txt("name").unwrap_or_else(|| info.fullname.clone());
                     let host_id = txt("id").unwrap_or_default();
                     let fingerprint = txt("fp").unwrap_or_default();
-                    let address = addr.to_string();
                     if !hosts
                         .iter()
                         .any(|h| h.address == address && h.port == info.get_port())

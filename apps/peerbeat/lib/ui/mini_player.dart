@@ -142,17 +142,19 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Shuffle',
-                        visualDensity: VisualDensity.compact,
+                        tooltip: player.shuffle ? 'Shuffle on' : 'Shuffle off',
                         onPressed: () => player.setShuffle(!player.shuffle),
+                        // Glyph changes with state (not just colour) so the
+                        // active state is distinguishable without colour.
                         icon: Icon(
-                          Icons.shuffle,
+                          player.shuffle
+                              ? Icons.shuffle_on_outlined
+                              : Icons.shuffle,
                           color: player.shuffle ? cs.primary : null,
                         ),
                       ),
                       IconButton(
                         tooltip: 'Previous',
-                        visualDensity: VisualDensity.compact,
                         onPressed: player.hasPrevious ? player.previous : null,
                         icon: const Icon(Icons.skip_previous),
                       ),
@@ -165,7 +167,6 @@ class _MiniPlayerState extends State<MiniPlayer> {
                       ),
                       IconButton(
                         tooltip: 'Next',
-                        visualDensity: VisualDensity.compact,
                         onPressed: player.hasNext ? player.next : null,
                         icon: const Icon(Icons.skip_next),
                       ),
@@ -175,7 +176,6 @@ class _MiniPlayerState extends State<MiniPlayer> {
                           RepeatMode.all => 'Repeat all',
                           RepeatMode.one => 'Repeat one',
                         },
-                        visualDensity: VisualDensity.compact,
                         onPressed: player.cycleRepeat,
                         icon: Icon(
                           player.repeat == RepeatMode.one
@@ -188,7 +188,6 @@ class _MiniPlayerState extends State<MiniPlayer> {
                       ),
                       IconButton(
                         tooltip: player.muted ? 'Unmute' : 'Mute',
-                        visualDensity: VisualDensity.compact,
                         onPressed: player.toggleMute,
                         icon: Icon(
                           player.muted ? Icons.volume_off : Icons.volume_up,

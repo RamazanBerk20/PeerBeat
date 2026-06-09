@@ -509,8 +509,9 @@ class TrackArt extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(size * 0.2);
     final art = track.artPath;
+    final Widget visual;
     if (art != null && art.isNotEmpty) {
-      return ClipRRect(
+      visual = ClipRRect(
         borderRadius: radius,
         child: Image.file(
           File(art),
@@ -523,8 +524,13 @@ class TrackArt extends StatelessWidget {
           errorBuilder: (_, _, _) => _placeholder(cs, radius),
         ),
       );
+    } else {
+      visual = _placeholder(cs, radius);
     }
-    return _placeholder(cs, radius);
+    // When selected, the art slot doubles as the "now playing" indicator
+    // (equalizer glyph / accent) — announce that to screen readers; otherwise
+    // the artwork is decorative and stays excluded.
+    return selected ? Semantics(label: 'Now playing', child: visual) : visual;
   }
 
   Widget _placeholder(ColorScheme cs, BorderRadius radius) => Container(

@@ -133,6 +133,7 @@ const _player = 'org.mpris.MediaPlayer2.Player';
 class MprisController implements OsMediaController {
   DBusClient? _client;
   _MprisObject? _object;
+  StreamSubscription<String>? _nameLostSub;
 
   // Last-emitted snapshot, so we only signal PropertiesChanged on real changes
   // (the player notifies on every position tick).
@@ -167,6 +168,14 @@ class MprisController implements OsMediaController {
       }
       _client = client;
       _object = object;
+      // We kept `allowReplacement`, so a newer live instance can take the name
+      // from us. When that happens, tear our orphaned object down so it stops
+      // silently answering MPRIS calls with stale state.
+      _nameLostSub = client.nameLost.listen((name) {
+        if (name == 'org.mpris.MediaPlayer2.peerbeat') {
+          unawaited(dispose());
+        }
+      });
       player.addListener(_onPlayerChanged);
       _onPlayerChanged(); // push initial state
     } catch (e) {
@@ -218,10 +227,23 @@ class MprisController implements OsMediaController {
   @override
   Future<void> dispose() async {
     player.removeListener(_onPlayerChanged);
+    final sub = _nameLostSub;
+    _nameLostSub = null;
     final c = _client;
+    final obj = _object;
     _client = null;
     _object = null;
-    if (c != null) await c.close();
+    await sub?.cancel();
+    if (c != null) {
+      if (obj != null) {
+        try {
+          await c.unregisterObject(obj);
+        } catch (_) {
+          // best-effort — closing the connection below drops it anyway
+        }
+      }
+      await c.close();
+    }
   }
 }
 
@@ -439,11 +461,14 @@ class _MprisObject extends DBusObject {
         'PlaybackStatus': DBusString(status),
         'LoopStatus': DBusString(loopStatusFor(player.repeat)),
         'Rate': DBusDouble(player.speed),
-        'MinimumRate': DBusDouble(0.25),
-        'MaximumRate': DBusDouble(4.0),
+        'MinimumRate': DBusDouble(0.5),
+        'MaximumRate': DBusDouble(2.0),
         'Shuffle': DBusBoolean(player.shuffle),
         'Metadata': mprisMetadata(t),
-        'Volume': DBusDouble(player.muted ? 0.0 : player.volume),
+        // MPRIS Volume is linear amplitude and is independent of mute state —
+        // desktops read Volume and mute separately. Reporting 0 when muted
+        // violates the spec and makes the OS think the user lowered the volume.
+        'Volume': DBusDouble(player.volume),
         'Position': DBusInt64(player.position.inMicroseconds),
         'CanGoNext': DBusBoolean(player.hasNext),
         'CanGoPrevious': DBusBoolean(player.hasPrevious),

@@ -191,11 +191,16 @@ fn watch_loop(rx: std::sync::mpsc::Receiver<PathBuf>, roots: Vec<PathBuf>) {
             .iter()
             .filter(|root| changed.iter().any(|p| p.starts_with(root)))
         {
-            let _ = with_db(|db| -> anyhow::Result<()> {
+            let res = with_db(|db| -> anyhow::Result<()> {
                 library::scan_folder(db.conn(), root, now, db.art_dir())?;
                 library::scan::prune_missing(db.conn(), root)?;
                 Ok(())
             });
+            if let Err(e) = res {
+                // A watched folder went unreadable (permissions, unmounted, …).
+                // Don't silently stop reflecting it — surface the failure.
+                eprintln!("peerbeat: watch rescan of {} failed: {e}", root.display());
+            }
         }
     }
 }

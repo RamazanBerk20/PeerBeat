@@ -402,14 +402,20 @@ class _NetworkPanelState extends State<NetworkPanel> {
       );
       return;
     }
+    // If this address:port is already a discovered host, reuse its identity so
+    // we pin under its stable host_id rather than creating a second TOFU trust
+    // anchor (ip:port) for the same device.
+    final matches = _hosts.where((h) => h.address == addr && h.port == port);
+    final match = matches.isEmpty ? null : matches.first;
     await _openHost(
-      HostInfo(
-        name: raw,
-        address: addr,
-        port: port,
-        hostId: '',
-        fingerprint: '',
-      ),
+      match ??
+          HostInfo(
+            name: raw,
+            address: addr,
+            port: port,
+            hostId: '',
+            fingerprint: '',
+          ),
     );
   }
 

@@ -150,7 +150,9 @@ pub struct PartyHub {
 
 impl PartyHub {
     pub fn new() -> Self {
-        let (tx, _rx) = broadcast::channel(16);
+        // Generous buffer: party state updates are tiny and a slow peer that
+        // would otherwise lag (and silently miss updates) gets far more slack.
+        let (tx, _rx) = broadcast::channel(256);
         Self {
             tx,
             latest: Arc::new(Mutex::new(None)),
@@ -162,8 +164,12 @@ impl PartyHub {
     /// Record a peer's track request (capped so a flooding peer can't grow it
     /// unbounded). Newest-last.
     pub fn record_request(&self, peer: String, track_id: i64) {
+        const MAX_PENDING: usize = 256;
         if let Ok(mut q) = self.requests.lock() {
-            if q.len() >= 64 {
+            if q.len() >= MAX_PENDING {
+                // Drop the oldest to bound memory, but don't do it silently —
+                // a full queue means a peer is flooding or the host isn't draining.
+                eprintln!("peerbeat: party request queue full ({MAX_PENDING}); dropping oldest");
                 q.remove(0);
             }
             q.push(PartyRequest {
@@ -197,11 +203,14 @@ impl PartyHub {
     /// Store + broadcast the latest playback snapshot to all party peers.
     pub fn broadcast_state(&self, state: &PartyState) {
         let payload = serde_json::json!({ "type": "state", "state": state });
-        if let Ok(msg) = serde_json::to_string(&payload) {
-            if let Ok(mut l) = self.latest.lock() {
-                *l = Some(msg.clone());
+        match serde_json::to_string(&payload) {
+            Ok(msg) => {
+                if let Ok(mut l) = self.latest.lock() {
+                    *l = Some(msg.clone());
+                }
+                let _ = self.tx.send(msg);
             }
-            let _ = self.tx.send(msg);
+            Err(e) => eprintln!("peerbeat: party broadcast_state serialize failed: {e}"),
         }
     }
 }
@@ -361,14 +370,15 @@ impl FromRequestParts<ServerConfig> for Auth {
             .sessions
             .lock()
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "session store poisoned"))?;
-        match map.get(&token) {
+        let key = hash_token(&token);
+        match map.get(&key) {
             Some(s) if s.expires_at_ms > now => {
                 let session = s.clone();
                 drop(map);
                 Ok(Auth { session, token })
             }
             Some(_) => {
-                map.remove(&token); // expired → drop it
+                map.remove(&key); // expired → drop it
                 Err((StatusCode::UNAUTHORIZED, "session expired"))
             }
             None => Err((StatusCode::UNAUTHORIZED, "invalid or revoked token")),
@@ -430,6 +440,17 @@ struct AuthResp {
     token: String,
 }
 
+/// Hash a bearer token for at-rest storage in the sessions map. The raw token
+/// goes only to the client; the host keeps the SHA-256 digest, so a memory
+/// scrape of the map yields digests — not usable tokens.
+fn hash_token(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(token.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
 /// Issue + store a scoped session token (with TTL), sweeping expired ones.
 fn mint_token(
     cfg: &ServerConfig,
@@ -442,7 +463,7 @@ fn mint_token(
     if let Ok(mut m) = cfg.sessions.lock() {
         m.retain(|_, s| s.expires_at_ms > now); // opportunistic sweep of expired tokens
         m.insert(
-            token.clone(),
+            hash_token(&token),
             Session {
                 scope,
                 can_download,
@@ -778,7 +799,12 @@ async fn download(
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("track")
-        .replace(['"', '\\'], "");
+        // Strip quotes/backslashes AND control chars (CR/LF/NUL/…) so the name
+        // can never break out of the header value (defence in depth — the
+        // HeaderValue::from_str check below would also reject control chars).
+        .chars()
+        .filter(|c| !c.is_control() && *c != '"' && *c != '\\')
+        .collect::<String>();
     match ServeFile::new(&file_path).oneshot(request).await {
         Ok(mut resp) => {
             if let Ok(v) = HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")) {
@@ -874,11 +900,12 @@ async fn party_ws(
 
 /// True while `token` is still a live, unexpired session.
 fn token_live(cfg: &ServerConfig, token: &str) -> bool {
+    let key = hash_token(token);
     cfg.sessions
         .lock()
         .ok()
         .map(|m| {
-            m.get(token)
+            m.get(&key)
                 .map(|s| s.expires_at_ms > now_ms())
                 .unwrap_or(false)
         })
@@ -891,7 +918,7 @@ async fn handle_party(mut socket: WebSocket, cfg: ServerConfig, token: String) {
         .sessions
         .lock()
         .ok()
-        .and_then(|m| m.get(&token).map(|s| s.peer.clone()))
+        .and_then(|m| m.get(&hash_token(&token)).map(|s| s.peer.clone()))
         .unwrap_or_default();
     // Send the current snapshot immediately so a joiner can sync at once.
     if let Some(latest) = cfg.party.latest.lock().ok().and_then(|l| l.clone()) {
@@ -916,7 +943,17 @@ async fn handle_party(mut socket: WebSocket, cfg: ServerConfig, token: String) {
                         break;
                     }
                 }
-                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    // The peer fell behind and dropped `n` updates — resend the
+                    // current snapshot so it resyncs instead of drifting.
+                    eprintln!("peerbeat: party peer lagged {n} updates; resending snapshot");
+                    if let Some(latest) = cfg.party.latest.lock().ok().and_then(|l| l.clone()) {
+                        if socket.send(Message::Text(latest.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    continue;
+                }
                 Err(broadcast::error::RecvError::Closed) => break,
             },
             incoming = socket.recv() => match incoming {
@@ -940,7 +977,13 @@ async fn handle_party(mut socket: WebSocket, cfg: ServerConfig, token: String) {
 /// Parse a peer's `{"type":"request","track_id":N}` message → the requested
 /// host track id, if that's what it is.
 fn parse_request(text: &str) -> Option<i64> {
-    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    let v: serde_json::Value = match serde_json::from_str(text) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("peerbeat: party request parse error: {e}");
+            return None;
+        }
+    };
     if v.get("type").and_then(|t| t.as_str()) == Some("request") {
         return v.get("track_id").and_then(|x| x.as_i64());
     }
@@ -1226,7 +1269,7 @@ mod tests {
             // Inject an already-expired token straight into the store.
             let token = "expiredtoken".to_string();
             cfg.sessions.lock().unwrap().insert(
-                token.clone(),
+                hash_token(&token), // sessions map is keyed by the token digest
                 Session {
                     scope: Scope::Library,
                     can_download: false,
@@ -1245,7 +1288,12 @@ mod tests {
             .await;
             assert_eq!(status, StatusCode::UNAUTHORIZED);
             // The extractor also evicts the dead token.
-            assert!(cfg.sessions.lock().unwrap().get(&token).is_none());
+            assert!(cfg
+                .sessions
+                .lock()
+                .unwrap()
+                .get(&hash_token(&token))
+                .is_none());
         });
     }
 

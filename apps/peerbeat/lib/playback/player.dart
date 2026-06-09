@@ -162,9 +162,17 @@ class PlayerController extends ChangeNotifier {
       _order.isNotEmpty && (_pos > 0 || _repeat == RepeatMode.all);
   String? get lastError => _lastError;
 
-  /// Play [tracks] starting at [index] (the new queue).
-  Future<void> playQueue(List<TrackRow> tracks, int index) async {
-    _resumeFrom = null; // a fresh user choice supersedes any restored bookmark
+  /// Play [tracks] starting at [index] (the new queue). If [startAt] is given
+  /// the track loads already positioned there (used by party sync to avoid a
+  /// brief play-from-zero before the seek lands).
+  Future<void> playQueue(
+    List<TrackRow> tracks,
+    int index, {
+    Duration? startAt,
+  }) async {
+    // A fresh user choice supersedes any restored bookmark, unless an explicit
+    // start position was requested.
+    _resumeFrom = (startAt != null && startAt > Duration.zero) ? startAt : null;
     _queue = List.of(tracks);
     _order = List<int>.generate(_queue.length, (i) => i);
     _pos = index.clamp(0, _order.isEmpty ? 0 : _order.length - 1);
@@ -502,9 +510,12 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  /// Set playback speed (0.25–4×). Desktop currently shifts pitch with speed.
+  /// Set playback speed (0.5–2×). Pitch-preserving on Linux/macOS (Signalsmith
+  /// Stretch); on Windows it currently falls back to a pitch-shifting resample.
+  /// The range matches the engine's safe bounds so the UI never shows a speed
+  /// the engine would silently clamp away.
   void setSpeed(double s) {
-    _speed = s.clamp(0.25, 4.0);
+    _speed = s.clamp(0.5, 2.0);
     _engine.setSpeed(_speed);
     notifyListeners();
   }
