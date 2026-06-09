@@ -14,6 +14,9 @@ features.
   (next/previous track) and `[`/`]` (speed −/+).
 - **Lyrics**: the synced `.lrc` view now auto-scrolls to keep the current line
   centred.
+- **Library**: per-folder watch toggle in Library → Folders — mute auto-import
+  for a folder while still being able to scan it on demand (the `is_watched`
+  flag is now honoured by the watcher).
 
 ### Fixes (correctness & security)
 - Playback speed is clamped to the engine-safe 0.5–2× in the UI (no more silent

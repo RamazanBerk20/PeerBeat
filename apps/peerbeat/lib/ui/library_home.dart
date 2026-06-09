@@ -333,6 +333,21 @@ class _FoldersDialogState extends State<_FoldersDialog> {
     }
   }
 
+  Future<void> _toggleWatch(FolderRow f) async {
+    try {
+      await librarySetFolderWatched(folderId: f.id, watched: !f.isWatched);
+      if (!mounted) return;
+      _changed = true;
+      _reload();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not change watching: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _remove(FolderRow f) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -406,10 +421,30 @@ class _FoldersDialogState extends State<_FoldersDialog> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: IconButton(
-                    tooltip: 'Remove',
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _remove(f),
+                  subtitle: Text(
+                    f.isWatched
+                        ? 'Watching for changes'
+                        : 'Not watching (scan manually)',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: f.isWatched
+                            ? 'Watching — tap to stop'
+                            : 'Not watching — tap to watch',
+                        isSelected: f.isWatched,
+                        icon: Icon(
+                          f.isWatched ? Icons.sync : Icons.sync_disabled,
+                        ),
+                        onPressed: () => _toggleWatch(f),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _remove(f),
+                      ),
+                    ],
                   ),
                 );
               },

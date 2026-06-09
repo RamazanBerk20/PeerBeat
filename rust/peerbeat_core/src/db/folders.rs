@@ -39,6 +39,16 @@ pub fn list(conn: &Connection) -> rusqlite::Result<Vec<FolderRow>> {
     rows.collect()
 }
 
+/// Enable/disable filesystem watching for one folder. Unwatched folders are
+/// still scanned on demand, just not auto-updated on changes.
+pub fn set_watched(conn: &Connection, id: i64, watched: bool) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE folders SET is_watched = ?2 WHERE id = ?1",
+        params![id, watched as i64],
+    )?;
+    Ok(())
+}
+
 /// Forget a folder and remove the tracks that live under it.
 pub fn remove(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     let path: Option<String> = conn
@@ -71,5 +81,17 @@ mod tests {
 
         remove(c, a).unwrap();
         assert_eq!(list(c).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn set_watched_toggles_the_flag() {
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        let id = add(c, "/music", 1).unwrap();
+        assert!(list(c).unwrap()[0].is_watched, "folders watch by default");
+        set_watched(c, id, false).unwrap();
+        assert!(!list(c).unwrap()[0].is_watched);
+        set_watched(c, id, true).unwrap();
+        assert!(list(c).unwrap()[0].is_watched);
     }
 }

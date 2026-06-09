@@ -34,6 +34,17 @@ Future<List<FolderRow>> libraryFolders() =>
 Future<void> libraryRemoveFolder({required PlatformInt64 folderId}) =>
     RustLib.instance.api.crateApiLibraryLibraryRemoveFolder(folderId: folderId);
 
+/// Enable/disable filesystem watching for a single folder. The watcher is
+/// restarted so the change takes effect immediately (an unwatched folder is no
+/// longer auto-rescanned on changes).
+Future<void> librarySetFolderWatched({
+  required PlatformInt64 folderId,
+  required bool watched,
+}) => RustLib.instance.api.crateApiLibraryLibrarySetFolderWatched(
+  folderId: folderId,
+  watched: watched,
+);
+
 /// Re-scan every known folder: import new/changed files and prune tracks whose
 /// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
 Future<ScanReport> libraryRescanAll() =>

@@ -87,6 +87,15 @@ pub fn library_remove_folder(folder_id: i64) -> Result<(), String> {
     r
 }
 
+/// Enable/disable filesystem watching for a single folder. The watcher is
+/// restarted so the change takes effect immediately (an unwatched folder is no
+/// longer auto-rescanned on changes).
+pub fn library_set_folder_watched(folder_id: i64, watched: bool) -> Result<(), String> {
+    let r = with_db(|db| folders::set_watched(db.conn(), folder_id, watched));
+    restart_watcher();
+    r
+}
+
 /// Re-scan every known folder: import new/changed files and prune tracks whose
 /// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
 pub fn library_rescan_all() -> Result<ScanReport, String> {
@@ -134,8 +143,11 @@ pub fn library_start_watching() -> Result<(), String> {
     if guard.is_some() {
         return Ok(());
     }
+    // Only watch folders the user hasn't muted (is_watched); unwatched folders
+    // are scanned on demand but not auto-updated.
     let roots: Vec<PathBuf> = with_db(|db| folders::list(db.conn()))?
         .into_iter()
+        .filter(|f| f.is_watched)
         .map(|f| PathBuf::from(f.path))
         .collect();
     if roots.is_empty() {
