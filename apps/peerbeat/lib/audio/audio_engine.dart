@@ -102,7 +102,11 @@ class RustDesktopEngine implements AudioEngine {
   }
 
   @override
-  Future<void> playPath(String path, {Duration? duration, MediaTag? tag}) async {
+  Future<void> playPath(
+    String path, {
+    Duration? duration,
+    MediaTag? tag,
+  }) async {
     // tag is unused on desktop — MPRIS metadata is published separately.
     rust.audioPlayPath(path: path);
     _duration = duration ?? Duration(milliseconds: rust.audioDurationMs());
@@ -300,7 +304,11 @@ class ExoPlayerEngine implements AudioEngine {
   final ja.AudioPlayer _player = ja.AudioPlayer();
 
   @override
-  Future<void> playPath(String path, {Duration? duration, MediaTag? tag}) async {
+  Future<void> playPath(
+    String path, {
+    Duration? duration,
+    MediaTag? tag,
+  }) async {
     await _player.setAudioSource(_source(Uri.file(path), tag, duration));
     unawaited(
       _player.play(),

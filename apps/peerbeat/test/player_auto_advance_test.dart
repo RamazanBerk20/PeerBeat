@@ -194,7 +194,11 @@ class _FakeAudioEngine implements AudioEngine {
   }
 
   @override
-  Future<void> playPath(String path, {Duration? duration, MediaTag? tag}) async {
+  Future<void> playPath(
+    String path, {
+    Duration? duration,
+    MediaTag? tag,
+  }) async {
     playedPaths.add(path);
     _pos = Duration.zero;
     _isPlaying = true;
