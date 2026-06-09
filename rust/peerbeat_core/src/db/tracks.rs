@@ -357,4 +357,43 @@ mod tests {
         let short = search_tracks(c, "Re", 10).unwrap();
         assert!(short.iter().any(|r| r.title == "Reunion"));
     }
+
+    #[test]
+    fn browse_songs_scales_to_50k() {
+        use std::time::Instant;
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        // Seed 50k minimal tracks in one transaction (fast).
+        c.execute_batch("BEGIN").unwrap();
+        {
+            let mut stmt = c
+                .prepare(
+                    "INSERT INTO tracks(path, normalized_path, title, added_at) \
+                     VALUES (?1, ?2, ?3, ?4)",
+                )
+                .unwrap();
+            for i in 0..50_000i64 {
+                let p = format!("/m/{i:06}.flac");
+                stmt.execute(params![p, p, format!("Song {i:06}"), i])
+                    .unwrap();
+            }
+        }
+        c.execute_batch("COMMIT").unwrap();
+
+        // First page must come back quickly + correctly.
+        let t = Instant::now();
+        let page = browse_songs(c, 300, 0).unwrap();
+        let elapsed = t.elapsed();
+        assert_eq!(page.len(), 300);
+        assert_eq!(page[0].title, "Song 000000"); // alphabetical order holds
+                                                  // Generous ceiling: the spec target is <2s for the whole 50k UI load; the
+                                                  // paged query is far under that. Mostly a guard against an O(n^2) regression.
+        assert!(
+            elapsed.as_millis() < 1500,
+            "first page of 50k took {elapsed:?}"
+        );
+
+        // A deep page still returns a full page.
+        assert_eq!(browse_songs(c, 300, 49_500).unwrap().len(), 300);
+    }
 }
