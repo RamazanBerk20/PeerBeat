@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
@@ -36,6 +38,7 @@ class _LibraryHomeState extends State<LibraryHome> {
   bool _busy = false;
   int _version = 0; // bumped after a scan to refresh tab data
   int _count = 0;
+  bool _dragging = false; // a folder is being dragged over the window
 
   @override
   void initState() {
@@ -51,9 +54,14 @@ class _LibraryHomeState extends State<LibraryHome> {
   Future<void> _scan() async {
     final path = await _pickMusicFolder(context);
     if (path == null || path.trim().isEmpty) return;
+    await _scanPath(path.trim());
+  }
+
+  /// Add + scan a single folder, refreshing the count and the visible tabs.
+  Future<void> _scanPath(String path) async {
     setState(() => _busy = true);
     try {
-      final r = await libraryScan(path: path.trim());
+      final r = await libraryScan(path: path);
       await _refreshCount();
       if (mounted) {
         setState(() => _version++);
@@ -75,6 +83,67 @@ class _LibraryHomeState extends State<LibraryHome> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Desktop drag-and-drop: dropping a folder onto the library adds + scans it
+  /// (a dropped file resolves to its containing folder). Only wired on desktop.
+  static bool get _dropSupported =>
+      Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+
+  Future<void> _onFolderDrop(List<String> paths) async {
+    final dirs = <String>{};
+    for (final p in paths) {
+      if (await Directory(p).exists()) {
+        dirs.add(p);
+      } else if (await File(p).exists()) {
+        dirs.add(File(p).parent.path);
+      }
+    }
+    for (final d in dirs) {
+      await _scanPath(d);
+    }
+  }
+
+  /// Wrap the body in a desktop [DropTarget] so a dragged-in folder is added +
+  /// scanned, with a highlight while dragging. No-op on mobile.
+  Widget _wrapDrop(Widget child) {
+    if (!_dropSupported) return child;
+    final cs = Theme.of(context).colorScheme;
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      onDragDone: (detail) {
+        setState(() => _dragging = false);
+        unawaited(_onFolderDrop([for (final f in detail.files) f.path]));
+      },
+      child: Stack(
+        children: [
+          child,
+          if (_dragging)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  alignment: Alignment.center,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.create_new_folder_outlined, size: 40),
+                          SizedBox(height: 12),
+                          Text('Drop a folder to add it to your library'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _manageFolders() async {
@@ -166,28 +235,30 @@ class _LibraryHomeState extends State<LibraryHome> {
                 ),
             ],
           ),
-          body: wide
-              ? Row(
-                  children: [
-                    NavigationRail(
-                      selectedIndex: _section,
-                      onDestinationSelected: (v) =>
-                          setState(() => _section = v),
-                      labelType: NavigationRailLabelType.all,
-                      destinations: [
-                        for (final (icon, sel, label) in _destinations)
-                          NavigationRailDestination(
-                            icon: Icon(icon),
-                            selectedIcon: Icon(sel),
-                            label: Text(label),
-                          ),
-                      ],
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: section),
-                  ],
-                )
-              : section,
+          body: _wrapDrop(
+            wide
+                ? Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: _section,
+                        onDestinationSelected: (v) =>
+                            setState(() => _section = v),
+                        labelType: NavigationRailLabelType.all,
+                        destinations: [
+                          for (final (icon, sel, label) in _destinations)
+                            NavigationRailDestination(
+                              icon: Icon(icon),
+                              selectedIcon: Icon(sel),
+                              label: Text(label),
+                            ),
+                        ],
+                      ),
+                      const VerticalDivider(width: 1),
+                      Expanded(child: section),
+                    ],
+                  )
+                : section,
+          ),
           bottomNavigationBar: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -547,10 +618,68 @@ class _TrackListViewState extends State<TrackListView> {
                 }
               }
             },
+            // Long-press opens the same actions as the ⋮ menu (better on mobile,
+            // where the small trailing target is hard to hit).
+            onLongPress: () => _showTrackMenu(context, t),
           );
         },
       ),
     );
+  }
+
+  /// The track action menu as a bottom sheet — the long-press equivalent of the
+  /// trailing ⋮ [PopupMenuButton]. Same actions, same handler.
+  Future<void> _showTrackMenu(BuildContext context, TrackRow track) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: TrackArt(track: track, size: 44),
+              title: Text(
+                track.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: track.artist.isEmpty
+                  ? null
+                  : Text(
+                      track.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.queue_play_next),
+              title: const Text('Play next'),
+              onTap: () => Navigator.pop(ctx, 'play_next'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_to_queue),
+              title: const Text('Add to queue'),
+              onTap: () => Navigator.pop(ctx, 'add_queue'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_add),
+              title: const Text('Add to playlist'),
+              onTap: () => Navigator.pop(ctx, 'add_playlist'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit metadata'),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action != null && context.mounted) {
+      await _handleTrackAction(context, action, track);
+    }
   }
 
   Future<void> _handleTrackAction(
