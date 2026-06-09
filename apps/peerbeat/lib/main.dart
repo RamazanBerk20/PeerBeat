@@ -146,19 +146,32 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Rebuild the app theme only when the album-art accent changes (track
-    // cadence) — MaterialApp animates the new ColorScheme via its internal
-    // AnimatedTheme, so this never rebuilds on the position tick.
-    return ValueListenableBuilder<Color?>(
-      valueListenable: player.accentColor,
-      builder: (context, accent, _) {
-        final seed = accent ?? kDefaultSeed;
+    // Rebuild the app theme only when the accent, theme mode, or chosen seed
+    // changes (track / settings cadence) — MaterialApp animates the new
+    // ColorScheme via its internal AnimatedTheme, so this never rebuilds on the
+    // position tick.
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        player.accentColor,
+        player.themeMode,
+        player.accentSeed,
+      ]),
+      builder: (context, _) {
+        // Album-art accent (when dynamic) wins; else the user's fixed accent;
+        // else the built-in default.
+        final seed =
+            player.accentColor.value ?? player.accentSeed.value ?? kDefaultSeed;
+        final mode = switch (player.themeMode.value) {
+          AppThemeMode.system => ThemeMode.system,
+          AppThemeMode.light => ThemeMode.light,
+          AppThemeMode.dark => ThemeMode.dark,
+        };
         return MaterialApp(
           title: 'PeerBeat',
           debugShowCheckedModeBanner: false,
           theme: peerBeatTheme(Brightness.light, seed: seed),
           darkTheme: peerBeatTheme(Brightness.dark, seed: seed),
-          themeMode: ThemeMode.dark,
+          themeMode: mode,
           builder: (context, child) =>
               _GlobalPlaybackShortcuts(child: child ?? const SizedBox.shrink()),
           home: const LibraryHome(),
@@ -250,6 +263,16 @@ class _GlobalPlaybackShortcutsState extends State<_GlobalPlaybackShortcuts> {
                   player.setShuffle(!player.shuffle),
               const SingleActivator(LogicalKeyboardKey.keyR):
                   player.cycleRepeat,
+              // Track navigation by letter (alongside Ctrl+←/→).
+              const SingleActivator(LogicalKeyboardKey.keyN): () =>
+                  player.next(),
+              const SingleActivator(LogicalKeyboardKey.keyP): () =>
+                  player.previous(),
+              // Speed nudge (engine clamps to 0.5–2×).
+              const SingleActivator(LogicalKeyboardKey.bracketRight): () =>
+                  player.setSpeed(player.speed + 0.25),
+              const SingleActivator(LogicalKeyboardKey.bracketLeft): () =>
+                  player.setSpeed(player.speed - 0.25),
             },
       child: widget.child,
     );

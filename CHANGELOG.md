@@ -3,7 +3,17 @@
 ## 0.3.0 — beta (audit + hardening)
 
 An audit-driven correctness, security, and accessibility pass on the way to a
-release candidate, plus a documentation rebuild.
+release candidate, plus a documentation rebuild and the first personalization
+features.
+
+### Features
+- **Personalization**: a Theme selector (System / Light / Dark — previously
+  dark-only) and an accent-colour picker (8 presets + the default) under
+  Settings → Appearance; the chosen accent is the fallback when dynamic
+  album-art theming finds no strong colour. Extra desktop shortcuts: `n`/`p`
+  (next/previous track) and `[`/`]` (speed −/+).
+- **Lyrics**: the synced `.lrc` view now auto-scrolls to keep the current line
+  centred.
 
 ### Fixes (correctness & security)
 - Playback speed is clamped to the engine-safe 0.5–2× in the UI (no more silent

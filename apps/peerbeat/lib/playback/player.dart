@@ -16,6 +16,10 @@ export '../audio/replay_gain.dart' show ReplayGainMode;
 
 enum RepeatMode { off, all, one }
 
+/// App theme mode (kept material-free here; mapped to Flutter's `ThemeMode` in
+/// the app shell).
+enum AppThemeMode { system, light, dark }
+
 const _kResumeTrack = 'resume.track_id';
 const _kResumePos = 'resume.position_ms';
 const _kRgMode = 'audio.rg_mode';
@@ -27,6 +31,8 @@ const _kOutputDevice = 'audio.output_device';
 const _kStereoWidth = 'audio.stereo_width';
 const _kCrossfade = 'audio.crossfade';
 const _kDynamicTheme = 'ui.dynamic_theme';
+const _kThemeMode = 'ui.theme_mode';
+const _kAccentSeed = 'ui.accent_seed';
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -110,6 +116,12 @@ class PlayerController extends ChangeNotifier {
   final ValueNotifier<Color?> accentColor = ValueNotifier(null);
   bool _dynamicTheme = true;
   bool get dynamicTheme => _dynamicTheme;
+  // Light/dark/system mode, and a user-chosen fixed accent seed used when
+  // dynamic theming yields nothing (or is off). Both drive the app shell theme.
+  final ValueNotifier<AppThemeMode> themeMode = ValueNotifier(
+    AppThemeMode.dark,
+  );
+  final ValueNotifier<Color?> accentSeed = ValueNotifier(null);
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
   // holding the track; the first play loads it and seeks to `_resumeFrom`.
@@ -426,6 +438,23 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Set the app theme mode (system/light/dark).
+  void setThemeMode(AppThemeMode m) {
+    themeMode.value = m;
+    unawaited(settingsSet(key: _kThemeMode, value: m.name));
+    notifyListeners();
+  }
+
+  /// Set the fixed accent seed (null = the built-in default). Used when dynamic
+  /// theming is off, or as the fallback when album art yields no color.
+  void setAccentSeed(Color? c) {
+    accentSeed.value = c;
+    unawaited(
+      settingsSet(key: _kAccentSeed, value: c == null ? '' : '${c.toARGB32()}'),
+    );
+    notifyListeners();
+  }
+
   /// Recompute the album-art accent for [t]. Best-effort and async; a stale
   /// result for a track we've since left is discarded.
   Future<void> _updateAccent(TrackRow? t) async {
@@ -490,6 +519,18 @@ class PlayerController extends ChangeNotifier {
       }
       final dyn = await settingsGet(key: _kDynamicTheme);
       if (dyn != null) _dynamicTheme = dyn == '1';
+      final tm = await settingsGet(key: _kThemeMode);
+      if (tm != null) {
+        themeMode.value = AppThemeMode.values.firstWhere(
+          (m) => m.name == tm,
+          orElse: () => AppThemeMode.dark,
+        );
+      }
+      final seedStr = await settingsGet(key: _kAccentSeed);
+      if (seedStr != null && seedStr.isNotEmpty) {
+        final v = int.tryParse(seedStr);
+        if (v != null) accentSeed.value = Color(v);
+      }
       _recomputeRg();
       _applyVolume();
       _applyEq();
@@ -755,6 +796,8 @@ class PlayerController extends ChangeNotifier {
     _engine.dispose();
     positionNotifier.dispose();
     accentColor.dispose();
+    themeMode.dispose();
+    accentSeed.dispose();
     super.dispose();
   }
 }

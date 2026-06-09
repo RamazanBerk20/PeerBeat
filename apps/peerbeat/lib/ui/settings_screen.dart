@@ -5,6 +5,19 @@ import '../src/rust/api/audio.dart' show OutputDeviceRow;
 import '../src/rust/api/library.dart';
 import '../src/rust/db/eq_presets.dart';
 import 'text_input_dialog.dart';
+import 'theme.dart' show kDefaultSeed;
+
+/// Fixed accent choices offered in Settings → Appearance (null = the default).
+const _accentPresets = <Color>[
+  Color(0xFF7C4DFF), // violet
+  Color(0xFF42A5F5), // blue
+  Color(0xFF26A69A), // teal-green
+  Color(0xFF66BB6A), // green
+  Color(0xFFFFB300), // amber
+  Color(0xFFFF7043), // deep orange
+  Color(0xFFEC407A), // pink
+  Color(0xFFEF5350), // red
+];
 
 const _eqBands = [
   '31',
@@ -136,6 +149,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text('Appearance', style: text.titleLarge),
             const SizedBox(height: 8),
             Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.brightness_6_outlined),
+                    const SizedBox(width: 16),
+                    const Expanded(child: Text('Theme')),
+                    SegmentedButton<AppThemeMode>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: AppThemeMode.system,
+                          icon: Icon(Icons.brightness_auto),
+                          tooltip: 'System',
+                        ),
+                        ButtonSegment(
+                          value: AppThemeMode.light,
+                          icon: Icon(Icons.light_mode),
+                          tooltip: 'Light',
+                        ),
+                        ButtonSegment(
+                          value: AppThemeMode.dark,
+                          icon: Icon(Icons.dark_mode),
+                          tooltip: 'Dark',
+                        ),
+                      ],
+                      selected: {player.themeMode.value},
+                      onSelectionChanged: (s) => player.setThemeMode(s.first),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
               child: SwitchListTile(
                 secondary: const Icon(Icons.palette_outlined),
                 title: const Text('Dynamic theme from album art'),
@@ -144,6 +192,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 value: player.dynamicTheme,
                 onChanged: player.setDynamicTheme,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.color_lens_outlined),
+                        const SizedBox(width: 16),
+                        const Expanded(child: Text('Accent color')),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      player.dynamicTheme
+                          ? 'Fallback when album art has no strong colour'
+                          : 'Pick the app accent',
+                      style: text.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        _AccentSwatch(
+                          color: null,
+                          selected: player.accentSeed.value == null,
+                          onTap: () => player.setAccentSeed(null),
+                        ),
+                        for (final c in _accentPresets)
+                          _AccentSwatch(
+                            color: c,
+                            selected:
+                                player.accentSeed.value?.toARGB32() ==
+                                c.toARGB32(),
+                            onTap: () => player.setAccentSeed(c),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -575,6 +668,60 @@ class _EqualizerCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A circular accent swatch for the Appearance accent picker. `color == null`
+/// means "the built-in default". 48 dp hit target for accessibility.
+class _AccentSwatch extends StatelessWidget {
+  const _AccentSwatch({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Color? color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final swatch = color ?? kDefaultSeed;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: color == null ? 'Default accent' : 'Accent colour',
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: swatch,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? cs.onSurface : cs.outlineVariant,
+                  width: selected ? 3 : 1,
+                ),
+              ),
+              child: Icon(
+                color == null
+                    ? Icons.auto_awesome
+                    : (selected ? Icons.check : null),
+                size: 18,
+                color: Colors.white,
+              ),
+            ),
+          ),
         ),
       ),
     );
