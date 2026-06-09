@@ -16,6 +16,16 @@ import 'remote_library.dart';
 import 'sharing_screen.dart';
 import 'text_input_dialog.dart';
 
+/// A stable, distinct color for a host or peer, derived from its id/name — so
+/// devices are visually recognizable across the discovery + connections lists.
+Color hostColorFor(String key) {
+  var h = 0;
+  for (final c in key.codeUnits) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return HSLColor.fromAHSL(1, (h % 360).toDouble(), 0.5, 0.55).toColor();
+}
+
 class NetworkScreen extends StatelessWidget {
   const NetworkScreen({super.key});
 
@@ -513,7 +523,15 @@ class _NetworkPanelState extends State<NetworkPanel> {
           ),
         for (final h in _hosts)
           ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.computer)),
+            leading: CircleAvatar(
+              backgroundColor: hostColorFor(
+                h.hostId.isEmpty ? '${h.address}:${h.port}' : h.hostId,
+              ),
+              child: Text(
+                h.name.isNotEmpty ? h.name[0].toUpperCase() : '?',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
             title: Text(h.name),
             subtitle: Text('${h.address}:${h.port}'),
             trailing: const Icon(Icons.chevron_right),
@@ -615,7 +633,11 @@ class _ConnectionsSectionState extends State<_ConnectionsSection> {
           for (final p in _peers)
             ListTile(
               dense: true,
-              leading: const Icon(Icons.person_outline),
+              leading: CircleAvatar(
+                radius: 14,
+                backgroundColor: hostColorFor(p),
+                child: const Icon(Icons.person, size: 16, color: Colors.white),
+              ),
               title: Text(p),
               subtitle: const Text('Active session'),
               trailing: TextButton(

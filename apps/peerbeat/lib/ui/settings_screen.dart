@@ -503,31 +503,47 @@ class _EqualizerCard extends StatelessWidget {
               },
             ),
             const SizedBox(height: 8),
-            for (var i = 0; i < _eqBands.length; i++)
-              Row(
+            // Graphic EQ: a row of vertical band sliders (drag up/down to boost
+            // or cut), forming the familiar response-curve shape.
+            SizedBox(
+              height: 200,
+              child: Row(
                 children: [
-                  SizedBox(width: 42, child: Text(_eqBands[i])),
-                  Expanded(
-                    child: Slider(
-                      min: -12,
-                      max: 12,
-                      divisions: 48,
-                      value: player.eqGains[i],
-                      label: '${player.eqGains[i].toStringAsFixed(1)} dB',
-                      onChanged: player.eqEnabled
-                          ? (v) => player.setEqBand(i, v)
-                          : null,
+                  for (var i = 0; i < _eqBands.length; i++)
+                    Expanded(
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            height: 18,
+                            child: Text(
+                              player.eqGains[i].toStringAsFixed(0),
+                              style: text.labelSmall,
+                            ),
+                          ),
+                          Expanded(
+                            child: RotatedBox(
+                              quarterTurns: 3,
+                              child: Slider(
+                                min: -12,
+                                max: 12,
+                                divisions: 48,
+                                value: player.eqGains[i],
+                                onChanged: player.eqEnabled
+                                    ? (v) => player.setEqBand(i, v)
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            height: 18,
+                            child: Text(_eqBands[i], style: text.labelSmall),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  SizedBox(
-                    width: 64,
-                    child: Text(
-                      '${player.eqGains[i].toStringAsFixed(1)} dB',
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
                 ],
               ),
+            ),
             Row(
               children: [
                 const SizedBox(width: 42, child: Text('Pre')),

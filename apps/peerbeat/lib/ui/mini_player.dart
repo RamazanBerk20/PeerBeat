@@ -59,6 +59,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         min: 0,
                         max: maxMs.toDouble(),
                         value: posMs,
+                        semanticFormatterCallback: (v) =>
+                            'Position ${fmtDuration(v.round())}',
                         onChanged: (v) => setState(() => _dragMs = v),
                         onChangeEnd: (v) async {
                           final requested = Duration(milliseconds: v.toInt());
@@ -155,6 +157,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         icon: const Icon(Icons.skip_previous),
                       ),
                       IconButton.filled(
+                        tooltip: player.playing ? 'Pause' : 'Play',
                         onPressed: player.toggle,
                         icon: Icon(
                           player.playing ? Icons.pause : Icons.play_arrow,

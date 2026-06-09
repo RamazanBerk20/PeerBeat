@@ -327,6 +327,7 @@ class _Controls extends StatelessWidget {
           icon: const Icon(Icons.skip_previous),
         ),
         IconButton.filled(
+          tooltip: player.playing ? 'Pause' : 'Play',
           iconSize: 44,
           onPressed: player.toggle,
           icon: Icon(player.playing ? Icons.pause : Icons.play_arrow),
