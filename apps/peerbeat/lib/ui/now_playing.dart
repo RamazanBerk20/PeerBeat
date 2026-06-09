@@ -34,6 +34,20 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
+  void _showQueue(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        builder: (_, controller) => _QueueSheet(scrollController: controller),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -49,8 +63,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           });
           return const Scaffold(body: SizedBox.shrink());
         }
+        final cs = Theme.of(context).colorScheme;
         return Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBodyBehindAppBar: true,
           appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
             leading: IconButton(
               tooltip: 'Close',
               icon: const Icon(Icons.expand_more),
@@ -59,6 +79,28 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             title: const Text('Now Playing'),
             centerTitle: true,
             actions: [
+              PopupMenuButton<int>(
+                tooltip: player.sleepActive
+                    ? 'Sleep timer: ${_fmtRemaining(player.sleepRemaining)}'
+                    : 'Sleep timer',
+                icon: Icon(
+                  player.sleepActive ? Icons.bedtime : Icons.bedtime_outlined,
+                  color: player.sleepActive ? cs.primary : null,
+                ),
+                onSelected: (m) =>
+                    player.setSleepTimer(m == 0 ? null : Duration(minutes: m)),
+                itemBuilder: (_) => [
+                  if (player.sleepActive)
+                    const PopupMenuItem(value: 0, child: Text('Turn off')),
+                  for (final m in [15, 30, 45, 60, 90])
+                    PopupMenuItem(value: m, child: Text('$m minutes')),
+                ],
+              ),
+              IconButton(
+                tooltip: 'Queue',
+                icon: const Icon(Icons.queue_music),
+                onPressed: () => _showQueue(context),
+              ),
               if (!t.path.startsWith('http'))
                 IconButton(
                   tooltip: 'Lyrics',
@@ -67,34 +109,48 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 ),
             ],
           ),
-          body: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 720;
-                final art = _Artwork(track: t);
-                final controls = _Controls(
-                  track: t,
-                  dragMs: _dragMs,
-                  onDragChanged: (v) => setState(() => _dragMs = v),
-                  onDragEnd: _onSeekEnd,
-                );
-                if (wide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+          // Album-art-forward backdrop: the theme's primary is already derived
+          // from the current art (dynamic theming), so this wash reflects it.
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  cs.primaryContainer.withValues(alpha: 0.55),
+                  cs.surface,
+                ],
+                stops: const [0.0, 0.6],
+              ),
+            ),
+            child: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 720;
+                  final art = _Artwork(track: t);
+                  final controls = _Controls(
+                    track: t,
+                    dragMs: _dragMs,
+                    onDragChanged: (v) => setState(() => _dragMs = v),
+                    onDragEnd: _onSeekEnd,
+                  );
+                  if (wide) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: Center(child: art)),
+                        Expanded(child: controls),
+                      ],
+                    );
+                  }
+                  return Column(
                     children: [
-                      Expanded(child: Center(child: art)),
-                      const VerticalDivider(width: 1),
-                      Expanded(child: controls),
+                      Expanded(flex: 5, child: Center(child: art)),
+                      Expanded(flex: 6, child: controls),
                     ],
                   );
-                }
-                return Column(
-                  children: [
-                    Expanded(flex: 5, child: Center(child: art)),
-                    Expanded(flex: 6, child: controls),
-                  ],
-                );
-              },
+                },
+              ),
             ),
           ),
         );
@@ -121,6 +177,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       }
     }
   }
+}
+
+String _fmtRemaining(Duration? d) {
+  if (d == null) return '';
+  final m = d.inMinutes;
+  return m >= 1 ? '$m min left' : '<1 min left';
 }
 
 class _Artwork extends StatelessWidget {
@@ -343,6 +405,85 @@ class _Controls extends StatelessWidget {
 
   static String _fmtSpeed(double s) =>
       s.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+}
+
+/// Full reorderable queue: drag to reorder, tap to jump, remove with the ✕.
+class _QueueSheet extends StatelessWidget {
+  const _QueueSheet({this.scrollController});
+  final ScrollController? scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        final upNext = player.upNext;
+        final base = player.currentIndex;
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Row(
+                children: [
+                  Text('Up next', style: text.titleLarge),
+                  const Spacer(),
+                  Text('${upNext.length}', style: text.labelLarge),
+                ],
+              ),
+            ),
+            Expanded(
+              child: upNext.isEmpty
+                  ? const Center(child: Text('Queue is empty'))
+                  : ReorderableListView.builder(
+                      scrollController: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: upNext.length,
+                      onReorderItem: player.reorderUpNext,
+                      itemBuilder: (context, i) {
+                        final t = upNext[i];
+                        return ListTile(
+                          key: ValueKey(i),
+                          leading: TrackArt(track: t, size: 40),
+                          title: Text(
+                            t.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: t.artist.isEmpty
+                              ? null
+                              : Text(
+                                  t.artist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Remove',
+                                icon: const Icon(Icons.close),
+                                onPressed: () => player.removeFromUpNext(i),
+                              ),
+                              ReorderableDragStartListener(
+                                index: i,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(Icons.drag_handle),
+                                ),
+                              ),
+                            ],
+                          ),
+                          onTap: () => player.playQueueIndex(base + 1 + i),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _UpNextList extends StatelessWidget {

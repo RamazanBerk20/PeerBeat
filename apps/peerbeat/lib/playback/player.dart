@@ -188,6 +188,69 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reorder a track within "Up next" (indices are into [upNext]). [newIndex] is
+  /// already adjusted for the removal (ReorderableListView.onReorderItem).
+  void reorderUpNext(int oldIndex, int newIndex) {
+    final base = _pos + 1;
+    if (base < 1) return;
+    final upNextLen = _order.length - base;
+    if (oldIndex < 0 || oldIndex >= upNextLen) return;
+    newIndex = newIndex.clamp(0, upNextLen - 1);
+    final item = _order.removeAt(base + oldIndex);
+    _order.insert(base + newIndex, item);
+    notifyListeners();
+  }
+
+  /// Remove a track from "Up next" by its [upNext] index.
+  void removeFromUpNext(int upNextIndex) {
+    final idx = _pos + 1 + upNextIndex;
+    if (idx <= _pos || idx >= _order.length) return;
+    _order.removeAt(idx);
+    notifyListeners();
+  }
+
+  // ── Sleep timer ──────────────────────────────────────────────────────────
+  Timer? _sleepTimer;
+  DateTime? _sleepDeadline;
+  bool get sleepActive => _sleepTimer != null;
+
+  /// Time left on the sleep timer, or null if it's off.
+  Duration? get sleepRemaining {
+    final d = _sleepDeadline;
+    if (d == null) return null;
+    final r = d.difference(DateTime.now());
+    return r.isNegative ? Duration.zero : r;
+  }
+
+  /// Arm (or, with null/zero, cancel) the sleep timer. On fire it fades the
+  /// volume out then pauses, restoring the volume so the next play is normal.
+  void setSleepTimer(Duration? duration) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepDeadline = null;
+    if (duration != null && duration > Duration.zero) {
+      _sleepDeadline = DateTime.now().add(duration);
+      _sleepTimer = Timer(duration, _onSleep);
+    }
+    notifyListeners();
+  }
+
+  Future<void> _onSleep() async {
+    _sleepTimer = null;
+    _sleepDeadline = null;
+    notifyListeners();
+    final restore = _volume;
+    for (var step = 1; step <= 10 && _playing; step++) {
+      _volume = (restore * (1 - step / 10)).clamp(0.0, 1.0);
+      _applyVolume();
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+    if (_playing) toggle(); // pause
+    _volume = restore;
+    _applyVolume();
+    notifyListeners();
+  }
+
   void playNext(TrackRow t) {
     _queue = [..._queue, t];
     final newIndex = _queue.length - 1;
@@ -677,6 +740,7 @@ class PlayerController extends ChangeNotifier {
   void dispose() {
     _posSub.cancel();
     _playSub.cancel();
+    _sleepTimer?.cancel();
     _engine.dispose();
     positionNotifier.dispose();
     accentColor.dispose();
