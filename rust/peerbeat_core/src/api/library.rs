@@ -96,6 +96,20 @@ pub fn library_set_folder_watched(folder_id: i64, watched: bool) -> Result<(), S
     r
 }
 
+// ── Duplicate detection (smarter library) ────────────────────────────────────
+
+/// Groups of tracks that are byte-for-byte duplicate audio (shared content
+/// hash), each group having 2+ members. Empty when there are none.
+pub fn library_duplicate_groups() -> Result<Vec<Vec<TrackRow>>, String> {
+    with_db(|db| tracks::duplicate_groups(db.conn()))
+}
+
+/// Remove a single track from the library (does not delete the file on disk).
+/// Used to resolve duplicates; joins cascade via the schema.
+pub fn library_remove_track(track_id: i64) -> Result<(), String> {
+    with_db(|db| library::scan::delete_track(db.conn(), track_id))
+}
+
 /// Re-scan every known folder: import new/changed files and prune tracks whose
 /// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
 pub fn library_rescan_all() -> Result<ScanReport, String> {

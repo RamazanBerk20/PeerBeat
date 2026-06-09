@@ -95,6 +95,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HostInfo> dco_decode_list_host_info(dynamic raw);
 
   @protected
+  List<List<TrackRow>> dco_decode_list_list_track_row(dynamic raw);
+
+  @protected
   List<OutputDeviceRow> dco_decode_list_output_device_row(dynamic raw);
 
   @protected
@@ -258,6 +261,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HostInfo> sse_decode_list_host_info(SseDeserializer deserializer);
+
+  @protected
+  List<List<TrackRow>> sse_decode_list_list_track_row(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<OutputDeviceRow> sse_decode_list_output_device_row(
@@ -453,6 +461,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_host_info(List<HostInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_list_track_row(
+    List<List<TrackRow>> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_output_device_row(

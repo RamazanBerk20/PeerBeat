@@ -133,7 +133,9 @@ fn under_root_like(root: &Path) -> String {
     format!("{escaped}/%")
 }
 
-fn delete_track(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+/// Remove a single track from the library (its artist/genre/playlist joins
+/// cascade via the schema). Used by folder-prune and duplicate removal.
+pub fn delete_track(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM tracks WHERE id = ?1", [id])?;
     // tracks_fts stores its own copy (not external-content) → delete explicitly.
     conn.execute("DELETE FROM tracks_fts WHERE rowid = ?1", [id])?;

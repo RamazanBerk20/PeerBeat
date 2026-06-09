@@ -81,6 +81,41 @@ pub(crate) fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackRow> {
     })
 }
 
+/// Groups of tracks that share an audio content hash (true duplicate files),
+/// each group having 2+ members. Ordered by descending group size; within a
+/// group by `id` ascending (so "keep the first" is the earliest-added). Tracks
+/// without a content hash are ignored.
+pub fn duplicate_groups(conn: &Connection) -> rusqlite::Result<Vec<Vec<TrackRow>>> {
+    let mut hash_stmt = conn.prepare(
+        "SELECT content_hash FROM tracks
+         WHERE content_hash IS NOT NULL AND content_hash <> ''
+         GROUP BY content_hash HAVING COUNT(*) > 1
+         ORDER BY COUNT(*) DESC, content_hash",
+    )?;
+    let hashes: Vec<String> = hash_stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(hash_stmt);
+
+    let sql = format!(
+        "{SELECT_ROW} tracks t
+         LEFT JOIN albums al ON al.id = t.album_id
+         WHERE t.content_hash = ?1
+         ORDER BY t.id"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let mut groups = Vec::with_capacity(hashes.len());
+    for h in hashes {
+        let rows: Vec<TrackRow> = stmt
+            .query_map([&h], map_row)?
+            .collect::<rusqlite::Result<_>>()?;
+        if rows.len() > 1 {
+            groups.push(rows);
+        }
+    }
+    Ok(groups)
+}
+
 fn get_or_create(
     conn: &Connection,
     sql_sel: &str,
@@ -333,6 +368,30 @@ mod tests {
             )
             .unwrap();
         assert_eq!(artist, "M83");
+    }
+
+    #[test]
+    fn duplicate_groups_finds_shared_content_hash() {
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        let mut a = sample("/m/a.flac", "Song", "Artist", "Album");
+        a.content_hash = Some("HASH1".into());
+        let mut b = sample("/m/b.flac", "Song (copy)", "Artist", "Album");
+        b.content_hash = Some("HASH1".into());
+        let mut u = sample("/m/u.flac", "Unique", "Artist", "Album");
+        u.content_hash = Some("HASH2".into());
+        let n = sample("/m/n.flac", "NoHash", "Artist", "Album"); // content_hash None
+        let id_a = upsert_track(c, &a).unwrap();
+        let id_b = upsert_track(c, &b).unwrap();
+        upsert_track(c, &u).unwrap();
+        upsert_track(c, &n).unwrap();
+
+        let groups = duplicate_groups(c).unwrap();
+        assert_eq!(groups.len(), 1, "only HASH1 is duplicated");
+        assert_eq!(groups[0].len(), 2);
+        // ordered by id ascending → keep-the-first is the earliest-added
+        assert_eq!(groups[0][0].id, id_a);
+        assert_eq!(groups[0][1].id, id_b);
     }
 
     #[test]

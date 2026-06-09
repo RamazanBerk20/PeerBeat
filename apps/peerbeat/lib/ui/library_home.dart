@@ -453,6 +453,152 @@ class _FoldersDialogState extends State<_FoldersDialog> {
         ),
       ),
       actions: [
+        TextButton.icon(
+          onPressed: _findDuplicates,
+          icon: const Icon(Icons.copy_all_outlined),
+          label: const Text('Find duplicates'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _changed),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _findDuplicates() async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DuplicatesDialog(),
+    );
+    if (changed == true && mounted) {
+      _changed = true;
+      _reload();
+    }
+  }
+}
+
+/// Lists groups of byte-identical duplicate tracks and lets the user remove the
+/// extras from the library (files on disk are never deleted).
+class _DuplicatesDialog extends StatefulWidget {
+  const _DuplicatesDialog();
+
+  @override
+  State<_DuplicatesDialog> createState() => _DuplicatesDialogState();
+}
+
+class _DuplicatesDialogState extends State<_DuplicatesDialog> {
+  late Future<List<List<TrackRow>>> _future = libraryDuplicateGroups();
+  bool _changed = false;
+
+  void _reload() => setState(() {
+    _future = libraryDuplicateGroups();
+  });
+
+  Future<void> _remove(TrackRow t) async {
+    try {
+      await libraryRemoveTrack(trackId: t.id);
+      if (!mounted) return;
+      _changed = true;
+      _reload();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not remove: $e')));
+      }
+    }
+  }
+
+  Future<void> _removeExtras(List<TrackRow> group) async {
+    for (var i = 1; i < group.length; i++) {
+      try {
+        await libraryRemoveTrack(trackId: group[i].id);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    _changed = true;
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.copy_all_outlined),
+          SizedBox(width: 12),
+          Expanded(child: Text('Duplicate tracks')),
+        ],
+      ),
+      content: SizedBox(
+        width: 520,
+        height: 360,
+        child: FutureBuilder<List<List<TrackRow>>>(
+          future: _future,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final groups = snap.data!;
+            if (groups.isEmpty) {
+              return const Center(child: Text('No duplicates found.'));
+            }
+            return ListView.builder(
+              itemCount: groups.length,
+              itemBuilder: (_, gi) {
+                final g = groups[gi];
+                return Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        dense: true,
+                        title: Text(
+                          '${g.length} copies · ${g.first.title}',
+                          style: text.titleSmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: TextButton(
+                          onPressed: () => _removeExtras(g),
+                          child: const Text('Remove extras'),
+                        ),
+                      ),
+                      for (var i = 0; i < g.length; i++)
+                        ListTile(
+                          dense: true,
+                          leading: Icon(
+                            i == 0
+                                ? Icons.check_circle_outline
+                                : Icons.subdirectory_arrow_right,
+                            size: 18,
+                          ),
+                          title: Text(
+                            g[i].path,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodySmall,
+                          ),
+                          subtitle: i == 0 ? const Text('Kept') : null,
+                          trailing: i == 0
+                              ? null
+                              : IconButton(
+                                  tooltip: 'Remove from library',
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: () => _remove(g[i]),
+                                ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+      actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, _changed),
           child: const Text('Done'),

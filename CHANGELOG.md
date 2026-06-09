@@ -17,6 +17,9 @@ features.
 - **Library**: per-folder watch toggle in Library → Folders — mute auto-import
   for a folder while still being able to scan it on demand (the `is_watched`
   flag is now honoured by the watcher).
+- **Library**: duplicate detection — Library → Folders → "Find duplicates"
+  groups byte-identical tracks (shared content hash) and removes the extras
+  from the library (files on disk are never deleted).
 
 ### Fixes (correctness & security)
 - Playback speed is clamped to the engine-safe 0.5–2× in the UI (no more silent

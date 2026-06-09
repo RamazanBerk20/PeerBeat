@@ -45,6 +45,16 @@ Future<void> librarySetFolderWatched({
   watched: watched,
 );
 
+/// Groups of tracks that are byte-for-byte duplicate audio (shared content
+/// hash), each group having 2+ members. Empty when there are none.
+Future<List<List<TrackRow>>> libraryDuplicateGroups() =>
+    RustLib.instance.api.crateApiLibraryLibraryDuplicateGroups();
+
+/// Remove a single track from the library (does not delete the file on disk).
+/// Used to resolve duplicates; joins cascade via the schema.
+Future<void> libraryRemoveTrack({required PlatformInt64 trackId}) =>
+    RustLib.instance.api.crateApiLibraryLibraryRemoveTrack(trackId: trackId);
+
 /// Re-scan every known folder: import new/changed files and prune tracks whose
 /// files have been deleted (skipping inaccessible/empty roots). Aggregate counts.
 Future<ScanReport> libraryRescanAll() =>
