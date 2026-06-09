@@ -191,17 +191,30 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
                   ),
           ListenableBuilder(
             listenable: party,
-            builder: (context, _) => party.joined
-                ? IconButton(
-                    tooltip: 'Leave party',
-                    icon: const Icon(Icons.exit_to_app),
-                    onPressed: () => party.leaveParty(),
-                  )
-                : IconButton(
-                    tooltip: 'Join party (sync to host)',
-                    icon: const Icon(Icons.celebration_outlined),
-                    onPressed: _joinParty,
+            builder: (context, _) {
+              if (party.reconnecting) {
+                return IconButton(
+                  tooltip: 'Reconnecting to party… (tap to leave)',
+                  icon: const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
+                  onPressed: () => party.leaveParty(),
+                );
+              }
+              return party.joined
+                  ? IconButton(
+                      tooltip: 'Leave party',
+                      icon: const Icon(Icons.exit_to_app),
+                      onPressed: () => party.leaveParty(),
+                    )
+                  : IconButton(
+                      tooltip: 'Join party (sync to host)',
+                      icon: const Icon(Icons.celebration_outlined),
+                      onPressed: _joinParty,
+                    );
+            },
           ),
         ],
       ),
