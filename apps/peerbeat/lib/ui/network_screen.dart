@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -224,40 +225,139 @@ class _NetworkPanelState extends State<NetworkPanel> {
     }
   }
 
-  /// POST /v1/auth/session for a scoped bearer token. Returns null (with a
-  /// snackbar) on a rejected PIN / denied access.
+  /// POST /v1/auth/session for a scoped bearer token. Handles the approved-peers
+  /// handshake (202 → poll until the host allows/denies). Returns null (with a
+  /// snackbar) on a rejected PIN / denied access / cancel.
   Future<String?> _authenticate(
     TofuHostClient tc,
     String base,
     _ShareDesc share,
     String? pin,
   ) async {
+    final (code, body) = await _postAuth(tc, base, share, pin, null);
+    if (code == 200) return _tokenFrom(body);
+    if (code == 202) {
+      final challenge = _challengeFrom(body);
+      if (challenge == null) return null;
+      return _awaitApproval(tc, base, share, challenge);
+    }
+    _surfaceAuthError(code, body);
+    return null;
+  }
+
+  /// One POST to /v1/auth/session; returns (statusCode, body). `challenge`
+  /// is the approved-peers poll handle (null on the first request).
+  Future<(int, String)> _postAuth(
+    TofuHostClient tc,
+    String base,
+    _ShareDesc share,
+    String? pin,
+    String? challenge,
+  ) async {
     final req = await tc.client.postUrl(Uri.parse('$base/v1/auth/session'));
     req.headers.set('content-type', 'application/json');
     final payload = <String, dynamic>{'scope': share.scope};
     if (share.playlistId != null) payload['playlist_id'] = share.playlistId;
     if (pin != null) payload['pin'] = pin;
+    if (challenge != null) payload['challenge'] = challenge;
     req.write(jsonEncode(payload));
     final resp = await req.close();
-    final body = await resp.transform(utf8.decoder).join();
-    if (resp.statusCode != 200) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              resp.statusCode == 401
-                  ? 'Incorrect PIN'
-                  : 'Access denied: ${body.trim()}',
-            ),
-          ),
-        );
-      }
-      return null;
-    }
+    final text = await resp.transform(utf8.decoder).join();
+    return (resp.statusCode, text);
+  }
+
+  String? _tokenFrom(String body) {
     final decoded = jsonDecode(body);
     return (decoded is Map && decoded['token'] is String)
         ? decoded['token'] as String
         : null;
+  }
+
+  String? _challengeFrom(String body) {
+    final decoded = jsonDecode(body);
+    return (decoded is Map && decoded['challenge'] is String)
+        ? decoded['challenge'] as String
+        : null;
+  }
+
+  void _surfaceAuthError(int code, String body) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          code == 401
+              ? 'Incorrect PIN'
+              : code == 429
+              ? 'Too many attempts — wait a moment and retry'
+              : 'Access denied: ${body.trim()}',
+        ),
+      ),
+    );
+  }
+
+  /// Poll the host while it decides on an approved-peers request. Shows a
+  /// cancellable "waiting" dialog; resolves to a token (allowed) or null.
+  Future<String?> _awaitApproval(
+    TofuHostClient tc,
+    String base,
+    _ShareDesc share,
+    String challenge,
+  ) async {
+    var cancelled = false;
+    if (mounted) {
+      // The dialog future completes when the host decides or the user cancels.
+      unawaited(
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            content: const Row(
+              children: [
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 16),
+                Expanded(child: Text('Waiting for the host to allow you…')),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  cancelled = true;
+                  Navigator.of(ctx).pop();
+                },
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    String? token;
+    // ~2 minutes of polling at 1.5s cadence.
+    for (var i = 0; i < 80 && !cancelled; i++) {
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (cancelled) break;
+      final (code, body) = await _postAuth(tc, base, share, null, challenge);
+      if (code == 200) {
+        token = _tokenFrom(body);
+        break;
+      }
+      if (code == 403) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('The host denied your request')),
+          );
+        }
+        break;
+      }
+      // 202 → still pending; keep polling.
+    }
+    // Close the waiting dialog if it's still up.
+    if (!cancelled && mounted) Navigator.of(context, rootNavigator: true).pop();
+    return token;
   }
 
   Future<String?> _promptPin() => promptText(
@@ -267,6 +367,40 @@ class _NetworkPanelState extends State<NetworkPanel> {
     keyboardType: TextInputType.number,
     confirmLabel: 'Connect',
   );
+
+  /// Manual fallback for when mDNS discovery doesn't surface a host: the user
+  /// types `ip:port` (the host shows its port on its "Share my library" tile).
+  /// We build a synthetic [HostInfo] and run the normal open-host + TOFU flow.
+  Future<void> _connectByIp() async {
+    final input = await promptText(
+      context,
+      title: 'Connect by IP',
+      hint: 'e.g. 192.168.1.42:54213',
+      confirmLabel: 'Connect',
+    );
+    if (input == null || !mounted) return;
+    final raw = input.trim();
+    final colon = raw.lastIndexOf(':');
+    final addr = colon > 0 ? raw.substring(0, colon) : raw;
+    final port = colon > 0 ? int.tryParse(raw.substring(colon + 1)) : null;
+    if (addr.isEmpty || port == null || port <= 0 || port > 65535) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter address and port, e.g. 192.168.1.42:54213'),
+        ),
+      );
+      return;
+    }
+    await _openHost(
+      HostInfo(
+        name: raw,
+        address: addr,
+        port: port,
+        hostId: '',
+        fingerprint: '',
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -350,6 +484,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
                   on ? party.startHosting() : party.stopHosting(),
             ),
           ),
+        if (_hosting) const _ApprovalsSection(),
         if (_hosting) const _ConnectionsSection(),
         const Divider(),
         ListTile(
@@ -364,6 +499,12 @@ class _NetworkPanelState extends State<NetworkPanel> {
                   icon: const Icon(Icons.refresh),
                   onPressed: _discover,
                 ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.add_link),
+          title: const Text('Connect by IP address'),
+          subtitle: const Text("Reach a host manually if it isn't discovered"),
+          onTap: _connectByIp,
         ),
         if (_hosts.isEmpty && !_discovering)
           const Padding(
@@ -518,6 +659,115 @@ class _ConnectionsSectionState extends State<_ConnectionsSection> {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// Host-side approval prompts for peers connecting under "approved peers" mode.
+/// Polls the pending queue while hosting and offers Allow / Deny / Always.
+class _ApprovalsSection extends StatefulWidget {
+  const _ApprovalsSection();
+
+  @override
+  State<_ApprovalsSection> createState() => _ApprovalsSectionState();
+}
+
+class _ApprovalsSectionState extends State<_ApprovalsSection> {
+  List<PendingApprovalDto> _pending = const [];
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final p = await netPendingApprovals();
+      if (mounted) setState(() => _pending = p);
+    } catch (_) {
+      // best-effort poll
+    }
+  }
+
+  Future<void> _decide(PendingApprovalDto p, bool allow, bool remember) async {
+    await netDecidePeer(
+      challenge: p.challenge,
+      allow: allow,
+      remember: remember,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(allow ? 'Allowed ${p.peer}' : 'Denied ${p.peer}'),
+        ),
+      );
+    }
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_pending.isEmpty) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          color: cs.tertiaryContainer,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: Row(
+            children: [
+              Icon(Icons.how_to_reg, color: cs.onTertiaryContainer),
+              const SizedBox(width: 8),
+              Text(
+                'Approval requests',
+                style: TextStyle(
+                  color: cs.onTertiaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        for (final p in _pending)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${p.peer} wants to connect to "${p.label}"'),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton(
+                      onPressed: () => _decide(p, true, false),
+                      child: const Text('Allow once'),
+                    ),
+                    OutlinedButton(
+                      onPressed: () => _decide(p, true, true),
+                      child: const Text('Always allow'),
+                    ),
+                    TextButton(
+                      onPressed: () => _decide(p, false, false),
+                      child: const Text('Deny'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

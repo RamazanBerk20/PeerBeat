@@ -1,5 +1,6 @@
 //! FRB LAN API: host (advertise + serve over TLS) and discover peers.
 
+use crate::db::remembered_peers;
 use crate::net::discovery::{self, HostInfo};
 use crate::net::party::PartyState;
 use crate::net::server::{self, ServerConfig};
@@ -7,6 +8,7 @@ use crate::net::tls;
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
 use mdns_sd::ServiceDaemon;
+use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread::JoinHandle;
@@ -19,6 +21,9 @@ struct Host {
     port: u16,
     sessions: server::Sessions,
     party: server::PartyHub,
+    approvals: server::Approvals,
+    db_path: PathBuf,
+    host_id: String,
 }
 
 static HOST: Mutex<Option<Host>> = Mutex::new(None);
@@ -70,6 +75,8 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
     );
     let sessions = cfg.sessions.clone();
     let party = cfg.party.clone();
+    let approvals = cfg.approvals.clone();
+    let host_id = cfg.host_id.clone();
     let handle: Handle<std::net::SocketAddr> = Handle::new();
     let handle_thread = handle.clone();
     let thread = std::thread::Builder::new()
@@ -99,8 +106,68 @@ pub fn net_start_host(db_path: String, display_name: String) -> Result<u16, Stri
         port,
         sessions,
         party,
+        approvals,
+        db_path: PathBuf::from(&db_path),
+        host_id,
     });
     Ok(port)
+}
+
+/// A peer waiting for the host to allow/deny it (approved-peers share mode),
+/// surfaced to the host UI.
+pub struct PendingApprovalDto {
+    pub challenge: String,
+    pub peer: String,
+    pub label: String,
+    pub requested_at_ms: i64,
+}
+
+/// Peers currently awaiting an allow/deny decision from the host.
+pub fn net_pending_approvals() -> Vec<PendingApprovalDto> {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            if let Ok(a) = h.approvals.lock() {
+                return a
+                    .iter()
+                    .filter(|p| p.decision.is_none())
+                    .map(|p| PendingApprovalDto {
+                        challenge: p.challenge.clone(),
+                        peer: p.peer.clone(),
+                        label: p.label.clone(),
+                        requested_at_ms: p.requested_at_ms,
+                    })
+                    .collect();
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// Allow or deny a pending peer by its `challenge`. With `remember`, the decision
+/// is persisted (so the peer is auto-handled next time). False if not hosting or
+/// the challenge is unknown.
+pub fn net_decide_peer(challenge: String, allow: bool, remember: bool) -> bool {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            let peer = {
+                let Ok(mut a) = h.approvals.lock() else {
+                    return false;
+                };
+                let Some(p) = a.iter_mut().find(|p| p.challenge == challenge) else {
+                    return false;
+                };
+                p.decision = Some(allow);
+                p.peer.clone()
+            };
+            if remember {
+                if let Ok(conn) = Connection::open(&h.db_path) {
+                    let _ = remembered_peers::set(&conn, &h.host_id, &peer, allow, unix_ms());
+                }
+            }
+            return true;
+        }
+    }
+    false
 }
 
 /// Revoke every peer session token (they must re-authenticate). Used by the

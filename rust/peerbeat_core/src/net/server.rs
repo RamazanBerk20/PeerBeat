@@ -14,7 +14,7 @@
 //! are stored Argon2id-hashed; and the `/v1/party` WebSocket is token-gated (and
 //! re-checked live) so a revoke tears down in-flight party connections.
 
-use crate::db::{shares, tracks, transfer_log};
+use crate::db::{remembered_peers, shares, tracks, transfer_log};
 use crate::net::party::PartyState;
 use axum::{
     extract::{
@@ -107,6 +107,28 @@ impl RateLimiter {
     }
 }
 
+/// One peer's pending connection request under the "approved peers" share mode.
+/// The peer polls `/v1/auth/session` with its `challenge` until the host decides.
+#[derive(Clone)]
+pub struct PendingApproval {
+    pub challenge: String,
+    pub peer: String,
+    pub scope: Scope,
+    pub can_download: bool,
+    pub label: String,
+    pub requested_at_ms: i64,
+    /// `None` = awaiting host, `Some(true/false)` = allowed / denied.
+    pub decision: Option<bool>,
+}
+
+/// Host-side queue of pending approval requests (shared with the FRB API so the
+/// host UI can list them and post allow/deny decisions).
+pub type Approvals = Arc<Mutex<Vec<PendingApproval>>>;
+
+/// How long a pending/decided approval lingers before it is swept (peer must
+/// finish its poll within this window).
+const APPROVAL_TTL_MS: i64 = 5 * 60 * 1000;
+
 /// Party-mode broadcast hub: fans the host's playback state out to connected
 /// WebSocket peers, keeps the latest snapshot for new joiners, and tracks active.
 #[derive(Clone)]
@@ -165,6 +187,7 @@ pub struct ServerConfig {
     pub sessions: Sessions,
     pub party: PartyHub,
     pub auth_limiter: Arc<RateLimiter>,
+    pub approvals: Approvals,
 }
 
 impl ServerConfig {
@@ -177,6 +200,7 @@ impl ServerConfig {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             party: PartyHub::new(),
             auth_limiter: Arc::new(RateLimiter::default()),
+            approvals: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -362,11 +386,150 @@ struct AuthReq {
     playlist_id: Option<i64>,
     #[serde(default)]
     pin: Option<String>,
+    /// Poll handle for the approved-peers flow (echoed back from the first 202).
+    #[serde(default)]
+    challenge: Option<String>,
 }
 
 #[derive(Serialize)]
 struct AuthResp {
     token: String,
+}
+
+/// Issue + store a scoped session token (with TTL), sweeping expired ones.
+fn mint_token(
+    cfg: &ServerConfig,
+    scope: Scope,
+    can_download: bool,
+    ip: IpAddr,
+    now: i64,
+) -> String {
+    let token = uuid::Uuid::new_v4().simple().to_string();
+    if let Ok(mut m) = cfg.sessions.lock() {
+        m.retain(|_, s| s.expires_at_ms > now); // opportunistic sweep of expired tokens
+        m.insert(
+            token.clone(),
+            Session {
+                scope,
+                can_download,
+                created_at_ms: now,
+                expires_at_ms: now + TOKEN_TTL_MS,
+                peer: ip.to_string(),
+            },
+        );
+    }
+    token
+}
+
+/// Display label for a scope (for the host's approval prompt).
+async fn scope_label(cfg: &ServerConfig, scope: &Scope) -> String {
+    match scope {
+        Scope::Library => "Whole library".to_string(),
+        Scope::Playlist(id) => {
+            let id = *id;
+            blocking_db(cfg.db_path.clone(), move |c| {
+                c.query_row("SELECT name FROM playlists WHERE id = ?1", [id], |r| {
+                    r.get::<_, String>(0)
+                })
+            })
+            .await
+            .unwrap_or_else(|| format!("Playlist {id}"))
+        }
+    }
+}
+
+/// The "approved peers" handshake: honor a remembered decision, otherwise create
+/// (or poll) a pending request the host resolves from its UI. Returns 200 (token)
+/// / 202 (still pending, with the `challenge`) / 403 (denied or expired).
+async fn handle_approved(
+    cfg: &ServerConfig,
+    req: &AuthReq,
+    ip: IpAddr,
+    now: i64,
+    scope: Scope,
+    can_download: bool,
+) -> axum::response::Response {
+    let peer = ip.to_string();
+
+    // 1. A remembered allow/deny short-circuits the prompt.
+    let host_id = cfg.host_id.clone();
+    let remembered = {
+        let peer = peer.clone();
+        blocking_db(cfg.db_path.clone(), move |c| {
+            remembered_peers::decision(c, &host_id, &peer)
+        })
+        .await
+        .flatten()
+    };
+    match remembered {
+        Some(false) => {
+            return (StatusCode::FORBIDDEN, "this device was denied by the host").into_response()
+        }
+        Some(true) => {
+            let token = mint_token(cfg, scope, can_download, ip, now);
+            return Json(AuthResp { token }).into_response();
+        }
+        None => {}
+    }
+
+    // 2. Interactive flow.
+    let label = scope_label(cfg, &scope).await;
+    let Ok(mut g) = cfg.approvals.lock() else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "approval store").into_response();
+    };
+    g.retain(|p| now - p.requested_at_ms < APPROVAL_TTL_MS); // drop stale entries
+
+    if let Some(ch) = req.challenge.as_deref() {
+        // Peer polling an existing challenge.
+        let Some(i) = g.iter().position(|p| p.challenge == ch && p.peer == peer) else {
+            return (StatusCode::FORBIDDEN, "approval request expired").into_response();
+        };
+        match g[i].decision {
+            Some(true) => {
+                let p = g.remove(i);
+                drop(g);
+                let token = mint_token(cfg, p.scope, p.can_download, ip, now);
+                Json(AuthResp { token }).into_response()
+            }
+            Some(false) => {
+                g.remove(i);
+                (StatusCode::FORBIDDEN, "the host denied your request").into_response()
+            }
+            None => (
+                StatusCode::ACCEPTED,
+                Json(serde_json::json!({ "challenge": ch })),
+            )
+                .into_response(),
+        }
+    } else {
+        // New request — reuse any in-flight one for the same peer+scope.
+        if let Some(p) = g
+            .iter()
+            .find(|p| p.peer == peer && p.scope == scope && p.decision.is_none())
+        {
+            let ch = p.challenge.clone();
+            return (
+                StatusCode::ACCEPTED,
+                Json(serde_json::json!({ "challenge": ch })),
+            )
+                .into_response();
+        }
+        let challenge = uuid::Uuid::new_v4().simple().to_string();
+        g.push(PendingApproval {
+            challenge: challenge.clone(),
+            peer,
+            scope,
+            can_download,
+            label,
+            requested_at_ms: now,
+            decision: None,
+        });
+        (
+            StatusCode::ACCEPTED,
+            Json(serde_json::json!({ "challenge": challenge })),
+        )
+            .into_response()
+    }
 }
 
 async fn auth_session(
@@ -402,6 +565,12 @@ async fn auth_session(
         return (StatusCode::FORBIDDEN, "that scope is not shared").into_response();
     };
 
+    let scope = match pid {
+        Some(id) => Scope::Playlist(id),
+        None => Scope::Library,
+    };
+    let can_download = access.allows_download();
+
     match access.mode.as_str() {
         "open" => {}
         "pin" => {
@@ -415,33 +584,12 @@ async fn auth_session(
             }
         }
         "approved" => {
-            return (
-                StatusCode::FORBIDDEN,
-                "host approval required (not yet available)",
-            )
-                .into_response();
+            return handle_approved(&cfg, &req, ip, now, scope, can_download).await;
         }
         _ => return (StatusCode::FORBIDDEN, "unsupported share mode").into_response(),
     }
 
-    let scope = match pid {
-        Some(id) => Scope::Playlist(id),
-        None => Scope::Library,
-    };
-    let token = uuid::Uuid::new_v4().simple().to_string();
-    if let Ok(mut m) = cfg.sessions.lock() {
-        m.retain(|_, s| s.expires_at_ms > now); // opportunistic sweep of expired tokens
-        m.insert(
-            token.clone(),
-            Session {
-                scope,
-                can_download: access.allows_download(),
-                created_at_ms: now,
-                expires_at_ms: now + TOKEN_TTL_MS,
-                peer: ip.to_string(),
-            },
-        );
-    }
+    let token = mint_token(&cfg, scope, can_download, ip, now);
     cfg.auth_limiter.record_success(ip);
     Json(AuthResp { token }).into_response()
 }
@@ -1091,6 +1239,79 @@ mod tests {
             )
             .await;
             assert_eq!(s, StatusCode::UNAUTHORIZED);
+        });
+    }
+
+    #[test]
+    fn approved_mode_pends_then_allow_issues_token() {
+        run(async {
+            let (path, ids) = seed_db(1);
+            let cfg = ServerConfig::new(path, "Host".into(), "h".into(), "fp".into());
+            shares::set_share(
+                &Connection::open(&cfg.db_path).unwrap(),
+                None,
+                "stream",
+                "approved",
+                None,
+                true,
+            )
+            .unwrap();
+
+            let new_req = |challenge: Option<&str>| {
+                let body = match challenge {
+                    Some(ch) => format!(r#"{{"scope":"library","challenge":"{ch}"}}"#),
+                    None => r#"{"scope":"library"}"#.to_string(),
+                };
+                HttpRequest::post("/v1/auth/session")
+                    .header("content-type", "application/json")
+                    .extension(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 6000))))
+                    .body(Body::from(body))
+                    .unwrap()
+            };
+
+            // First contact → 202 Accepted + a challenge.
+            let resp = router(cfg.clone()).oneshot(new_req(None)).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::ACCEPTED);
+            let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            let challenge = v["challenge"].as_str().unwrap().to_string();
+
+            // Still pending → polling returns 202 again.
+            let pend = router(cfg.clone())
+                .oneshot(new_req(Some(&challenge)))
+                .await
+                .unwrap();
+            assert_eq!(pend.status(), StatusCode::ACCEPTED);
+
+            // Host allows it.
+            cfg.approvals
+                .lock()
+                .unwrap()
+                .iter_mut()
+                .find(|p| p.challenge == challenge)
+                .unwrap()
+                .decision = Some(true);
+
+            // Poll → 200 + token, and the token actually streams an in-scope track.
+            let ok = router(cfg.clone())
+                .oneshot(new_req(Some(&challenge)))
+                .await
+                .unwrap();
+            assert_eq!(ok.status(), StatusCode::OK);
+            let bytes = to_bytes(ok.into_body(), usize::MAX).await.unwrap();
+            let token = serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["token"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            let streamed = status_of(
+                &cfg,
+                HttpRequest::get(format!("/v1/stream/{}", ids[0]))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(streamed, StatusCode::OK);
         });
     }
 }

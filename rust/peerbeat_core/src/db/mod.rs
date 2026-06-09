@@ -13,6 +13,7 @@ pub mod folders;
 pub mod history;
 pub mod known_hosts;
 pub mod playlists;
+pub mod remembered_peers;
 mod schema;
 pub mod settings;
 pub mod shares;

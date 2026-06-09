@@ -98,6 +98,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<OutputDeviceRow> dco_decode_list_output_device_row(dynamic raw);
 
   @protected
+  List<PendingApprovalDto> dco_decode_list_pending_approval_dto(dynamic raw);
+
+  @protected
   List<PlaylistRow> dco_decode_list_playlist_row(dynamic raw);
 
   @protected
@@ -144,6 +147,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OutputDeviceRow dco_decode_output_device_row(dynamic raw);
+
+  @protected
+  PendingApprovalDto dco_decode_pending_approval_dto(dynamic raw);
 
   @protected
   PlaylistImportReport dco_decode_playlist_import_report(dynamic raw);
@@ -253,6 +259,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<PendingApprovalDto> sse_decode_list_pending_approval_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PlaylistRow> sse_decode_list_playlist_row(SseDeserializer deserializer);
 
   @protected
@@ -301,6 +312,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OutputDeviceRow sse_decode_output_device_row(SseDeserializer deserializer);
+
+  @protected
+  PendingApprovalDto sse_decode_pending_approval_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlaylistImportReport sse_decode_playlist_import_report(
@@ -431,6 +447,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_pending_approval_dto(
+    List<PendingApprovalDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_playlist_row(
     List<PlaylistRow> self,
     SseSerializer serializer,
@@ -505,6 +527,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_output_device_row(
     OutputDeviceRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_pending_approval_dto(
+    PendingApprovalDto self,
     SseSerializer serializer,
   );
 

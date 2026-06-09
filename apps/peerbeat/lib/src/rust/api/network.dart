@@ -21,6 +21,23 @@ Future<int> netStartHost({
   displayName: displayName,
 );
 
+/// Peers currently awaiting an allow/deny decision from the host.
+Future<List<PendingApprovalDto>> netPendingApprovals() =>
+    RustLib.instance.api.crateApiNetworkNetPendingApprovals();
+
+/// Allow or deny a pending peer by its `challenge`. With `remember`, the decision
+/// is persisted (so the peer is auto-handled next time). False if not hosting or
+/// the challenge is unknown.
+Future<bool> netDecidePeer({
+  required String challenge,
+  required bool allow,
+  required bool remember,
+}) => RustLib.instance.api.crateApiNetworkNetDecidePeer(
+  challenge: challenge,
+  allow: allow,
+  remember: remember,
+);
+
 /// Revoke every peer session token (they must re-authenticate). Used by the
 /// host's "revoke all access" control. Returns false if not currently hosting.
 Future<bool> netRevokeAll() =>
@@ -69,3 +86,36 @@ Future<int?> netHostPort() => RustLib.instance.api.crateApiNetworkNetHostPort();
 /// Browse the LAN for hosts for `timeout_ms`, returning the resolved peers.
 Future<List<HostInfo>> netDiscover({required PlatformInt64 timeoutMs}) =>
     RustLib.instance.api.crateApiNetworkNetDiscover(timeoutMs: timeoutMs);
+
+/// A peer waiting for the host to allow/deny it (approved-peers share mode),
+/// surfaced to the host UI.
+class PendingApprovalDto {
+  final String challenge;
+  final String peer;
+  final String label;
+  final PlatformInt64 requestedAtMs;
+
+  const PendingApprovalDto({
+    required this.challenge,
+    required this.peer,
+    required this.label,
+    required this.requestedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      challenge.hashCode ^
+      peer.hashCode ^
+      label.hashCode ^
+      requestedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PendingApprovalDto &&
+          runtimeType == other.runtimeType &&
+          challenge == other.challenge &&
+          peer == other.peer &&
+          label == other.label &&
+          requestedAtMs == other.requestedAtMs;
+}

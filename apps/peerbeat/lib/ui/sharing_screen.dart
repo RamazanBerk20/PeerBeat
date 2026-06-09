@@ -227,7 +227,7 @@ class _ShareTileState extends State<_ShareTile> {
                         DropdownMenuItem(value: 'pin', child: Text('PIN')),
                         DropdownMenuItem(
                           value: 'approved',
-                          child: Text('Approved (soon)'),
+                          child: Text('Approved'),
                         ),
                       ],
                     ),
@@ -272,8 +272,8 @@ class _ShareTileState extends State<_ShareTile> {
                   const Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
-                      'Approved-peer prompts arrive with the control channel; '
-                      'peers cannot connect in this mode yet.',
+                      'Each new device asks to connect; you allow or deny it on '
+                      'the Network screen (tick "Always" to remember a device).',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
