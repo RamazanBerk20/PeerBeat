@@ -1,0 +1,515 @@
+{
+  "@@locale": "en",
+
+  "appTagline": "Local + LAN music player",
+  "@appTagline": {},
+
+  "commonCancel": "Cancel",
+  "commonSave": "Save",
+  "commonDelete": "Delete",
+  "commonRemove": "Remove",
+  "commonDone": "Done",
+  "commonApply": "Apply",
+  "commonRetry": "Retry",
+  "commonPlay": "Play",
+  "commonEdit": "Edit",
+  "commonRename": "Rename",
+  "commonDuplicate": "Duplicate",
+  "commonClose": "Close",
+  "commonRefresh": "Refresh",
+  "commonReset": "Reset",
+  "commonPrevious": "Previous",
+  "commonNext": "Next",
+
+  "nowPlayingTitle": "Now Playing",
+  "pause": "Pause",
+  "repeatOff": "Repeat off",
+  "repeatAll": "Repeat all",
+  "repeatOne": "Repeat one",
+  "mute": "Mute",
+  "unmute": "Unmute",
+  "volumePercent": "{percent}% volume",
+  "@volumePercent": {
+    "placeholders": { "percent": { "type": "int" } }
+  },
+  "shuffle": "Shuffle",
+  "queue": "Queue",
+  "lyrics": "Lyrics",
+  "playbackSpeed": "Playback speed",
+  "upNext": "Up next",
+  "queueIsEmpty": "Queue is empty",
+  "noLyricsFound": "No lyrics found",
+  "sleepTimer": "Sleep timer",
+  "sleepTimerActive": "Sleep timer: {remaining}",
+  "@sleepTimerActive": {
+    "placeholders": { "remaining": { "type": "String" } }
+  },
+  "sleepTurnOff": "Turn off",
+  "sleepMinutes": "{count} minutes",
+  "@sleepMinutes": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "seekFailed": "Seek failed: {error}",
+  "@seekFailed": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "playbackFailed": "Playback failed: {error}",
+  "@playbackFailed": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+
+  "editMetadata": "Edit metadata",
+  "batchEditHint": "Tick a field to apply it to all selected tracks; the rest stay as they are.",
+  "addToFavorites": "Add to Favorites",
+  "removeFromFavorites": "Remove from Favorites",
+  "accentDefault": "Default accent",
+  "positionLabel": "Position {time}",
+  "@positionLabel": {
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "setPinFirst": "Set a 4–6 digit PIN first",
+  "pinMustBeDigits": "PIN must be 4–6 digits",
+  "sharingNamed": "Sharing \"{name}\"",
+  "@sharingNamed": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "stoppedSharingNamed": "Stopped sharing \"{name}\"",
+  "@stoppedSharingNamed": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "fieldTitle": "Title",
+  "fieldArtist": "Artist (\";\"-separated)",
+  "fieldAlbum": "Album",
+  "fieldAlbumArtist": "Album artist",
+  "fieldGenre": "Genre (\";\"-separated)",
+  "fieldYear": "Year",
+  "fieldTrackNo": "Track #",
+  "editNTracks": "Edit {count} tracks",
+  "@editNTracks": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "couldNotReadTags": "Could not read tags: {error}",
+  "@couldNotReadTags": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "tracksNotUpdated": "{count, plural, one{{count} track could not be updated} other{{count} tracks could not be updated}}",
+  "@tracksNotUpdated": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "saveFailed": "Save failed: {error}",
+  "@saveFailed": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+
+  "settingsAudio": "Audio",
+  "settingsAppearance": "Appearance",
+  "settingsAbout": "About",
+  "settingsTheme": "Theme",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "language": "Language",
+  "languageSystemDefault": "System default",
+  "dynamicTheme": "Dynamic theme from album art",
+  "dynamicThemeSubtitle": "Tint the app with the current track's colors",
+  "accentColor": "Accent color",
+  "accentDynamicHint": "Fallback when album art has no strong colour",
+  "accentPickHint": "Pick the app accent",
+  "stereoWidening": "Stereo widening",
+  "stereoWideningHint": "Adjust mid/side width on desktop output. 100% leaves the file unchanged.",
+  "width": "Width",
+  "crossfade": "Crossfade",
+  "crossfadeHint": "Overlap the end of one track with the start of the next (desktop). 0 disables it.",
+  "duration": "Duration",
+  "outputDevice": "Output device",
+  "outputDeviceHint": "Choose the desktop audio output. Android routing follows the system output.",
+  "couldNotListDevices": "Could not list devices: {error}",
+  "@couldNotListDevices": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "refreshDevices": "Refresh devices",
+  "audioOutput": "Audio output",
+  "replayGain": "ReplayGain",
+  "replayGainHint": "Even out perceived loudness between tracks using gain tags.",
+  "equalizerHint": "Desktop playback applies EQ live. Android EQ uses the same saved settings and will be active with the Android audio-effects pass.",
+  "replayGainOff": "Off",
+  "replayGainTrack": "Track",
+  "replayGainAlbum": "Album",
+  "preamp": "Pre-amp",
+  "equalizer10Band": "10-band equalizer",
+  "saveCustom": "Save custom",
+  "eqPre": "Pre",
+  "saveEqPreset": "Save EQ preset",
+  "presetName": "Preset name",
+  "couldNotSavePreset": "Could not save preset: {error}",
+  "@couldNotSavePreset": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "couldNotDeletePreset": "Could not delete preset: {error}",
+  "@couldNotDeletePreset": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+
+  "version": "Version",
+  "updates": "Updates",
+  "updatesManaged": "Managed by your package manager (AUR / .deb / AppImage).",
+  "checkAutomatically": "Check for updates automatically",
+  "checkForUpdates": "Check for updates",
+  "onLatestVersion": "You're on the latest version",
+  "updateCheckFailed": "Update check failed: {error}",
+  "@updateCheckFailed": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "updateAvailable": "PeerBeat {version} is available",
+  "@updateAvailable": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "updateSkip": "Skip",
+  "updateLater": "Later",
+  "updateNow": "Update",
+  "updateToVersion": "Update to {version}",
+  "@updateToVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "downloadingPercent": "Downloading… {percent}%",
+  "@downloadingPercent": {
+    "placeholders": { "percent": { "type": "int" } }
+  },
+  "startingInstaller": "Starting installer…",
+  "downloadAndInstall": "Download & install",
+
+  "invalidRules": "Invalid rules: {error}",
+  "@invalidRules": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "enterAName": "Enter a name",
+  "couldNotSave": "Could not save: {error}",
+  "@couldNotSave": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "name": "Name",
+  "ruleMatch": "Match",
+  "ruleMatchAll": "All",
+  "ruleMatchAny": "Any",
+  "ofTheseRules": "of these rules",
+  "addRule": "Add rule",
+  "newSmartPlaylist": "New smart playlist",
+  "editSmartPlaylist": "Edit smart playlist",
+  "preview": "Preview",
+  "matchesCount": "{count, plural, one{{count} match} other{{count} matches}}",
+  "@matchesCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "limitOptional": "Limit (optional)",
+  "ruleValueHint": "value",
+  "removeRule": "Remove rule",
+  "noTracksMatchRules": "No tracks match these rules",
+  "playAll": "Play all",
+
+  "sharingTitle": "Sharing",
+  "sharingHint": "Pick what peers on your network can stream or download. Changes apply immediately while you are sharing.",
+  "wholeLibrary": "Whole library",
+  "noPlaylistsYet": "No playlists yet",
+  "couldNotUpdateSharing": "Could not update sharing: {error}",
+  "@couldNotUpdateSharing": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "accessLabel": "Access: ",
+  "accessOpen": "Open",
+  "accessPin": "PIN",
+  "accessApproved": "Approved",
+  "peersCanLabel": "Peers can: ",
+  "streamOnly": "Stream only",
+  "streamAndDownload": "Stream + download",
+  "notShared": "Not shared",
+  "changePin": "Change PIN (leave blank to keep)",
+  "setPin": "Set a 4–6 digit PIN",
+  "approvedModeHint": "Each new device asks to connect; you allow or deny it on the Network screen (tick \"Always\" to remember a device).",
+
+  "downloadedToLibrary": "Downloaded \"{title}\" to your library",
+  "@downloadedToLibrary": {
+    "placeholders": { "title": { "type": "String" } }
+  },
+  "downloadedBulk": "Downloaded {done} of {total} tracks{failed} to your library",
+  "@downloadedBulk": {
+    "placeholders": {
+      "done": { "type": "int" },
+      "total": { "type": "int" },
+      "failed": { "type": "String" }
+    }
+  },
+  "bulkFailedSuffix": " ({count} failed)",
+  "@bulkFailedSuffix": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "downloadFailed": "Download failed: {error}",
+  "@downloadFailed": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "joinedParty": "Joined party — following the host",
+  "couldNotJoinParty": "Could not join party: {error}",
+  "@couldNotJoinParty": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "downloadAllToLibrary": "Download all to my library",
+  "downloadToLibrary": "Download to my library",
+  "reconnectingToParty": "Reconnecting to party… (tap to leave)",
+  "leaveParty": "Leave party",
+  "joinPartySync": "Join party (sync to host)",
+  "nothingSharedHere": "Nothing shared here",
+  "requestedTrack": "Requested \"{title}\"",
+  "@requestedTrack": {
+    "placeholders": { "title": { "type": "String" } }
+  },
+  "joinToRequest": "Join the party to request tracks",
+
+  "networkTitle": "Network",
+  "lanOnlyBanner": "Local network only — nothing leaves your Wi-Fi. No cloud, no accounts.",
+  "sharingOnPort": "Sharing on port {port} as \"{name}\"",
+  "@sharingOnPort": {
+    "placeholders": {
+      "port": { "type": "String" },
+      "name": { "type": "String" }
+    }
+  },
+  "off": "Off",
+  "manageWhatIShareSubtitle": "Playlists or the whole library, with access mode & PIN",
+  "revokeAllSubtitle": "Disconnect everyone; they must re-authenticate",
+  "partyModeOnSubtitle": "Connected peers follow your playback in sync",
+  "partyModeOffSubtitle": "Start a synchronized session for peers",
+  "recentActivity": "Recent activity",
+  "approvalRequests": "Approval requests",
+  "partyRequestsTitle": "Party requests",
+  "peerAllowed": "Allowed {peer}",
+  "@peerAllowed": {
+    "placeholders": { "peer": { "type": "String" } }
+  },
+  "peerDenied": "Denied {peer}",
+  "@peerDenied": {
+    "placeholders": { "peer": { "type": "String" } }
+  },
+  "incorrectPin": "Incorrect PIN",
+  "tooManyAttempts": "Too many attempts — wait a moment and retry",
+  "accessDenied": "Access denied: {detail}",
+  "@accessDenied": {
+    "placeholders": { "detail": { "type": "String" } }
+  },
+  "pinDigitsHint": "4–6 digits",
+  "connect": "Connect",
+  "ipExampleHint": "e.g. 192.168.1.42:54213",
+  "hostNotSharing": "{name} isn't sharing anything right now",
+  "@hostNotSharing": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "sharedBy": "Shared by {name}",
+  "@sharedBy": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "couldNotReachHost": "Could not reach {name}: {error}",
+  "@couldNotReachHost": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "error": { "type": "Object" }
+    }
+  },
+  "waitingForHost": "Waiting for the host to allow you…",
+  "hostDenied": "The host denied your request",
+  "enterPin": "Enter PIN",
+  "connectByIp": "Connect by IP",
+  "enterAddressHint": "Enter address and port, e.g. 192.168.1.42:54213",
+  "shareMyLibrary": "Share my library",
+  "manageWhatIShare": "Manage what I share",
+  "revokeAllPeerAccess": "Revoke all peer access",
+  "allSessionsRevoked": "All peer sessions revoked",
+  "partyMode": "Party mode",
+  "discoveredHosts": "Discovered hosts",
+  "connectByIpAddress": "Connect by IP address",
+  "reachHostManually": "Reach a host manually if it isn't discovered",
+  "noHostsFound": "No hosts found on the network",
+  "connectionsAndActivity": "Connections & activity",
+  "noPeersConnected": "No peers connected",
+  "activeSession": "Active session",
+  "revoke": "Revoke",
+  "clearActivity": "Clear activity",
+  "peerWantsToConnect": "{peer} wants to connect to \"{label}\"",
+  "@peerWantsToConnect": {
+    "placeholders": {
+      "peer": { "type": "String" },
+      "label": { "type": "String" }
+    }
+  },
+  "allowOnce": "Allow once",
+  "alwaysAllow": "Always allow",
+  "deny": "Deny",
+  "requestedByPeer": "Requested by {peer}",
+  "@requestedByPeer": {
+    "placeholders": { "peer": { "type": "String" } }
+  },
+  "dismiss": "Dismiss",
+
+  "scanFailed": "Scan failed: {error}",
+  "@scanFailed": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "scanSummary": "Scanned: {added} added, {updated} updated, {skipped} unchanged, {errors} errors",
+  "@scanSummary": {
+    "placeholders": {
+      "added": { "type": "int" },
+      "updated": { "type": "int" },
+      "skipped": { "type": "int" },
+      "errors": { "type": "int" }
+    }
+  },
+  "dropFolderHint": "Drop a folder to add it to your library",
+  "scanMusicFolder": "Scan a music folder",
+  "folderPath": "Folder path",
+  "libraryFolders": "Library folders",
+  "scanFolder": "Scan folder",
+  "rescanSummary": "Rescan: {added} added, {updated} updated, {removed} removed",
+  "@rescanSummary": {
+    "placeholders": {
+      "added": { "type": "int" },
+      "updated": { "type": "int" },
+      "removed": { "type": "int" }
+    }
+  },
+  "removeFolderBody": "Forget \"{path}\" and remove its tracks from the library? Files on disk are not deleted.",
+  "@removeFolderBody": {
+    "placeholders": { "path": { "type": "String" } }
+  },
+  "watchingForChanges": "Watching for changes",
+  "notWatchingManual": "Not watching (scan manually)",
+  "watchingTapToStop": "Watching — tap to stop",
+  "notWatchingTapToWatch": "Not watching — tap to watch",
+  "rescanFailed": "Rescan failed: {error}",
+  "@rescanFailed": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "couldNotChangeWatching": "Could not change watching: {error}",
+  "@couldNotChangeWatching": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "removeFolderQuestion": "Remove folder?",
+  "rescanAll": "Rescan all",
+  "noFoldersYet": "No folders yet — use \"Scan folder\".",
+  "findDuplicates": "Find duplicates",
+  "couldNotRemove": "Could not remove: {error}",
+  "@couldNotRemove": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "duplicateTracks": "Duplicate tracks",
+  "copiesCount": "{count} copies · {title}",
+  "@copiesCount": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "title": { "type": "String" }
+    }
+  },
+  "noDuplicatesFound": "No duplicates found.",
+  "removeExtras": "Remove extras",
+  "kept": "Kept",
+  "removeFromLibrary": "Remove from library",
+  "searchHint": "Search songs, artists, albums…",
+  "nowPlayingSemantic": "Now playing",
+  "addedToQueue": "Added {count} to queue",
+  "@addedToQueue": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "clearSelection": "Clear selection",
+  "selectedCount": "{count} selected",
+  "@selectedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "addToQueue": "Add to queue",
+  "editTags": "Edit tags",
+  "nothingHereYet": "Nothing here yet",
+  "trackActions": "Track actions",
+  "playNext": "Play next",
+  "addToPlaylist": "Add to playlist",
+  "select": "Select",
+  "queuedTrack": "Queued \"{title}\"",
+  "@queuedTrack": {
+    "placeholders": { "title": { "type": "String" } }
+  },
+  "failedToLoad": "Failed to load: {error}",
+  "@failedToLoad": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "libraryEmpty": "Your library is empty",
+  "libraryEmptyHintDrop": "Drag a music folder here, or use the scan button in the top bar to add one.",
+  "libraryEmptyHintTap": "Tap the scan button in the top bar to add a music folder.",
+  "importPlaylistTitle": "Import playlist (M3U / PLS)",
+  "newPlaylist": "New playlist",
+  "importedTracks": "Imported {matched}/{total} tracks",
+  "@importedTracks": {
+    "placeholders": {
+      "matched": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "importFailed": "Import failed: {error}",
+  "@importFailed": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "deleteSmartPlaylistQuestion": "Delete smart playlist?",
+  "deleteNamedPermanently": "Delete \"{name}\" permanently?",
+  "@deleteNamedPermanently": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "smart": "Smart",
+  "import": "Import",
+  "autoPlaylists": "Auto playlists",
+  "recentlyPlayed": "Recently Played",
+  "mostPlayed": "Most Played",
+  "neverPlayed": "Never Played",
+  "favorites": "Favorites",
+  "songs": "Songs",
+  "albums": "Albums",
+  "artists": "Artists",
+  "genres": "Genres",
+  "recent": "Recent",
+  "settings": "Settings",
+  "playlists": "Playlists",
+  "smartPlaylists": "Smart playlists",
+  "trackCount": "{count, plural, one{{count} track} other{{count} tracks}}",
+  "@trackCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "exportEllipsis": "Export…",
+  "couldNotRemoveTrack": "Could not remove track: {error}",
+  "@couldNotRemoveTrack": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "couldNotReorderPlaylist": "Could not reorder playlist: {error}",
+  "@couldNotReorderPlaylist": {
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "playPlaylist": "Play playlist",
+  "unknownArtist": "Unknown artist",
+  "exportPlaylistTitle": "Export playlist",
+  "noTracksInPlaylist": "No tracks in this playlist",
+  "renamePlaylist": "Rename playlist",
+  "duplicatePlaylist": "Duplicate playlist",
+  "exportedPlaylist": "Exported \"{name}\"",
+  "@exportedPlaylist": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "deletePlaylistQuestion": "Delete playlist?",
+  "addedTrackToPlaylist": "Added \"{title}\" to {playlist}",
+  "@addedTrackToPlaylist": {
+    "placeholders": {
+      "title": { "type": "String" },
+      "playlist": { "type": "String" }
+    }
+  },
+  "noAlbums": "No albums",
+  "noArtists": "No artists",
+  "artistSummary": "{albums} albums • {tracks} tracks",
+  "@artistSummary": {
+    "placeholders": {
+      "albums": { "type": "int" },
+      "tracks": { "type": "int" }
+    }
+  },
+  "noGenres": "No genres"
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/db/tracks.dart';
 
@@ -14,9 +15,11 @@ Future<TrackRow?> showEditMetadataDialog(
     tags = await libraryTrackTags(trackId: track.id);
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not read tags: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).couldNotReadTags(e)),
+        ),
+      );
     }
     return null;
   }
@@ -102,7 +105,9 @@ class _BatchEditDialogState extends State<_BatchEditDialog> {
     if (!mounted) return;
     if (failed > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$failed track(s) could not be updated')),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).tracksNotUpdated(failed)),
+        ),
       );
     }
     Navigator.of(context).pop(updated);
@@ -110,6 +115,7 @@ class _BatchEditDialogState extends State<_BatchEditDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     Widget row(
       String label,
       bool on,
@@ -139,7 +145,7 @@ class _BatchEditDialogState extends State<_BatchEditDialog> {
 
     final n = widget.trackIds.length;
     return AlertDialog(
-      title: Text('Edit $n tracks'),
+      title: Text(l10n.editNTracks(n)),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
@@ -148,37 +154,36 @@ class _BatchEditDialogState extends State<_BatchEditDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Tick a field to apply it to all selected tracks; the rest stay '
-                'as they are.',
+                l10n.batchEditHint,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
               row(
-                'Album',
+                l10n.fieldAlbum,
                 _doAlbum,
                 (v) => setState(() => _doAlbum = v),
                 _album,
               ),
               row(
-                'Album artist',
+                l10n.fieldAlbumArtist,
                 _doAlbumArtist,
                 (v) => setState(() => _doAlbumArtist = v),
                 _albumArtist,
               ),
               row(
-                'Genre (";"-separated)',
+                l10n.fieldGenre,
                 _doGenre,
                 (v) => setState(() => _doGenre = v),
                 _genre,
               ),
               row(
-                'Artist (";"-separated)',
+                l10n.fieldArtist,
                 _doArtist,
                 (v) => setState(() => _doArtist = v),
                 _artist,
               ),
               row(
-                'Year',
+                l10n.fieldYear,
                 _doYear,
                 (v) => setState(() => _doYear = v),
                 _year,
@@ -191,11 +196,11 @@ class _BatchEditDialogState extends State<_BatchEditDialog> {
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.commonCancel),
         ),
         FilledButton(
           onPressed: (_saving || !_anyField) ? null : _apply,
-          child: _saving ? Text('$_done/$n') : const Text('Apply'),
+          child: _saving ? Text('$_done/$n') : Text(l10n.commonApply),
         ),
       ],
     );
@@ -260,15 +265,16 @@ class _EditMetadataDialogState extends State<_EditMetadataDialog> {
     } catch (e) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).saveFailed(e))),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     Widget field(
       String label,
       TextEditingController c, {
@@ -287,23 +293,25 @@ class _EditMetadataDialogState extends State<_EditMetadataDialog> {
     );
 
     return AlertDialog(
-      title: const Text('Edit metadata'),
+      title: Text(l10n.editMetadata),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              field('Title', _title),
-              field('Artist (";"-separated)', _artist),
-              field('Album', _album),
-              field('Album artist', _albumArtist),
-              field('Genre (";"-separated)', _genre),
+              field(l10n.fieldTitle, _title),
+              field(l10n.fieldArtist, _artist),
+              field(l10n.fieldAlbum, _album),
+              field(l10n.fieldAlbumArtist, _albumArtist),
+              field(l10n.fieldGenre, _genre),
               Row(
                 children: [
-                  Expanded(child: field('Year', _year, number: true)),
+                  Expanded(child: field(l10n.fieldYear, _year, number: true)),
                   const SizedBox(width: 12),
-                  Expanded(child: field('Track #', _trackNo, number: true)),
+                  Expanded(
+                    child: field(l10n.fieldTrackNo, _trackNo, number: true),
+                  ),
                 ],
               ),
             ],
@@ -313,7 +321,7 @@ class _EditMetadataDialogState extends State<_EditMetadataDialog> {
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.commonCancel),
         ),
         FilledButton(
           onPressed: _saving ? null : _save,
@@ -323,7 +331,7 @@ class _EditMetadataDialogState extends State<_EditMetadataDialog> {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Save'),
+              : Text(l10n.commonSave),
         ),
       ],
     );

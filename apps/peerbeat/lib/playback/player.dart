@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:ui' show Color;
+import 'dart:ui' show Color, Locale;
 
 import 'package:flutter/foundation.dart';
 
@@ -33,6 +33,7 @@ const _kCrossfade = 'audio.crossfade';
 const _kDynamicTheme = 'ui.dynamic_theme';
 const _kThemeMode = 'ui.theme_mode';
 const _kAccentSeed = 'ui.accent_seed';
+const _kLocale = 'ui.locale'; // language tag (e.g. "tr"); empty/absent = system
 
 /// App-wide playback state: wraps the platform [AudioEngine], owns the queue +
 /// play order (shuffle), and exposes prev/next/toggle/seek/shuffle/repeat/mute.
@@ -122,6 +123,9 @@ class PlayerController extends ChangeNotifier {
     AppThemeMode.dark,
   );
   final ValueNotifier<Color?> accentSeed = ValueNotifier(null);
+  // UI language. null = follow the system locale; otherwise a fixed locale the
+  // user picked in Settings. Drives MaterialApp.locale via the app shell.
+  final ValueNotifier<Locale?> locale = ValueNotifier(null);
   String? _lastError;
   // Resume support: a restored session is shown paused with the engine not yet
   // holding the track; the first play loads it and seeks to `_resumeFrom`.
@@ -455,6 +459,14 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Set the UI language (null = follow the system locale). Persisted as a BCP-47
+  /// language tag; applied live via the app shell's MaterialApp.locale.
+  void setLocale(Locale? l) {
+    locale.value = l;
+    unawaited(settingsSet(key: _kLocale, value: l?.languageCode ?? ''));
+    notifyListeners();
+  }
+
   /// Recompute the album-art accent for [t]. Best-effort and async; a stale
   /// result for a track we've since left is discarded.
   Future<void> _updateAccent(TrackRow? t) async {
@@ -531,6 +543,8 @@ class PlayerController extends ChangeNotifier {
         final v = int.tryParse(seedStr);
         if (v != null) accentSeed.value = Color(v);
       }
+      final loc = await settingsGet(key: _kLocale);
+      if (loc != null && loc.isNotEmpty) locale.value = Locale(loc);
       _recomputeRg();
       _applyVolume();
       _applyEq();
@@ -798,6 +812,7 @@ class PlayerController extends ChangeNotifier {
     accentColor.dispose();
     themeMode.dispose();
     accentSeed.dispose();
+    locale.dispose();
     super.dispose();
   }
 }

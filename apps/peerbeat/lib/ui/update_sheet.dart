@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../update/updater.dart';
 
 /// A non-blocking banner offering the [info] update: Update · Later · Skip.
 void showUpdateBanner(BuildContext context, UpdateInfo info) {
+  final l10n = AppLocalizations.of(context);
   final messenger = ScaffoldMessenger.of(context);
   messenger.showMaterialBanner(
     MaterialBanner(
       leading: const Icon(Icons.system_update_outlined),
-      content: Text('PeerBeat ${info.version} is available'),
+      content: Text(l10n.updateAvailable(info.version)),
       actions: [
         TextButton(
           onPressed: () {
@@ -16,14 +18,14 @@ void showUpdateBanner(BuildContext context, UpdateInfo info) {
             updater.skip(info.version);
             updater.dismiss();
           },
-          child: const Text('Skip'),
+          child: Text(l10n.updateSkip),
         ),
         TextButton(
           onPressed: () {
             messenger.hideCurrentMaterialBanner();
             updater.dismiss();
           },
-          child: const Text('Later'),
+          child: Text(l10n.updateLater),
         ),
         FilledButton(
           onPressed: () {
@@ -31,7 +33,7 @@ void showUpdateBanner(BuildContext context, UpdateInfo info) {
             updater.dismiss();
             runUpdateFlow(context, info);
           },
-          child: const Text('Update'),
+          child: Text(l10n.updateNow),
         ),
       ],
     ),
@@ -85,11 +87,12 @@ class _UpdateDialogState extends State<_UpdateDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final downloading = _progress != null && !_installing;
     final busy = _progress != null;
     final notes = widget.info.notes;
     return AlertDialog(
-      title: Text('Update to ${widget.info.version}'),
+      title: Text(l10n.updateToVersion(widget.info.version)),
       content: SizedBox(
         width: 420,
         child: Column(
@@ -106,12 +109,12 @@ class _UpdateDialogState extends State<_UpdateDialog> {
             if (downloading) ...[
               LinearProgressIndicator(value: _progress),
               const SizedBox(height: 8),
-              Text('Downloading… ${((_progress ?? 0) * 100).round()}%'),
+              Text(l10n.downloadingPercent(((_progress ?? 0) * 100).round())),
             ],
             if (_installing) ...[
               const LinearProgressIndicator(),
               const SizedBox(height: 8),
-              const Text('Starting installer…'),
+              Text(l10n.startingInstaller),
             ],
             if (_error != null)
               Text(
@@ -124,11 +127,13 @@ class _UpdateDialogState extends State<_UpdateDialog> {
       actions: [
         TextButton(
           onPressed: busy ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.commonCancel),
         ),
         FilledButton(
           onPressed: busy ? null : _start,
-          child: Text(_error != null ? 'Retry' : 'Download & install'),
+          child: Text(
+            _error != null ? l10n.commonRetry : l10n.downloadAndInstall,
+          ),
         ),
       ],
     );

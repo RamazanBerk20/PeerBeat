@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 
+import '../l10n/app_localizations.dart';
 import '../playback/player.dart';
 import 'library_home.dart' show TrackArt, fmtDuration;
 import 'now_playing.dart';
@@ -59,8 +60,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         min: 0,
                         max: maxMs.toDouble(),
                         value: posMs,
-                        semanticFormatterCallback: (v) =>
-                            'Position ${fmtDuration(v.round())}',
+                        semanticFormatterCallback: (v) => AppLocalizations.of(
+                          context,
+                        ).positionLabel(fmtDuration(v.round())),
                         onChanged: (v) => setState(() => _dragMs = v),
                         onChangeEnd: (v) async {
                           final requested = Duration(milliseconds: v.toInt());
@@ -76,7 +78,11 @@ class _MiniPlayerState extends State<MiniPlayer> {
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Seek failed: $e')),
+                                SnackBar(
+                                  content: Text(
+                                    AppLocalizations.of(context).seekFailed(e),
+                                  ),
+                                ),
                               );
                             }
                           }
@@ -146,7 +152,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                       // lives on the Now Playing screen (tap the bar to open).
                       const SizedBox(width: 4),
                       IconButton(
-                        tooltip: 'Previous',
+                        tooltip: AppLocalizations.of(context).commonPrevious,
                         iconSize: 22,
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,
@@ -172,7 +178,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Next',
+                        tooltip: AppLocalizations.of(context).commonNext,
                         iconSize: 22,
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,

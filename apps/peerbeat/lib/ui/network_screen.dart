@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../app_config.dart';
+import '../l10n/app_localizations.dart';
 import '../net/party.dart';
 import '../net/tofu.dart';
 import '../playback/player.dart';
@@ -33,7 +34,7 @@ class NetworkScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Network')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).networkTitle)),
       bottomNavigationBar: const MiniPlayer(),
       body: const NetworkPanel(),
     );
@@ -139,19 +140,22 @@ class _NetworkPanelState extends State<NetworkPanel> {
       if (!mounted) return;
       if (shares.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("${h.name} isn't sharing anything right now")),
+          SnackBar(
+            content: Text(AppLocalizations.of(context).hostNotSharing(h.name)),
+          ),
         );
         return;
       }
 
       // 2. Let the user choose a scope.
+      final l10n = AppLocalizations.of(context);
       final chosen = await showModalBottomSheet<_ShareDesc>(
         context: context,
         builder: (ctx) => SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(dense: true, title: Text('Shared by ${h.name}')),
+              ListTile(dense: true, title: Text(l10n.sharedBy(h.name))),
               for (final s in shares)
                 ListTile(
                   leading: Icon(
@@ -161,8 +165,8 @@ class _NetworkPanelState extends State<NetworkPanel> {
                   ),
                   title: Text(s.label),
                   subtitle: Text(
-                    '${s.requiresPin ? 'PIN · ' : ''}'
-                    '${s.permission == 'stream_download' ? 'stream + download' : 'stream only'}',
+                    '${s.requiresPin ? '${l10n.accessPin} · ' : ''}'
+                    '${s.permission == 'stream_download' ? l10n.streamAndDownload : l10n.streamOnly}',
                   ),
                   onTap: () => Navigator.pop(ctx, s),
                 ),
@@ -228,7 +232,11 @@ class _NetworkPanelState extends State<NetworkPanel> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not reach ${h.name}: $e')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).couldNotReachHost(h.name, e),
+            ),
+          ),
         );
       }
     } finally {
@@ -293,14 +301,15 @@ class _NetworkPanelState extends State<NetworkPanel> {
 
   void _surfaceAuthError(int code, String body) {
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           code == 401
-              ? 'Incorrect PIN'
+              ? l10n.incorrectPin
               : code == 429
-              ? 'Too many attempts — wait a moment and retry'
-              : 'Access denied: ${body.trim()}',
+              ? l10n.tooManyAttempts
+              : l10n.accessDenied(body.trim()),
         ),
       ),
     );
@@ -322,15 +331,15 @@ class _NetworkPanelState extends State<NetworkPanel> {
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
-            content: const Row(
+            content: Row(
               children: [
-                SizedBox(
+                const SizedBox(
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                SizedBox(width: 16),
-                Expanded(child: Text('Waiting for the host to allow you…')),
+                const SizedBox(width: 16),
+                Expanded(child: Text(AppLocalizations.of(ctx).waitingForHost)),
               ],
             ),
             actions: [
@@ -339,7 +348,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
                   cancelled = true;
                   Navigator.of(ctx).pop();
                 },
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations.of(ctx).commonCancel),
               ),
             ],
           ),
@@ -359,7 +368,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
       if (code == 403) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('The host denied your request')),
+            SnackBar(content: Text(AppLocalizations.of(context).hostDenied)),
           );
         }
         break;
@@ -371,23 +380,27 @@ class _NetworkPanelState extends State<NetworkPanel> {
     return token;
   }
 
-  Future<String?> _promptPin() => promptText(
-    context,
-    title: 'Enter PIN',
-    hint: '4–6 digits',
-    keyboardType: TextInputType.number,
-    confirmLabel: 'Connect',
-  );
+  Future<String?> _promptPin() {
+    final l10n = AppLocalizations.of(context);
+    return promptText(
+      context,
+      title: l10n.enterPin,
+      hint: l10n.pinDigitsHint,
+      keyboardType: TextInputType.number,
+      confirmLabel: l10n.connect,
+    );
+  }
 
   /// Manual fallback for when mDNS discovery doesn't surface a host: the user
   /// types `ip:port` (the host shows its port on its "Share my library" tile).
   /// We build a synthetic [HostInfo] and run the normal open-host + TOFU flow.
   Future<void> _connectByIp() async {
+    final l10n = AppLocalizations.of(context);
     final input = await promptText(
       context,
-      title: 'Connect by IP',
-      hint: 'e.g. 192.168.1.42:54213',
-      confirmLabel: 'Connect',
+      title: l10n.connectByIp,
+      hint: l10n.ipExampleHint,
+      confirmLabel: l10n.connect,
     );
     if (input == null || !mounted) return;
     final raw = input.trim();
@@ -396,9 +409,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
     final port = colon > 0 ? int.tryParse(raw.substring(colon + 1)) : null;
     if (addr.isEmpty || port == null || port <= 0 || port > 65535) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter address and port, e.g. 192.168.1.42:54213'),
-        ),
+        SnackBar(content: Text(AppLocalizations.of(context).enterAddressHint)),
       );
       return;
     }
@@ -422,6 +433,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     return ListView(
       children: [
         // LAN-only banner
@@ -435,7 +447,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Local network only — nothing leaves your Wi-Fi. No cloud, no accounts.',
+                  l10n.lanOnlyBanner,
                   style: TextStyle(color: cs.onSecondaryContainer),
                 ),
               ),
@@ -444,11 +456,11 @@ class _NetworkPanelState extends State<NetworkPanel> {
         ),
         SwitchListTile(
           secondary: const Icon(Icons.wifi_tethering),
-          title: const Text('Share my library'),
+          title: Text(l10n.shareMyLibrary),
           subtitle: Text(
             _hosting
-                ? 'Sharing on port ${_port ?? '…'} as "$appDisplayName"'
-                : 'Off',
+                ? l10n.sharingOnPort('${_port ?? '…'}', appDisplayName)
+                : l10n.off,
           ),
           value: _hosting,
           onChanged: _toggleHost,
@@ -460,10 +472,8 @@ class _NetworkPanelState extends State<NetworkPanel> {
           ),
         ListTile(
           leading: const Icon(Icons.tune),
-          title: const Text('Manage what I share'),
-          subtitle: const Text(
-            'Playlists or the whole library, with access mode & PIN',
-          ),
+          title: Text(l10n.manageWhatIShare),
+          subtitle: Text(l10n.manageWhatIShareSubtitle),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(
             context,
@@ -472,15 +482,13 @@ class _NetworkPanelState extends State<NetworkPanel> {
         if (_hosting)
           ListTile(
             leading: Icon(Icons.block, color: cs.error),
-            title: const Text('Revoke all peer access'),
-            subtitle: const Text(
-              'Disconnect everyone; they must re-authenticate',
-            ),
+            title: Text(l10n.revokeAllPeerAccess),
+            subtitle: Text(l10n.revokeAllSubtitle),
             onTap: () async {
               await netRevokeAll();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All peer sessions revoked')),
+                  SnackBar(content: Text(l10n.allSessionsRevoked)),
                 );
               }
             },
@@ -490,11 +498,11 @@ class _NetworkPanelState extends State<NetworkPanel> {
             listenable: party,
             builder: (context, _) => SwitchListTile(
               secondary: const Icon(Icons.celebration_outlined),
-              title: const Text('Party mode'),
+              title: Text(l10n.partyMode),
               subtitle: Text(
                 party.hosting
-                    ? 'Connected peers follow your playback in sync'
-                    : 'Start a synchronized session for peers',
+                    ? l10n.partyModeOnSubtitle
+                    : l10n.partyModeOffSubtitle,
               ),
               value: party.hosting,
               onChanged: (on) =>
@@ -506,7 +514,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
         if (_hosting) const _ConnectionsSection(),
         const Divider(),
         ListTile(
-          title: const Text('Discovered hosts'),
+          title: Text(l10n.discoveredHosts),
           trailing: _discovering
               ? const SizedBox(
                   width: 20,
@@ -520,14 +528,14 @@ class _NetworkPanelState extends State<NetworkPanel> {
         ),
         ListTile(
           leading: const Icon(Icons.add_link),
-          title: const Text('Connect by IP address'),
-          subtitle: const Text("Reach a host manually if it isn't discovered"),
+          title: Text(l10n.connectByIpAddress),
+          subtitle: Text(l10n.reachHostManually),
           onTap: _connectByIp,
         ),
         if (_hosts.isEmpty && !_discovering)
-          const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(child: Text('No hosts found on the network')),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(child: Text(l10n.noHostsFound)),
           ),
         for (final h in _hosts)
           ListTile(
@@ -616,11 +624,12 @@ class _ConnectionsSectionState extends State<_ConnectionsSection> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ListTile(
-          title: const Text('Connections & activity'),
+          title: Text(l10n.connectionsAndActivity),
           trailing: _loading
               ? const SizedBox(
                   width: 20,
@@ -633,9 +642,9 @@ class _ConnectionsSectionState extends State<_ConnectionsSection> {
                 ),
         ),
         if (_peers.isEmpty)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text('No peers connected'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(l10n.noPeersConnected),
           )
         else
           for (final p in _peers)
@@ -647,21 +656,21 @@ class _ConnectionsSectionState extends State<_ConnectionsSection> {
                 child: const Icon(Icons.person, size: 16, color: Colors.white),
               ),
               title: Text(p),
-              subtitle: const Text('Active session'),
+              subtitle: Text(l10n.activeSession),
               trailing: TextButton(
                 onPressed: () async {
                   await netRevokePeer(peer: p);
                   await _refresh();
                 },
-                child: const Text('Revoke'),
+                child: Text(l10n.revoke),
               ),
             ),
         if (_activity.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Text(
-              'Recent activity',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              l10n.recentActivity,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
           for (final a in _activity)
@@ -685,7 +694,7 @@ class _ConnectionsSectionState extends State<_ConnectionsSection> {
                 await netClearActivity();
                 await _refresh();
               },
-              child: const Text('Clear activity'),
+              child: Text(l10n.clearActivity),
             ),
           ),
         ],
@@ -736,9 +745,12 @@ class _ApprovalsSectionState extends State<_ApprovalsSection> {
       remember: remember,
     );
     if (mounted) {
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(allow ? 'Allowed ${p.peer}' : 'Denied ${p.peer}'),
+          content: Text(
+            allow ? l10n.peerAllowed(p.peer) : l10n.peerDenied(p.peer),
+          ),
         ),
       );
     }
@@ -749,6 +761,7 @@ class _ApprovalsSectionState extends State<_ApprovalsSection> {
   Widget build(BuildContext context) {
     if (_pending.isEmpty) return const SizedBox.shrink();
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -761,7 +774,7 @@ class _ApprovalsSectionState extends State<_ApprovalsSection> {
               Icon(Icons.how_to_reg, color: cs.onTertiaryContainer),
               const SizedBox(width: 8),
               Text(
-                'Approval requests',
+                l10n.approvalRequests,
                 style: TextStyle(
                   color: cs.onTertiaryContainer,
                   fontWeight: FontWeight.bold,
@@ -776,22 +789,22 @@ class _ApprovalsSectionState extends State<_ApprovalsSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${p.peer} wants to connect to "${p.label}"'),
+                Text(l10n.peerWantsToConnect(p.peer, p.label)),
                 const SizedBox(height: 4),
                 Wrap(
                   spacing: 8,
                   children: [
                     FilledButton(
                       onPressed: () => _decide(p, true, false),
-                      child: const Text('Allow once'),
+                      child: Text(l10n.allowOnce),
                     ),
                     OutlinedButton(
                       onPressed: () => _decide(p, true, true),
-                      child: const Text('Always allow'),
+                      child: Text(l10n.alwaysAllow),
                     ),
                     TextButton(
                       onPressed: () => _decide(p, false, false),
-                      child: const Text('Deny'),
+                      child: Text(l10n.deny),
                     ),
                   ],
                 ),
@@ -854,6 +867,7 @@ class _PartyRequestsSectionState extends State<_PartyRequestsSection> {
   Widget build(BuildContext context) {
     if (_requests.isEmpty) return const SizedBox.shrink();
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -866,7 +880,7 @@ class _PartyRequestsSectionState extends State<_PartyRequestsSection> {
               Icon(Icons.playlist_add_check, color: cs.onSecondaryContainer),
               const SizedBox(width: 8),
               Text(
-                'Party requests',
+                l10n.partyRequestsTitle,
                 style: TextStyle(
                   color: cs.onSecondaryContainer,
                   fontWeight: FontWeight.bold,
@@ -884,16 +898,16 @@ class _PartyRequestsSectionState extends State<_PartyRequestsSection> {
               child: const Icon(Icons.person, size: 16, color: Colors.white),
             ),
             title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text('Requested by ${r.peer}'),
+            subtitle: Text(l10n.requestedByPeer(r.peer)),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 FilledButton.tonal(
                   onPressed: () => _play(r),
-                  child: const Text('Play'),
+                  child: Text(l10n.commonPlay),
                 ),
                 IconButton(
-                  tooltip: 'Dismiss',
+                  tooltip: l10n.dismiss,
                   icon: const Icon(Icons.close),
                   onPressed: () => setState(() => _requests.remove(r)),
                 ),

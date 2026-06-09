@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_localizations.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/db/playlists.dart';
 import '../src/rust/db/shares.dart';
@@ -41,8 +42,9 @@ class _SharingScreenState extends State<SharingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Sharing')),
+      appBar: AppBar(title: Text(l10n.sharingTitle)),
       bottomNavigationBar: const MiniPlayer(),
       body: FutureBuilder<_SharingData>(
         future: _future,
@@ -53,15 +55,12 @@ class _SharingScreenState extends State<SharingScreen> {
           final data = snap.data!;
           return ListView(
             children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Pick what peers on your network can stream or download. '
-                  'Changes apply immediately while you are sharing.',
-                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(l10n.sharingHint),
               ),
               _ShareTile(
-                label: 'Whole library',
+                label: l10n.wholeLibrary,
                 playlistId: null,
                 existing: data.byScope[null],
                 onChanged: _reload,
@@ -75,9 +74,9 @@ class _SharingScreenState extends State<SharingScreen> {
                   onChanged: _reload,
                 ),
               if (data.playlists.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: Text('No playlists yet')),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(child: Text(l10n.noPlaylistsYet)),
                 ),
             ],
           );
@@ -145,11 +144,10 @@ class _ShareTileState extends State<_ShareTile> {
               newPin.length <= 6 &&
               RegExp(r'^\d+$').hasMatch(newPin));
       if (needsPin || badPin) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              needsPin ? 'Set a 4–6 digit PIN first' : 'PIN must be 4–6 digits',
-            ),
+            content: Text(needsPin ? l10n.setPinFirst : l10n.pinMustBeDigits),
           ),
         );
         return;
@@ -167,21 +165,26 @@ class _ShareTileState extends State<_ShareTile> {
       _pin.clear();
       if (!mounted) return;
       setState(() => _enabled = enabled);
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             enabled
-                ? 'Sharing "${widget.label}"'
-                : 'Stopped sharing "${widget.label}"',
+                ? l10n.sharingNamed(widget.label)
+                : l10n.stoppedSharingNamed(widget.label),
           ),
         ),
       );
       widget.onChanged();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not update sharing: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).couldNotUpdateSharing(e),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -190,6 +193,7 @@ class _ShareTileState extends State<_ShareTile> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final hasPin = widget.existing?.hasPin ?? false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,8 +205,8 @@ class _ShareTileState extends State<_ShareTile> {
           title: Text(widget.label),
           subtitle: Text(
             _enabled
-                ? '${_modeLabel(_mode)} · ${_permLabel(_permission)}'
-                : 'Not shared',
+                ? '${_modeLabel(l10n, _mode)} · ${_permLabel(l10n, _permission)}'
+                : l10n.notShared,
           ),
           value: _enabled,
           onChanged: _busy ? null : (v) => _save(enabled: v),
@@ -215,19 +219,25 @@ class _ShareTileState extends State<_ShareTile> {
               children: [
                 Row(
                   children: [
-                    const Text('Access: '),
+                    Text(l10n.accessLabel),
                     const SizedBox(width: 8),
                     DropdownButton<String>(
                       value: _mode,
                       onChanged: _busy
                           ? null
                           : (v) => setState(() => _mode = v ?? 'open'),
-                      items: const [
-                        DropdownMenuItem(value: 'open', child: Text('Open')),
-                        DropdownMenuItem(value: 'pin', child: Text('PIN')),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'open',
+                          child: Text(l10n.accessOpen),
+                        ),
+                        DropdownMenuItem(
+                          value: 'pin',
+                          child: Text(l10n.accessPin),
+                        ),
                         DropdownMenuItem(
                           value: 'approved',
-                          child: Text('Approved'),
+                          child: Text(l10n.accessApproved),
                         ),
                       ],
                     ),
@@ -235,21 +245,21 @@ class _ShareTileState extends State<_ShareTile> {
                 ),
                 Row(
                   children: [
-                    const Text('Peers can: '),
+                    Text(l10n.peersCanLabel),
                     const SizedBox(width: 8),
                     DropdownButton<String>(
                       value: _permission,
                       onChanged: _busy
                           ? null
                           : (v) => setState(() => _permission = v ?? 'stream'),
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: 'stream',
-                          child: Text('Stream only'),
+                          child: Text(l10n.streamOnly),
                         ),
                         DropdownMenuItem(
                           value: 'stream_download',
-                          child: Text('Stream + download'),
+                          child: Text(l10n.streamAndDownload),
                         ),
                       ],
                     ),
@@ -263,25 +273,22 @@ class _ShareTileState extends State<_ShareTile> {
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     decoration: InputDecoration(
                       counterText: '',
-                      labelText: hasPin
-                          ? 'Change PIN (leave blank to keep)'
-                          : 'Set a 4–6 digit PIN',
+                      labelText: hasPin ? l10n.changePin : l10n.setPin,
                     ),
                   ),
                 if (_mode == 'approved')
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'Each new device asks to connect; you allow or deny it on '
-                      'the Network screen (tick "Always" to remember a device).',
-                      style: TextStyle(fontSize: 12),
+                      l10n.approvedModeHint,
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: FilledButton(
                     onPressed: _busy ? null : () => _save(enabled: true),
-                    child: const Text('Apply'),
+                    child: Text(l10n.commonApply),
                   ),
                 ),
               ],
@@ -292,11 +299,11 @@ class _ShareTileState extends State<_ShareTile> {
   }
 }
 
-String _modeLabel(String m) => switch (m) {
-  'pin' => 'PIN',
-  'approved' => 'Approved',
-  _ => 'Open',
+String _modeLabel(AppLocalizations l10n, String m) => switch (m) {
+  'pin' => l10n.accessPin,
+  'approved' => l10n.accessApproved,
+  _ => l10n.accessOpen,
 };
 
-String _permLabel(String p) =>
-    p == 'stream_download' ? 'stream + download' : 'stream only';
+String _permLabel(AppLocalizations l10n, String p) =>
+    p == 'stream_download' ? l10n.streamAndDownload : l10n.streamOnly;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../playback/player.dart';
 import '../update/updater.dart';
 import '../src/rust/api/audio.dart' show OutputDeviceRow;
@@ -83,11 +84,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _savePreset() async {
+    final l10n = AppLocalizations.of(context);
     final name = await promptText(
       context,
-      title: 'Save EQ preset',
-      label: 'Preset name',
-      confirmLabel: 'Save',
+      title: l10n.saveEqPreset,
+      label: l10n.presetName,
+      confirmLabel: l10n.commonSave,
     );
     final clean = name?.trim();
     if (clean == null || clean.isEmpty) return;
@@ -100,9 +102,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) _reloadPresets();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not save preset: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).couldNotSavePreset(e)),
+        ),
+      );
     }
   }
 
@@ -112,9 +116,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) _reloadPresets();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not delete preset: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).couldNotDeletePreset(e)),
+        ),
+      );
     }
   }
 
@@ -124,11 +130,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
+        final l10n = AppLocalizations.of(context);
         final rgOn = player.replayGainMode != ReplayGainMode.off;
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Audio', style: text.titleLarge),
+            Text(l10n.settingsAudio, style: text.titleLarge),
             const SizedBox(height: 8),
             _ReplayGainCard(rgOn: rgOn),
             const SizedBox(height: 12),
@@ -148,7 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 12),
             const _CrossfadeCard(),
             const SizedBox(height: 16),
-            Text('Appearance', style: text.titleLarge),
+            Text(l10n.settingsAppearance, style: text.titleLarge),
             const SizedBox(height: 8),
             Card(
               child: Padding(
@@ -157,24 +164,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     const Icon(Icons.brightness_6_outlined),
                     const SizedBox(width: 16),
-                    const Expanded(child: Text('Theme')),
+                    Expanded(child: Text(l10n.settingsTheme)),
                     SegmentedButton<AppThemeMode>(
                       showSelectedIcon: false,
-                      segments: const [
+                      segments: [
                         ButtonSegment(
                           value: AppThemeMode.system,
-                          icon: Icon(Icons.brightness_auto),
-                          tooltip: 'System',
+                          icon: const Icon(Icons.brightness_auto),
+                          tooltip: l10n.themeSystem,
                         ),
                         ButtonSegment(
                           value: AppThemeMode.light,
-                          icon: Icon(Icons.light_mode),
-                          tooltip: 'Light',
+                          icon: const Icon(Icons.light_mode),
+                          tooltip: l10n.themeLight,
                         ),
                         ButtonSegment(
                           value: AppThemeMode.dark,
-                          icon: Icon(Icons.dark_mode),
-                          tooltip: 'Dark',
+                          icon: const Icon(Icons.dark_mode),
+                          tooltip: l10n.themeDark,
                         ),
                       ],
                       selected: {player.themeMode.value},
@@ -185,13 +192,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 8),
+            const _LanguageCard(),
+            const SizedBox(height: 8),
             Card(
               child: SwitchListTile(
                 secondary: const Icon(Icons.palette_outlined),
-                title: const Text('Dynamic theme from album art'),
-                subtitle: const Text(
-                  "Tint the app with the current track's colors",
-                ),
+                title: Text(l10n.dynamicTheme),
+                subtitle: Text(l10n.dynamicThemeSubtitle),
                 value: player.dynamicTheme,
                 onChanged: player.setDynamicTheme,
               ),
@@ -207,14 +214,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       children: [
                         const Icon(Icons.color_lens_outlined),
                         const SizedBox(width: 16),
-                        const Expanded(child: Text('Accent color')),
+                        Expanded(child: Text(l10n.accentColor)),
                       ],
                     ),
                     const SizedBox(height: 2),
                     Text(
                       player.dynamicTheme
-                          ? 'Fallback when album art has no strong colour'
-                          : 'Pick the app accent',
+                          ? l10n.accentDynamicHint
+                          : l10n.accentPickHint,
                       style: text.bodySmall,
                     ),
                     const SizedBox(height: 12),
@@ -242,12 +249,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Text('About', style: text.titleLarge),
-            const Card(
+            Text(l10n.settingsAbout, style: text.titleLarge),
+            Card(
               child: ListTile(
-                leading: Icon(Icons.music_note),
-                title: Text('PeerBeat'),
-                subtitle: Text('Local + LAN music player'),
+                leading: const Icon(Icons.music_note),
+                title: const Text('PeerBeat'),
+                subtitle: Text(l10n.appTagline),
               ),
             ),
             const SizedBox(height: 8),
@@ -297,16 +304,18 @@ class _UpdateCardState extends State<_UpdateCard> {
       if (!mounted) return;
       if (info == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("You're on the latest version")),
+          SnackBar(content: Text(AppLocalizations.of(context).onLatestVersion)),
         );
       } else {
         await runUpdateFlow(context, info);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).updateCheckFailed(e)),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _checking = false);
@@ -315,6 +324,7 @@ class _UpdateCardState extends State<_UpdateCard> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final managed = !updater.supported;
     return Card(
       child: Column(
@@ -322,21 +332,19 @@ class _UpdateCardState extends State<_UpdateCard> {
         children: [
           ListTile(
             leading: const Icon(Icons.info_outline),
-            title: const Text('Version'),
+            title: Text(l10n.version),
             subtitle: Text(_version.isEmpty ? '…' : _version),
           ),
           if (managed)
-            const ListTile(
-              leading: Icon(Icons.verified_outlined),
-              title: Text('Updates'),
-              subtitle: Text(
-                'Managed by your package manager (AUR / .deb / AppImage).',
-              ),
+            ListTile(
+              leading: const Icon(Icons.verified_outlined),
+              title: Text(l10n.updates),
+              subtitle: Text(l10n.updatesManaged),
             )
           else ...[
             SwitchListTile(
               secondary: const Icon(Icons.update_outlined),
-              title: const Text('Check for updates automatically'),
+              title: Text(l10n.checkAutomatically),
               value: _autoCheck,
               onChanged: (v) async {
                 await updater.setAutoCheck(v);
@@ -356,7 +364,7 @@ class _UpdateCardState extends State<_UpdateCard> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.refresh),
-                  label: const Text('Check for updates'),
+                  label: Text(l10n.checkForUpdates),
                 ),
               ),
             ),
@@ -367,30 +375,102 @@ class _UpdateCardState extends State<_UpdateCard> {
   }
 }
 
+/// Language picker — System default + the ten supported locales, each shown in
+/// its own script. Persists the choice via the player and re-renders live.
+class _LanguageCard extends StatelessWidget {
+  const _LanguageCard();
+
+  // Native display names keyed by language code; null = follow the system.
+  static const _names = <String?, String>{
+    null: '',
+    'en': 'English',
+    'tr': 'Türkçe',
+    'es': 'Español',
+    'fr': 'Français',
+    'de': 'Deutsch',
+    'ru': 'Русский',
+    'ar': 'العربية',
+    'ja': '日本語',
+    'zh': '中文',
+    'ko': '한국어',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ValueListenableBuilder<Locale?>(
+      valueListenable: player.locale,
+      builder: (context, current, _) {
+        final code = current?.languageCode;
+        final label = code == null
+            ? l10n.languageSystemDefault
+            : (_names[code] ?? code);
+        return Card(
+          child: ListTile(
+            leading: const Icon(Icons.translate_outlined),
+            title: Text(l10n.language),
+            subtitle: Text(label),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _pick(context),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pick(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final current = player.locale.value?.languageCode ?? '';
+        return RadioGroup<String>(
+          groupValue: current,
+          onChanged: (v) => Navigator.of(ctx).pop(v),
+          child: SimpleDialog(
+            title: Text(l10n.language),
+            children: [
+              for (final entry in _names.entries)
+                RadioListTile<String>(
+                  value: entry.key ?? '',
+                  title: Text(
+                    entry.key == null
+                        ? l10n.languageSystemDefault
+                        : entry.value,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null) return; // dismissed
+    player.setLocale(selected.isEmpty ? null : Locale(selected));
+  }
+}
+
 class _StereoWidthCard extends StatelessWidget {
   const _StereoWidthCard();
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Stereo widening', style: text.titleMedium),
+            Text(l10n.stereoWidening, style: text.titleMedium),
             const SizedBox(height: 4),
-            Text(
-              'Adjust mid/side width on desktop output. 100% leaves the file unchanged.',
-              style: text.bodySmall,
-            ),
+            Text(l10n.stereoWideningHint, style: text.bodySmall),
             const SizedBox(height: 12),
             ListenableBuilder(
               listenable: player,
               builder: (context, _) => Row(
                 children: [
-                  const Text('Width'),
+                  Text(l10n.width),
                   Expanded(
                     child: Slider(
                       min: 0,
@@ -424,19 +504,16 @@ class _CrossfadeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Crossfade', style: text.titleMedium),
+            Text(l10n.crossfade, style: text.titleMedium),
             const SizedBox(height: 4),
-            Text(
-              'Overlap the end of one track with the start of the next (desktop). '
-              '0 disables it.',
-              style: text.bodySmall,
-            ),
+            Text(l10n.crossfadeHint, style: text.bodySmall),
             const SizedBox(height: 12),
             // Own ListenableBuilder so the controlled Slider follows the live
             // value even though this card itself is const (and so not rebuilt).
@@ -445,10 +522,10 @@ class _CrossfadeCard extends StatelessWidget {
               builder: (context, _) {
                 final secs = player.crossfade;
                 String fmt(double s) =>
-                    s < 0.5 ? 'Off' : '${s.toStringAsFixed(1)} s';
+                    s < 0.5 ? l10n.replayGainOff : '${s.toStringAsFixed(1)} s';
                 return Row(
                   children: [
-                    const Text('Duration'),
+                    Text(l10n.duration),
                     Expanded(
                       child: Slider(
                         min: 0,
@@ -483,6 +560,7 @@ class _OutputDeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -491,19 +569,18 @@ class _OutputDeviceCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text('Output device', style: text.titleMedium)),
+                Expanded(
+                  child: Text(l10n.outputDevice, style: text.titleMedium),
+                ),
                 IconButton(
-                  tooltip: 'Refresh devices',
+                  tooltip: l10n.refreshDevices,
                   onPressed: onReload,
                   icon: const Icon(Icons.refresh),
                 ),
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              'Choose the desktop audio output. Android routing follows the system output.',
-              style: text.bodySmall,
-            ),
+            Text(l10n.outputDeviceHint, style: text.bodySmall),
             const SizedBox(height: 12),
             if (devices == null)
               const LinearProgressIndicator()
@@ -519,12 +596,12 @@ class _OutputDeviceCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            'Could not list devices: ${snapshot.error}',
+                            l10n.couldNotListDevices(snapshot.error ?? ''),
                           ),
                         ),
                         TextButton(
                           onPressed: onReload,
-                          child: const Text('Retry'),
+                          child: Text(l10n.commonRetry),
                         ),
                       ],
                     );
@@ -536,9 +613,9 @@ class _OutputDeviceCard extends StatelessWidget {
                       : 'default';
                   return DropdownButtonFormField<String>(
                     initialValue: selected,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Audio output',
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      labelText: l10n.audioOutput,
                     ),
                     items: [
                       for (final d in rows)
@@ -571,29 +648,30 @@ class _ReplayGainCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ReplayGain', style: text.titleMedium),
+            Text(l10n.replayGain, style: text.titleMedium),
             const SizedBox(height: 4),
-            Text(
-              'Even out perceived loudness between tracks using gain tags.',
-              style: text.bodySmall,
-            ),
+            Text(l10n.replayGainHint, style: text.bodySmall),
             const SizedBox(height: 12),
             SegmentedButton<ReplayGainMode>(
-              segments: const [
-                ButtonSegment(value: ReplayGainMode.off, label: Text('Off')),
+              segments: [
+                ButtonSegment(
+                  value: ReplayGainMode.off,
+                  label: Text(l10n.replayGainOff),
+                ),
                 ButtonSegment(
                   value: ReplayGainMode.track,
-                  label: Text('Track'),
+                  label: Text(l10n.replayGainTrack),
                 ),
                 ButtonSegment(
                   value: ReplayGainMode.album,
-                  label: Text('Album'),
+                  label: Text(l10n.replayGainAlbum),
                 ),
               ],
               selected: {player.replayGainMode},
@@ -602,7 +680,7 @@ class _ReplayGainCard extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Text('Pre-amp'),
+                Text(l10n.preamp),
                 Expanded(
                   child: Slider(
                     min: -15,
@@ -645,6 +723,7 @@ class _EqualizerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -654,16 +733,13 @@ class _EqualizerCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text('10-band equalizer', style: text.titleMedium),
+                  child: Text(l10n.equalizer10Band, style: text.titleMedium),
                 ),
                 Switch(value: player.eqEnabled, onChanged: player.setEqEnabled),
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              'Desktop playback applies EQ live. Android EQ uses the same saved settings and will be active with the Android audio-effects pass.',
-              style: text.bodySmall,
-            ),
+            Text(l10n.equalizerHint, style: text.bodySmall),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -677,7 +753,7 @@ class _EqualizerCard extends StatelessWidget {
                   ),
                 ActionChip(
                   avatar: const Icon(Icons.save, size: 18),
-                  label: const Text('Save custom'),
+                  label: Text(l10n.saveCustom),
                   onPressed: onSavePreset,
                 ),
               ],
@@ -751,7 +827,7 @@ class _EqualizerCard extends StatelessWidget {
             ),
             Row(
               children: [
-                const SizedBox(width: 42, child: Text('Pre')),
+                SizedBox(width: 42, child: Text(l10n.eqPre)),
                 Expanded(
                   child: Slider(
                     min: -15,
@@ -776,7 +852,7 @@ class _EqualizerCard extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: player.resetEq,
                 icon: const Icon(Icons.restart_alt),
-                label: const Text('Reset'),
+                label: Text(l10n.commonReset),
               ),
             ),
           ],
@@ -803,10 +879,11 @@ class _AccentSwatch extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final swatch = color ?? kDefaultSeed;
+    final l10n = AppLocalizations.of(context);
     return Semantics(
       button: true,
       selected: selected,
-      label: color == null ? 'Default accent' : 'Accent colour',
+      label: color == null ? l10n.accentDefault : l10n.accentColor,
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),

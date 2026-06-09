@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../net/party.dart';
 import '../net/tofu.dart';
 import '../playback/player.dart';
@@ -64,14 +65,20 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
       await libraryScan(path: dir.path); // register + import the new file
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Downloaded "${t.title}" to your library')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).downloadedToLibrary(t.title),
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).downloadFailed(e)),
+          ),
+        );
       }
     } finally {
       client.close();
@@ -104,12 +111,14 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
       }
       await libraryScan(path: dir.path); // bulk-register all new files at once
       if (mounted) {
-        final failed = _bulkFailed > 0 ? ' ($_bulkFailed failed)' : '';
+        final l10n = AppLocalizations.of(context);
+        final failed = _bulkFailed > 0
+            ? l10n.bulkFailedSuffix(_bulkFailed)
+            : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Downloaded $_bulkDone of ${widget.tracks.length} tracks'
-              '$failed to your library',
+              l10n.downloadedBulk(_bulkDone, widget.tracks.length, failed),
             ),
           ),
         );
@@ -148,20 +157,23 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
       await party.joinParty(widget.base, widget.token, widget.title);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Joined party — following the host')),
+          SnackBar(content: Text(AppLocalizations.of(context).joinedParty)),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not join party: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).couldNotJoinParty(e)),
+          ),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
@@ -185,7 +197,7 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
                     ),
                   )
                 : IconButton(
-                    tooltip: 'Download all to my library',
+                    tooltip: l10n.downloadAllToLibrary,
                     icon: const Icon(Icons.download_for_offline_outlined),
                     onPressed: widget.tracks.isEmpty ? null : _downloadAll,
                   ),
@@ -194,7 +206,7 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
             builder: (context, _) {
               if (party.reconnecting) {
                 return IconButton(
-                  tooltip: 'Reconnecting to party… (tap to leave)',
+                  tooltip: l10n.reconnectingToParty,
                   icon: const SizedBox(
                     width: 18,
                     height: 18,
@@ -205,12 +217,12 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
               }
               return party.joined
                   ? IconButton(
-                      tooltip: 'Leave party',
+                      tooltip: l10n.leaveParty,
                       icon: const Icon(Icons.exit_to_app),
                       onPressed: () => party.leaveParty(),
                     )
                   : IconButton(
-                      tooltip: 'Join party (sync to host)',
+                      tooltip: l10n.joinPartySync,
                       icon: const Icon(Icons.celebration_outlined),
                       onPressed: _joinParty,
                     );
@@ -220,7 +232,7 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
       ),
       bottomNavigationBar: const MiniPlayer(),
       body: widget.tracks.isEmpty
-          ? const Center(child: Text('Nothing shared here'))
+          ? Center(child: Text(l10n.nothingSharedHere))
           : ListenableBuilder(
               listenable: player,
               builder: (context, _) => ListView.builder(
@@ -262,7 +274,7 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
                                   ),
                                 )
                               : IconButton(
-                                  tooltip: 'Download to my library',
+                                  tooltip: l10n.downloadToLibrary,
                                   icon: const Icon(Icons.download_outlined),
                                   onPressed: () => _download(t),
                                 ),
@@ -274,7 +286,7 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Playback failed: $e')),
+                            SnackBar(content: Text(l10n.playbackFailed(e))),
                           );
                         }
                       }
@@ -284,13 +296,11 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
                       if (party.joined) {
                         party.requestTrack(t.id);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Requested "${t.title}"')),
+                          SnackBar(content: Text(l10n.requestedTrack(t.title))),
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Join the party to request tracks'),
-                          ),
+                          SnackBar(content: Text(l10n.joinToRequest)),
                         );
                       }
                     },

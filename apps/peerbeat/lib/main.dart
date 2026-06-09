@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app_config.dart';
+import 'l10n/app_localizations.dart';
 import 'os/audio_handler.dart';
 import 'os/desktop_shell.dart';
 import 'os/os_media_controller.dart';
@@ -170,6 +171,7 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
         player.accentColor,
         player.themeMode,
         player.accentSeed,
+        player.locale,
       ]),
       builder: (context, _) {
         // Album-art accent (when dynamic) wins; else the user's fixed accent;
@@ -187,6 +189,9 @@ class _PeerBeatAppState extends State<PeerBeatApp> {
           theme: peerBeatTheme(Brightness.light, seed: seed),
           darkTheme: peerBeatTheme(Brightness.dark, seed: seed),
           themeMode: mode,
+          locale: player.locale.value,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) =>
               _GlobalPlaybackShortcuts(child: child ?? const SizedBox.shrink()),
           home: const LibraryHome(),

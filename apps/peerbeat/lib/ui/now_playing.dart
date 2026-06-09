@@ -4,6 +4,7 @@ import 'dart:typed_data' show Float32List;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/scheduler.dart' show Ticker;
 
+import '../l10n/app_localizations.dart';
 import '../playback/player.dart';
 import '../src/rust/api/audio.dart' show audioSpectrum;
 import '../src/rust/api/library.dart';
@@ -96,6 +97,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           return const Scaffold(body: SizedBox.shrink());
         }
         final cs = Theme.of(context).colorScheme;
+        final l10n = AppLocalizations.of(context);
         return Scaffold(
           backgroundColor: Colors.transparent,
           extendBodyBehindAppBar: true,
@@ -104,17 +106,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             elevation: 0,
             scrolledUnderElevation: 0,
             leading: IconButton(
-              tooltip: 'Close',
+              tooltip: l10n.commonClose,
               icon: const Icon(Icons.expand_more),
               onPressed: () => Navigator.of(context).maybePop(),
             ),
-            title: const Text('Now Playing'),
+            title: Text(l10n.nowPlayingTitle),
             centerTitle: true,
             actions: [
               PopupMenuButton<int>(
                 tooltip: player.sleepActive
-                    ? 'Sleep timer: ${_fmtRemaining(player.sleepRemaining)}'
-                    : 'Sleep timer',
+                    ? l10n.sleepTimerActive(
+                        _fmtRemaining(player.sleepRemaining),
+                      )
+                    : l10n.sleepTimer,
                 icon: Icon(
                   player.sleepActive ? Icons.bedtime : Icons.bedtime_outlined,
                   color: player.sleepActive ? cs.primary : null,
@@ -123,19 +127,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     player.setSleepTimer(m == 0 ? null : Duration(minutes: m)),
                 itemBuilder: (_) => [
                   if (player.sleepActive)
-                    const PopupMenuItem(value: 0, child: Text('Turn off')),
+                    PopupMenuItem(value: 0, child: Text(l10n.sleepTurnOff)),
                   for (final m in [15, 30, 45, 60, 90])
-                    PopupMenuItem(value: m, child: Text('$m minutes')),
+                    PopupMenuItem(value: m, child: Text(l10n.sleepMinutes(m))),
                 ],
               ),
               IconButton(
-                tooltip: 'Queue',
+                tooltip: l10n.queue,
                 icon: const Icon(Icons.queue_music),
                 onPressed: () => _showQueue(context),
               ),
               if (!t.path.startsWith('http'))
                 IconButton(
-                  tooltip: 'Lyrics',
+                  tooltip: l10n.lyrics,
                   icon: const Icon(Icons.lyrics_outlined),
                   onPressed: () => _showLyrics(context, t.id),
                 ),
@@ -239,9 +243,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       await player.seek(target);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Seek failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).seekFailed(e))),
+        );
       }
     }
   }
@@ -296,6 +300,7 @@ class _Controls extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
     final durMs = player.duration.inMilliseconds;
     final maxMs = durMs <= 0 ? 1 : durMs;
     return Padding(
@@ -313,7 +318,7 @@ class _Controls extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             [
-              if (track.artist.isNotEmpty) track.artist else 'Unknown artist',
+              if (track.artist.isNotEmpty) track.artist else l10n.unknownArtist,
               if (track.album.isNotEmpty) track.album,
             ].join(' • '),
             style: text.titleMedium?.copyWith(color: cs.onSurfaceVariant),
@@ -365,7 +370,7 @@ class _Controls extends StatelessWidget {
             _Visualizer(color: cs.primary),
           ],
           const SizedBox(height: 8),
-          _transportRow(cs),
+          _transportRow(context, cs),
           const SizedBox(height: 8),
           _volumeRow(context, cs),
           // The queue lives in the swipe-up "Up next" sheet (peeking below).
@@ -375,7 +380,8 @@ class _Controls extends StatelessWidget {
     );
   }
 
-  Widget _transportRow(ColorScheme cs) {
+  Widget _transportRow(BuildContext context, ColorScheme cs) {
+    final l10n = AppLocalizations.of(context);
     final cur = player.current;
     final localTrack = cur != null && !cur.path.startsWith('http');
     return Row(
@@ -383,34 +389,34 @@ class _Controls extends StatelessWidget {
       children: [
         if (localTrack) _FavoriteButton(key: ValueKey(cur.id), trackId: cur.id),
         IconButton(
-          tooltip: 'Shuffle',
+          tooltip: l10n.shuffle,
           isSelected: player.shuffle,
           onPressed: () => player.setShuffle(!player.shuffle),
           icon: Icon(Icons.shuffle, color: player.shuffle ? cs.primary : null),
         ),
         IconButton(
-          tooltip: 'Previous',
+          tooltip: l10n.commonPrevious,
           iconSize: 36,
           onPressed: player.hasPrevious ? player.previous : null,
           icon: const Icon(Icons.skip_previous),
         ),
         IconButton.filled(
-          tooltip: player.playing ? 'Pause' : 'Play',
+          tooltip: player.playing ? l10n.pause : l10n.commonPlay,
           iconSize: 44,
           onPressed: player.toggle,
           icon: Icon(player.playing ? Icons.pause : Icons.play_arrow),
         ),
         IconButton(
-          tooltip: 'Next',
+          tooltip: l10n.commonNext,
           iconSize: 36,
           onPressed: player.hasNext ? player.next : null,
           icon: const Icon(Icons.skip_next),
         ),
         IconButton(
           tooltip: switch (player.repeat) {
-            RepeatMode.off => 'Repeat off',
-            RepeatMode.all => 'Repeat all',
-            RepeatMode.one => 'Repeat one',
+            RepeatMode.off => l10n.repeatOff,
+            RepeatMode.all => l10n.repeatAll,
+            RepeatMode.one => l10n.repeatOne,
           },
           // isSelected gives a non-colour (filled background) cue, and the glyph
           // changes for repeat-one, so the three states are distinguishable
@@ -427,10 +433,11 @@ class _Controls extends StatelessWidget {
   }
 
   Widget _volumeRow(BuildContext context, ColorScheme cs) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       children: [
         IconButton(
-          tooltip: player.muted ? 'Unmute' : 'Mute',
+          tooltip: player.muted ? l10n.unmute : l10n.mute,
           onPressed: player.toggleMute,
           icon: Icon(player.muted ? Icons.volume_off : Icons.volume_up),
         ),
@@ -439,20 +446,22 @@ class _Controls extends StatelessWidget {
             min: 0,
             max: 1,
             value: (player.muted ? 0.0 : player.volume).clamp(0.0, 1.0),
-            semanticFormatterCallback: (v) => '${(v * 100).round()}% volume',
+            semanticFormatterCallback: (v) =>
+                l10n.volumePercent((v * 100).round()),
             onChanged: player.setVolume,
           ),
         ),
-        _speedButton(cs),
+        _speedButton(context, cs),
       ],
     );
   }
 
-  Widget _speedButton(ColorScheme cs) {
+  Widget _speedButton(BuildContext context, ColorScheme cs) {
+    final l10n = AppLocalizations.of(context);
     const presets = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
     final active = player.speed != 1.0;
     return PopupMenuButton<double>(
-      tooltip: 'Playback speed',
+      tooltip: l10n.playbackSpeed,
       initialValue: player.speed,
       onSelected: player.setSpeed,
       itemBuilder: (_) => [
@@ -545,7 +554,10 @@ class _QueuePanel extends StatelessWidget {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Text('Up next', style: text.titleMedium),
+                      Text(
+                        AppLocalizations.of(context).upNext,
+                        style: text.titleMedium,
+                      ),
                       const Spacer(),
                       ListenableBuilder(
                         listenable: player,
@@ -584,9 +596,9 @@ class _QueueList extends StatelessWidget {
         if (upNext.isEmpty) {
           return ListView(
             controller: scrollController,
-            children: const [
-              SizedBox(height: 40),
-              Center(child: Text('Queue is empty')),
+            children: [
+              const SizedBox(height: 40),
+              Center(child: Text(AppLocalizations.of(context).queueIsEmpty)),
             ],
           );
         }
@@ -616,7 +628,7 @@ class _QueueList extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: 'Remove',
+                    tooltip: AppLocalizations.of(context).commonRemove,
                     icon: const Icon(Icons.close),
                     onPressed: () => player.removeFromUpNext(i),
                   ),
@@ -680,8 +692,9 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final fav = _fav ?? false;
+    final l10n = AppLocalizations.of(context);
     return IconButton(
-      tooltip: fav ? 'Remove from Favorites' : 'Add to Favorites',
+      tooltip: fav ? l10n.removeFromFavorites : l10n.addToFavorites,
       onPressed: _toggle,
       icon: Icon(
         fav ? Icons.favorite : Icons.favorite_border,
@@ -817,10 +830,10 @@ class _LyricsPanelState extends State<_LyricsPanel> {
     }
     final raw = _raw;
     if (raw == null || raw.trim().isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('No lyrics found'),
+          padding: const EdgeInsets.all(24),
+          child: Text(AppLocalizations.of(context).noLyricsFound),
         ),
       );
     }

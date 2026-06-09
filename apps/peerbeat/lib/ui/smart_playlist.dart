@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../playback/player.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/db/smart.dart';
@@ -126,9 +127,9 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
       if (mounted) setState(() => _previewCount = rows.length);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Invalid rules: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).invalidRules(e))),
+        );
       }
     }
   }
@@ -136,9 +137,9 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
   Future<void> _save() async {
     final name = _name.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Enter a name')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).enterAName)),
+      );
       return;
     }
     try {
@@ -159,49 +160,50 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).couldNotSave(e))),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(
           widget.existing == null
-              ? 'New smart playlist'
-              : 'Edit smart playlist',
+              ? l10n.newSmartPlaylist
+              : l10n.editSmartPlaylist,
         ),
-        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
+        actions: [TextButton(onPressed: _save, child: Text(l10n.commonSave))],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
             controller: _name,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.name,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              const Text('Match'),
+              Text(l10n.ruleMatch),
               const SizedBox(width: 12),
               SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'all', label: Text('All')),
-                  ButtonSegment(value: 'any', label: Text('Any')),
+                segments: [
+                  ButtonSegment(value: 'all', label: Text(l10n.ruleMatchAll)),
+                  ButtonSegment(value: 'any', label: Text(l10n.ruleMatchAny)),
                 ],
                 selected: {_match},
                 onSelectionChanged: (s) => setState(() => _match = s.first),
               ),
               const SizedBox(width: 12),
-              const Text('of these rules'),
+              Text(l10n.ofTheseRules),
             ],
           ),
           const SizedBox(height: 8),
@@ -211,7 +213,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
             child: TextButton.icon(
               onPressed: () => setState(() => _rules.add(_RuleRow())),
               icon: const Icon(Icons.add),
-              label: const Text('Add rule'),
+              label: Text(l10n.addRule),
             ),
           ),
           const Divider(),
@@ -222,9 +224,9 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                 child: TextField(
                   controller: _limit,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Limit (optional)',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.limitOptional,
+                    border: const OutlineInputBorder(),
                   ),
                 ),
               ),
@@ -234,8 +236,8 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                 icon: const Icon(Icons.search),
                 label: Text(
                   _previewCount == null
-                      ? 'Preview'
-                      : '$_previewCount match${_previewCount == 1 ? '' : 'es'}',
+                      ? l10n.preview
+                      : l10n.matchesCount(_previewCount!),
                 ),
               ),
             ],
@@ -246,6 +248,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
   }
 
   Widget _ruleRow(int i) {
+    final l10n = AppLocalizations.of(context);
     final r = _rules[i];
     final ops = _opsFor(r.field);
     final isText = _isText(r.field);
@@ -294,15 +297,15 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
             child: TextFormField(
               initialValue: r.value,
               keyboardType: isText ? TextInputType.text : TextInputType.number,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
-                hintText: 'value',
+                hintText: l10n.ruleValueHint,
               ),
               onChanged: (v) => r.value = v,
             ),
           ),
           IconButton(
-            tooltip: 'Remove rule',
+            tooltip: l10n.removeRule,
             icon: const Icon(Icons.close),
             onPressed: _rules.length == 1
                 ? null
@@ -330,12 +333,13 @@ class _SmartPlaylistDetailState extends State<SmartPlaylistDetail> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.smart.name),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: l10n.commonRefresh,
             icon: const Icon(Icons.refresh),
             onPressed: () => setState(() {
               _future = smartPlaylistTracks(smartId: widget.smart.id);
@@ -351,7 +355,7 @@ class _SmartPlaylistDetailState extends State<SmartPlaylistDetail> {
           }
           final tracks = snap.data!;
           if (tracks.isEmpty) {
-            return const Center(child: Text('No tracks match these rules'));
+            return Center(child: Text(l10n.noTracksMatchRules));
           }
           return TrackListView(tracks: tracks);
         },
@@ -362,7 +366,7 @@ class _SmartPlaylistDetailState extends State<SmartPlaylistDetail> {
           if (tracks.isNotEmpty) await player.playQueue(tracks, 0);
         },
         icon: const Icon(Icons.play_arrow),
-        label: const Text('Play all'),
+        label: Text(l10n.playAll),
       ),
       // Keep the persistent mini-player on this route too — otherwise playing a
       // track from a smart playlist leaves no transport bar until you pop back.

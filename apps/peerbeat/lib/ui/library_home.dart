@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show Int64List;
 
+import '../l10n/app_localizations.dart';
 import '../playback/player.dart';
 import '../update/updater.dart';
 import '../src/rust/api/library.dart';
@@ -82,17 +83,18 @@ class _LibraryHomeState extends State<LibraryHome> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Scanned: ${r.added} added, ${r.updated} updated, '
-              '${r.skipped} unchanged, ${r.errors} errors',
+              AppLocalizations.of(
+                context,
+              ).scanSummary(r.added, r.updated, r.skipped, r.errors),
             ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).scanFailed(e))),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -144,10 +146,13 @@ class _LibraryHomeState extends State<LibraryHome> {
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.create_new_folder_outlined, size: 40),
-                          SizedBox(height: 12),
-                          Text('Drop a folder to add it to your library'),
+                        children: [
+                          const Icon(
+                            Icons.create_new_folder_outlined,
+                            size: 40,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(AppLocalizations.of(context).dropFolderHint),
                         ],
                       ),
                     ),
@@ -172,40 +177,46 @@ class _LibraryHomeState extends State<LibraryHome> {
   }
 
   Future<String?> _pickMusicFolder(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
     try {
       return await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Scan a music folder',
+        dialogTitle: l10n.scanMusicFolder,
         initialDirectory: Platform.environment['HOME'],
       );
     } catch (_) {
       if (!context.mounted) return null;
       return promptText(
         context,
-        title: 'Scan a music folder',
+        title: l10n.scanMusicFolder,
         initialText: Platform.environment['HOME'] ?? '',
-        label: 'Folder path',
+        label: l10n.folderPath,
         hint: '/home/you/Music',
-        confirmLabel: 'Scan',
+        confirmLabel: l10n.scanFolder,
       );
     }
   }
 
-  static const _destinations = [
-    (Icons.library_music_outlined, Icons.library_music, 'Songs'),
-    (Icons.queue_music_outlined, Icons.queue_music, 'Playlists'),
-    (Icons.wifi_tethering_outlined, Icons.wifi_tethering, 'Network'),
-    (Icons.settings_outlined, Icons.settings, 'Settings'),
+  static const _destinationIcons = [
+    (Icons.library_music_outlined, Icons.library_music),
+    (Icons.queue_music_outlined, Icons.queue_music),
+    (Icons.wifi_tethering_outlined, Icons.wifi_tethering),
+    (Icons.settings_outlined, Icons.settings),
+  ];
+
+  /// Localized nav labels, index-aligned with [_destinationIcons].
+  List<String> _navLabels(AppLocalizations l10n) => [
+    l10n.songs,
+    l10n.playlists,
+    l10n.networkTitle,
+    l10n.settings,
   ];
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final title = switch (_section) {
-      0 => 'Songs',
-      1 => 'Playlists',
-      2 => 'Network',
-      _ => 'Settings',
-    };
+    final l10n = AppLocalizations.of(context);
+    final labels = _navLabels(l10n);
+    final title = labels[_section];
     final section = switch (_section) {
       0 => _SongsSection(
         query: _query,
@@ -237,13 +248,13 @@ class _LibraryHomeState extends State<LibraryHome> {
                 ),
               if (_section == 0)
                 IconButton(
-                  tooltip: 'Library folders',
+                  tooltip: l10n.libraryFolders,
                   onPressed: _busy ? null : _manageFolders,
                   icon: const Icon(Icons.folder_outlined),
                 ),
               if (_section == 0)
                 IconButton(
-                  tooltip: 'Scan folder',
+                  tooltip: l10n.scanFolder,
                   onPressed: _busy ? null : _scan,
                   icon: const Icon(Icons.create_new_folder_outlined),
                 ),
@@ -259,11 +270,11 @@ class _LibraryHomeState extends State<LibraryHome> {
                             setState(() => _section = v),
                         labelType: NavigationRailLabelType.all,
                         destinations: [
-                          for (final (icon, sel, label) in _destinations)
+                          for (var i = 0; i < _destinationIcons.length; i++)
                             NavigationRailDestination(
-                              icon: Icon(icon),
-                              selectedIcon: Icon(sel),
-                              label: Text(label),
+                              icon: Icon(_destinationIcons[i].$1),
+                              selectedIcon: Icon(_destinationIcons[i].$2),
+                              label: Text(labels[i]),
                             ),
                         ],
                       ),
@@ -282,11 +293,11 @@ class _LibraryHomeState extends State<LibraryHome> {
                   selectedIndex: _section,
                   onDestinationSelected: (v) => setState(() => _section = v),
                   destinations: [
-                    for (final (icon, sel, label) in _destinations)
+                    for (var i = 0; i < _destinationIcons.length; i++)
                       NavigationDestination(
-                        icon: Icon(icon),
-                        selectedIcon: Icon(sel),
-                        label: label,
+                        icon: Icon(_destinationIcons[i].$1),
+                        selectedIcon: Icon(_destinationIcons[i].$2),
+                        label: labels[i],
                       ),
                   ],
                 ),
@@ -330,17 +341,18 @@ class _FoldersDialogState extends State<_FoldersDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Rescan: ${r.added} added, ${r.updated} updated, '
-              '${r.removed} removed',
+              AppLocalizations.of(
+                context,
+              ).rescanSummary(r.added, r.updated, r.removed),
             ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Rescan failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).rescanFailed(e))),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -356,29 +368,31 @@ class _FoldersDialogState extends State<_FoldersDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not change watching: $e')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).couldNotChangeWatching(e),
+            ),
+          ),
         );
       }
     }
   }
 
   Future<void> _remove(FolderRow f) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove folder?'),
-        content: Text(
-          'Forget "${f.path}" and remove its tracks from the library? '
-          'Files on disk are not deleted.',
-        ),
+        title: Text(l10n.removeFolderQuestion),
+        content: Text(l10n.removeFolderBody(f.path)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove'),
+            child: Text(l10n.commonRemove),
           ),
         ],
       ),
@@ -392,10 +406,11 @@ class _FoldersDialogState extends State<_FoldersDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Row(
         children: [
-          const Expanded(child: Text('Library folders')),
+          Expanded(child: Text(l10n.libraryFolders)),
           TextButton.icon(
             onPressed: _busy ? null : _rescanAll,
             icon: _busy
@@ -405,7 +420,7 @@ class _FoldersDialogState extends State<_FoldersDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.refresh),
-            label: const Text('Rescan all'),
+            label: Text(l10n.rescanAll),
           ),
         ],
       ),
@@ -420,9 +435,7 @@ class _FoldersDialogState extends State<_FoldersDialog> {
             }
             final folders = snap.data!;
             if (folders.isEmpty) {
-              return const Center(
-                child: Text('No folders yet — use "Scan folder".'),
-              );
+              return Center(child: Text(l10n.noFoldersYet));
             }
             return ListView.builder(
               itemCount: folders.length,
@@ -437,16 +450,16 @@ class _FoldersDialogState extends State<_FoldersDialog> {
                   ),
                   subtitle: Text(
                     f.isWatched
-                        ? 'Watching for changes'
-                        : 'Not watching (scan manually)',
+                        ? l10n.watchingForChanges
+                        : l10n.notWatchingManual,
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         tooltip: f.isWatched
-                            ? 'Watching — tap to stop'
-                            : 'Not watching — tap to watch',
+                            ? l10n.watchingTapToStop
+                            : l10n.notWatchingTapToWatch,
                         isSelected: f.isWatched,
                         icon: Icon(
                           f.isWatched ? Icons.sync : Icons.sync_disabled,
@@ -454,7 +467,7 @@ class _FoldersDialogState extends State<_FoldersDialog> {
                         onPressed: () => _toggleWatch(f),
                       ),
                       IconButton(
-                        tooltip: 'Remove',
+                        tooltip: l10n.commonRemove,
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () => _remove(f),
                       ),
@@ -470,11 +483,11 @@ class _FoldersDialogState extends State<_FoldersDialog> {
         TextButton.icon(
           onPressed: _findDuplicates,
           icon: const Icon(Icons.copy_all_outlined),
-          label: const Text('Find duplicates'),
+          label: Text(l10n.findDuplicates),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, _changed),
-          child: const Text('Done'),
+          child: Text(l10n.commonDone),
         ),
       ],
     );
@@ -517,9 +530,11 @@ class _DuplicatesDialogState extends State<_DuplicatesDialog> {
       _reload();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not remove: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).couldNotRemove(e)),
+          ),
+        );
       }
     }
   }
@@ -538,12 +553,13 @@ class _DuplicatesDialogState extends State<_DuplicatesDialog> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.copy_all_outlined),
-          SizedBox(width: 12),
-          Expanded(child: Text('Duplicate tracks')),
+          const Icon(Icons.copy_all_outlined),
+          const SizedBox(width: 12),
+          Expanded(child: Text(l10n.duplicateTracks)),
         ],
       ),
       content: SizedBox(
@@ -557,7 +573,7 @@ class _DuplicatesDialogState extends State<_DuplicatesDialog> {
             }
             final groups = snap.data!;
             if (groups.isEmpty) {
-              return const Center(child: Text('No duplicates found.'));
+              return Center(child: Text(l10n.noDuplicatesFound));
             }
             return ListView.builder(
               itemCount: groups.length,
@@ -570,14 +586,14 @@ class _DuplicatesDialogState extends State<_DuplicatesDialog> {
                       ListTile(
                         dense: true,
                         title: Text(
-                          '${g.length} copies · ${g.first.title}',
+                          l10n.copiesCount(g.length, g.first.title),
                           style: text.titleSmall,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         trailing: TextButton(
                           onPressed: () => _removeExtras(g),
-                          child: const Text('Remove extras'),
+                          child: Text(l10n.removeExtras),
                         ),
                       ),
                       for (var i = 0; i < g.length; i++)
@@ -595,11 +611,11 @@ class _DuplicatesDialogState extends State<_DuplicatesDialog> {
                             overflow: TextOverflow.ellipsis,
                             style: text.bodySmall,
                           ),
-                          subtitle: i == 0 ? const Text('Kept') : null,
+                          subtitle: i == 0 ? Text(l10n.kept) : null,
                           trailing: i == 0
                               ? null
                               : IconButton(
-                                  tooltip: 'Remove from library',
+                                  tooltip: l10n.removeFromLibrary,
                                   icon: const Icon(Icons.delete_outline),
                                   onPressed: () => _remove(g[i]),
                                 ),
@@ -615,7 +631,7 @@ class _DuplicatesDialogState extends State<_DuplicatesDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, _changed),
-          child: const Text('Done'),
+          child: Text(l10n.commonDone),
         ),
       ],
     );
@@ -637,6 +653,7 @@ class _SongsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final searching = query.trim().isNotEmpty;
     return DefaultTabController(
       length: 5,
@@ -646,21 +663,21 @@ class _SongsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: SearchBar(
-              hintText: 'Search songs, artists, albums…',
+              hintText: l10n.searchHint,
               leading: const Icon(Icons.search),
               onChanged: onQueryChanged,
             ),
           ),
           if (!searching)
-            const TabBar(
+            TabBar(
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               tabs: [
-                Tab(text: 'Songs'),
-                Tab(text: 'Albums'),
-                Tab(text: 'Artists'),
-                Tab(text: 'Genres'),
-                Tab(text: 'Recent'),
+                Tab(text: l10n.songs),
+                Tab(text: l10n.albums),
+                Tab(text: l10n.artists),
+                Tab(text: l10n.genres),
+                Tab(text: l10n.recent),
               ],
             ),
           Expanded(
@@ -725,7 +742,12 @@ class TrackArt extends StatelessWidget {
     // When selected, the art slot doubles as the "now playing" indicator
     // (equalizer glyph / accent) — announce that to screen readers; otherwise
     // the artwork is decorative and stays excluded.
-    return selected ? Semantics(label: 'Now playing', child: visual) : visual;
+    return selected
+        ? Semantics(
+            label: AppLocalizations.of(context).nowPlayingSemantic,
+            child: visual,
+          )
+        : visual;
   }
 
   Widget _placeholder(ColorScheme cs, BorderRadius radius) => Container(
@@ -774,9 +796,9 @@ class _TrackListViewState extends State<TrackListView> {
     }
     final n = _selected.length;
     _clearSelection();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Added $n to queue')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppLocalizations.of(context).addedToQueue(n))),
+    );
   }
 
   Future<void> _batchEdit() async {
@@ -795,6 +817,7 @@ class _TrackListViewState extends State<TrackListView> {
 
   Widget _selectionBar(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     return Material(
       color: cs.secondaryContainer,
       child: Padding(
@@ -802,23 +825,23 @@ class _TrackListViewState extends State<TrackListView> {
         child: Row(
           children: [
             IconButton(
-              tooltip: 'Clear selection',
+              tooltip: l10n.clearSelection,
               icon: const Icon(Icons.close),
               onPressed: _clearSelection,
             ),
             Expanded(
               child: Text(
-                '${_selected.length} selected',
+                l10n.selectedCount(_selected.length),
                 style: TextStyle(color: cs.onSecondaryContainer),
               ),
             ),
             IconButton(
-              tooltip: 'Add to queue',
+              tooltip: l10n.addToQueue,
               icon: const Icon(Icons.add_to_queue),
               onPressed: _addSelectedToQueue,
             ),
             IconButton(
-              tooltip: 'Edit tags',
+              tooltip: l10n.editTags,
               icon: const Icon(Icons.edit_outlined),
               onPressed: _batchEdit,
             ),
@@ -859,7 +882,7 @@ class _TrackListViewState extends State<TrackListView> {
   @override
   Widget build(BuildContext context) {
     if (_tracks.isEmpty) {
-      return const Center(child: Text('Nothing here yet'));
+      return Center(child: Text(AppLocalizations.of(context).nothingHereYet));
     }
     return Column(
       children: [
@@ -899,31 +922,36 @@ class _TrackListViewState extends State<TrackListView> {
                           children: [
                             Text(fmtDuration(t.durationMs)),
                             PopupMenuButton<String>(
-                              tooltip: 'Track actions',
+                              tooltip: AppLocalizations.of(
+                                context,
+                              ).trackActions,
                               onSelected: (value) =>
                                   _handleTrackAction(context, value, t),
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                  value: 'play_next',
-                                  child: Text('Play next'),
-                                ),
-                                PopupMenuItem(
-                                  value: 'add_queue',
-                                  child: Text('Add to queue'),
-                                ),
-                                PopupMenuItem(
-                                  value: 'add_playlist',
-                                  child: Text('Add to playlist'),
-                                ),
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: Text('Edit metadata'),
-                                ),
-                                PopupMenuItem(
-                                  value: 'select',
-                                  child: Text('Select'),
-                                ),
-                              ],
+                              itemBuilder: (_) {
+                                final l10n = AppLocalizations.of(context);
+                                return [
+                                  PopupMenuItem(
+                                    value: 'play_next',
+                                    child: Text(l10n.playNext),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'add_queue',
+                                    child: Text(l10n.addToQueue),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'add_playlist',
+                                    child: Text(l10n.addToPlaylist),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Text(l10n.editMetadata),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'select',
+                                    child: Text(l10n.select),
+                                  ),
+                                ];
+                              },
                             ),
                           ],
                         ),
@@ -937,7 +965,11 @@ class _TrackListViewState extends State<TrackListView> {
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Playback failed: $e')),
+                          SnackBar(
+                            content: Text(
+                              AppLocalizations.of(context).playbackFailed(e),
+                            ),
+                          ),
                         );
                       }
                     }
@@ -963,6 +995,7 @@ class _TrackListViewState extends State<TrackListView> {
   /// The track action menu as a bottom sheet — the long-press equivalent of the
   /// trailing ⋮ [PopupMenuButton]. Same actions, same handler.
   Future<void> _showTrackMenu(BuildContext context, TrackRow track) async {
+    final l10n = AppLocalizations.of(context);
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -988,27 +1021,27 @@ class _TrackListViewState extends State<TrackListView> {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.queue_play_next),
-              title: const Text('Play next'),
+              title: Text(l10n.playNext),
               onTap: () => Navigator.pop(ctx, 'play_next'),
             ),
             ListTile(
               leading: const Icon(Icons.add_to_queue),
-              title: const Text('Add to queue'),
+              title: Text(l10n.addToQueue),
               onTap: () => Navigator.pop(ctx, 'add_queue'),
             ),
             ListTile(
               leading: const Icon(Icons.playlist_add),
-              title: const Text('Add to playlist'),
+              title: Text(l10n.addToPlaylist),
               onTap: () => Navigator.pop(ctx, 'add_playlist'),
             ),
             ListTile(
               leading: const Icon(Icons.edit_outlined),
-              title: const Text('Edit metadata'),
+              title: Text(l10n.editMetadata),
               onTap: () => Navigator.pop(ctx, 'edit'),
             ),
             ListTile(
               leading: const Icon(Icons.checklist),
-              title: const Text('Select'),
+              title: Text(l10n.select),
               onTap: () => Navigator.pop(ctx, 'select'),
             ),
           ],
@@ -1047,9 +1080,11 @@ class _TrackListViewState extends State<TrackListView> {
         return;
     }
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Queued "${track.title}"')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).queuedTrack(track.title)),
+        ),
+      );
     }
   }
 }
@@ -1073,7 +1108,9 @@ class _TracksFutureState extends State<_TracksFuture> {
       future: _future,
       builder: (context, snap) {
         if (snap.hasError) {
-          return Center(child: Text('Failed to load: ${snap.error}'));
+          return Center(
+            child: Text(AppLocalizations.of(context).failedToLoad(snap.error!)),
+          );
         }
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -1127,7 +1164,9 @@ class _PaginatedTracksState extends State<_PaginatedTracks> {
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
-      return Center(child: Text('Failed to load: $_error'));
+      return Center(
+        child: Text(AppLocalizations.of(context).failedToLoad(_error!)),
+      );
     }
     if (_tracks.isEmpty && !_done) {
       return const Center(child: CircularProgressIndicator());
@@ -1151,6 +1190,7 @@ class _EmptyLibrary extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
     final canDrop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
     return Center(
       child: Padding(
@@ -1160,12 +1200,10 @@ class _EmptyLibrary extends StatelessWidget {
           children: [
             Icon(Icons.library_music_outlined, size: 72, color: cs.primary),
             const SizedBox(height: 16),
-            Text('Your library is empty', style: text.headlineSmall),
+            Text(l10n.libraryEmpty, style: text.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              canDrop
-                  ? 'Drag a music folder here, or use the scan button in the top bar to add one.'
-                  : 'Tap the scan button in the top bar to add a music folder.',
+              canDrop ? l10n.libraryEmptyHintDrop : l10n.libraryEmptyHintTap,
               textAlign: TextAlign.center,
               style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
             ),
@@ -1216,15 +1254,19 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
   void _refresh() => setState(() => _version++);
 
   Future<void> _create() async {
-    final name = await _playlistNameDialog(context, title: 'New playlist');
+    final name = await _playlistNameDialog(
+      context,
+      title: AppLocalizations.of(context).newPlaylist,
+    );
     if (name == null) return;
     await playlistCreate(name: name);
     if (mounted) _refresh();
   }
 
   Future<void> _import() async {
+    final l10n = AppLocalizations.of(context);
     final res = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Import playlist (M3U / PLS)',
+      dialogTitle: l10n.importPlaylistTitle,
       type: FileType.custom,
       allowedExtensions: ['m3u', 'm3u8', 'pls'],
     );
@@ -1236,14 +1278,18 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       _refresh();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Imported ${report.matched}/${report.total} tracks'),
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).importedTracks(report.matched, report.total),
+          ),
         ),
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).importFailed(e))),
+        );
       }
     }
   }
@@ -1263,19 +1309,20 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
   }
 
   Future<void> _deleteSmart(SmartPlaylistRow s) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete smart playlist?'),
-        content: Text('Delete "${s.name}" permanently?'),
+        title: Text(l10n.deleteSmartPlaylistQuestion),
+        content: Text(l10n.deleteNamedPermanently(s.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(l10n.commonDelete),
           ),
         ],
       ),
@@ -1323,6 +1370,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
           return const Center(child: CircularProgressIndicator());
         }
         final (playlists, smarts) = snap.data!;
+        final l10n = AppLocalizations.of(context);
         return Column(
           children: [
             Padding(
@@ -1334,17 +1382,17 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                   FilledButton.icon(
                     onPressed: _create,
                     icon: const Icon(Icons.add),
-                    label: const Text('New playlist'),
+                    label: Text(l10n.newPlaylist),
                   ),
                   OutlinedButton.icon(
                     onPressed: _createSmart,
                     icon: const Icon(Icons.auto_awesome),
-                    label: const Text('Smart'),
+                    label: Text(l10n.smart),
                   ),
                   OutlinedButton.icon(
                     onPressed: _import,
                     icon: const Icon(Icons.file_open),
-                    label: const Text('Import'),
+                    label: Text(l10n.import),
                   ),
                 ],
               ),
@@ -1352,40 +1400,40 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
             Expanded(
               child: ListView(
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text('Auto playlists'),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Text(l10n.autoPlaylists),
                   ),
                   _autoTile(
                     Icons.history,
-                    'Recently Played',
+                    l10n.recentlyPlayed,
                     () => libraryRecentlyPlayed(limit: 200),
                   ),
                   _autoTile(
                     Icons.local_fire_department,
-                    'Most Played',
+                    l10n.mostPlayed,
                     () => libraryMostPlayed(limit: 200),
                   ),
                   _autoTile(
                     Icons.fiber_new,
-                    'Never Played',
+                    l10n.neverPlayed,
                     () => libraryNeverPlayed(limit: 200),
                   ),
                   _autoTile(
                     Icons.favorite,
-                    'Favorites',
+                    l10n.favorites,
                     () => libraryFavorites(limit: 500),
                   ),
                   if (playlists.isNotEmpty)
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Text('Playlists'),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text(l10n.playlists),
                     ),
                   for (final p in playlists) _manualTile(p),
                   if (smarts.isNotEmpty)
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Text('Smart playlists'),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text(l10n.smartPlaylists),
                     ),
                   for (final s in smarts) _smartTile(s),
                 ],
@@ -1400,18 +1448,21 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
   Widget _manualTile(PlaylistRow p) => ListTile(
     leading: const CircleAvatar(child: Icon(Icons.queue_music)),
     title: Text(p.name),
-    subtitle: Text('${p.trackCount} tracks'),
+    subtitle: Text(AppLocalizations.of(context).trackCount(p.trackCount)),
     trailing: PopupMenuButton<String>(
       onSelected: (value) async {
         await _handlePlaylistAction(context, value, p);
         if (mounted) _refresh();
       },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'rename', child: Text('Rename')),
-        PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
-        PopupMenuItem(value: 'export', child: Text('Export…')),
-        PopupMenuItem(value: 'delete', child: Text('Delete')),
-      ],
+      itemBuilder: (_) {
+        final l10n = AppLocalizations.of(context);
+        return [
+          PopupMenuItem(value: 'rename', child: Text(l10n.commonRename)),
+          PopupMenuItem(value: 'duplicate', child: Text(l10n.commonDuplicate)),
+          PopupMenuItem(value: 'export', child: Text(l10n.exportEllipsis)),
+          PopupMenuItem(value: 'delete', child: Text(l10n.commonDelete)),
+        ];
+      },
     ),
     onTap: () async {
       await Navigator.of(
@@ -1424,16 +1475,19 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
   Widget _smartTile(SmartPlaylistRow s) => ListTile(
     leading: const CircleAvatar(child: Icon(Icons.auto_awesome)),
     title: Text(s.name),
-    subtitle: const Text('Smart'),
+    subtitle: Text(AppLocalizations.of(context).smart),
     trailing: PopupMenuButton<String>(
       onSelected: (value) {
         if (value == 'edit') _editSmart(s);
         if (value == 'delete') _deleteSmart(s);
       },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'edit', child: Text('Edit')),
-        PopupMenuItem(value: 'delete', child: Text('Delete')),
-      ],
+      itemBuilder: (_) {
+        final l10n = AppLocalizations.of(context);
+        return [
+          PopupMenuItem(value: 'edit', child: Text(l10n.commonEdit)),
+          PopupMenuItem(value: 'delete', child: Text(l10n.commonDelete)),
+        ];
+      },
     ),
     onTap: () => Navigator.of(
       context,
@@ -1474,9 +1528,11 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not remove track: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).couldNotRemoveTrack(e)),
+        ),
+      );
       return;
     }
     if (!mounted) return;
@@ -1498,9 +1554,13 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
       // Roll the optimistic reorder back so the UI matches the DB, and report.
       if (!mounted) return;
       setState(() => _tracks = previous);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not reorder playlist: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).couldNotReorderPlaylist(e),
+          ),
+        ),
+      );
       return;
     }
     if (!mounted) return;
@@ -1509,12 +1569,13 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.playlist.name),
         actions: [
           IconButton(
-            tooltip: 'Play playlist',
+            tooltip: l10n.playPlaylist,
             onPressed: _tracks.isEmpty ? null : _playAll,
             icon: const Icon(Icons.play_arrow),
           ),
@@ -1528,7 +1589,7 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
           }
           _tracks = snap.data!;
           if (_tracks.isEmpty) {
-            return const Center(child: Text('No tracks in this playlist'));
+            return Center(child: Text(l10n.noTracksInPlaylist));
           }
           return ReorderableListView.builder(
             itemCount: _tracks.length,
@@ -1547,12 +1608,12 @@ class _PlaylistDetailState extends State<_PlaylistDetail> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  t.artist.isEmpty ? 'Unknown artist' : t.artist,
+                  t.artist.isEmpty ? l10n.unknownArtist : t.artist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: IconButton(
-                  tooltip: 'Remove',
+                  tooltip: l10n.commonRemove,
                   onPressed: () => _removeAt(i),
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
@@ -1572,11 +1633,12 @@ Future<void> _handlePlaylistAction(
   String value,
   PlaylistRow playlist,
 ) async {
+  final l10n = AppLocalizations.of(context);
   switch (value) {
     case 'rename':
       final name = await _playlistNameDialog(
         context,
-        title: 'Rename playlist',
+        title: l10n.renamePlaylist,
         initial: playlist.name,
       );
       if (name != null) {
@@ -1586,7 +1648,7 @@ Future<void> _handlePlaylistAction(
     case 'duplicate':
       final name = await _playlistNameDialog(
         context,
-        title: 'Duplicate playlist',
+        title: l10n.duplicatePlaylist,
         initial: '${playlist.name} copy',
       );
       if (name != null) {
@@ -1595,7 +1657,7 @@ Future<void> _handlePlaylistAction(
       break;
     case 'export':
       final path = await FilePicker.platform.saveFile(
-        dialogTitle: 'Export playlist',
+        dialogTitle: l10n.exportPlaylistTitle,
         fileName: '${playlist.name}.m3u',
         type: FileType.custom,
         allowedExtensions: ['m3u', 'm3u8', 'pls'],
@@ -1604,7 +1666,7 @@ Future<void> _handlePlaylistAction(
         await playlistExport(playlistId: playlist.id, filePath: path);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Exported "${playlist.name}"')),
+            SnackBar(content: Text(l10n.exportedPlaylist(playlist.name))),
           );
         }
       }
@@ -1613,16 +1675,16 @@ Future<void> _handlePlaylistAction(
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Delete playlist?'),
-          content: Text('Delete "${playlist.name}" permanently?'),
+          title: Text(l10n.deletePlaylistQuestion),
+          content: Text(l10n.deleteNamedPermanently(playlist.name)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+              child: Text(l10n.commonCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete'),
+              child: Text(l10n.commonDelete),
             ),
           ],
         ),
@@ -1635,10 +1697,11 @@ Future<void> _handlePlaylistAction(
 }
 
 Future<void> _addTrackToPlaylist(BuildContext context, TrackRow track) async {
+  final l10n = AppLocalizations.of(context);
   final playlists = await playlistList();
   if (!context.mounted) return;
   if (playlists.isEmpty) {
-    final name = await _playlistNameDialog(context, title: 'New playlist');
+    final name = await _playlistNameDialog(context, title: l10n.newPlaylist);
     if (name == null) return;
     final id = await playlistCreate(name: name);
     await playlistAddTracks(
@@ -1650,7 +1713,7 @@ Future<void> _addTrackToPlaylist(BuildContext context, TrackRow track) async {
   final picked = await showDialog<PlaylistRow>(
     context: context,
     builder: (ctx) => SimpleDialog(
-      title: const Text('Add to playlist'),
+      title: Text(l10n.addToPlaylist),
       children: [
         for (final p in playlists)
           SimpleDialogOption(
@@ -1667,7 +1730,9 @@ Future<void> _addTrackToPlaylist(BuildContext context, TrackRow track) async {
   );
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Added "${track.title}" to ${picked.name}')),
+      SnackBar(
+        content: Text(l10n.addedTrackToPlaylist(track.title, picked.name)),
+      ),
     );
   }
 }
@@ -1677,12 +1742,13 @@ Future<String?> _playlistNameDialog(
   required String title,
   String initial = '',
 }) async {
+  final l10n = AppLocalizations.of(context);
   final name = await promptText(
     context,
     title: title,
     initialText: initial,
-    label: 'Name',
-    confirmLabel: 'Save',
+    label: l10n.name,
+    confirmLabel: l10n.commonSave,
   );
   final clean = name?.trim();
   return clean == null || clean.isEmpty ? null : clean;
@@ -1701,7 +1767,9 @@ class _AlbumsTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final albums = snap.data!;
-        if (albums.isEmpty) return const Center(child: Text('No albums'));
+        if (albums.isEmpty) {
+          return Center(child: Text(AppLocalizations.of(context).noAlbums));
+        }
         return ListView.builder(
           itemCount: albums.length,
           itemBuilder: (_, i) {
@@ -1744,7 +1812,9 @@ class _ArtistsTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final artists = snap.data!;
-        if (artists.isEmpty) return const Center(child: Text('No artists'));
+        if (artists.isEmpty) {
+          return Center(child: Text(AppLocalizations.of(context).noArtists));
+        }
         return ListView.builder(
           itemCount: artists.length,
           itemBuilder: (_, i) {
@@ -1752,7 +1822,11 @@ class _ArtistsTab extends StatelessWidget {
             return ListTile(
               leading: const CircleAvatar(child: Icon(Icons.person)),
               title: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('${a.albumCount} albums • ${a.trackCount} tracks'),
+              subtitle: Text(
+                AppLocalizations.of(
+                  context,
+                ).artistSummary(a.albumCount, a.trackCount),
+              ),
               onTap: () => _openTracks(
                 context,
                 a.name,
@@ -1777,7 +1851,9 @@ class _GenresTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final genres = snap.data!;
-        if (genres.isEmpty) return const Center(child: Text('No genres'));
+        if (genres.isEmpty) {
+          return Center(child: Text(AppLocalizations.of(context).noGenres));
+        }
         return ListView.builder(
           itemCount: genres.length,
           itemBuilder: (_, i) {
