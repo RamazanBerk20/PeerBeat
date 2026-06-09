@@ -19,9 +19,36 @@ class NowPlayingScreen extends StatefulWidget {
   State<NowPlayingScreen> createState() => _NowPlayingScreenState();
 }
 
+/// Collapsed height of the "Up next" sheet on Now Playing (fraction of height).
+const double _kQueuePeek = 0.14;
+
 class _NowPlayingScreenState extends State<NowPlayingScreen> {
   static const _endSeekEpsilon = Duration(milliseconds: 250);
   double? _dragMs;
+
+  // Drives the YouTube-Music-style swipe-up: the queue sheet rises while the
+  // player content fades. `_queueExtent` mirrors the sheet size (0.14–1.0).
+  final DraggableScrollableController _sheetCtl =
+      DraggableScrollableController();
+  final ValueNotifier<double> _queueExtent = ValueNotifier(_kQueuePeek);
+
+  @override
+  void initState() {
+    super.initState();
+    _sheetCtl.addListener(_onSheet);
+  }
+
+  void _onSheet() {
+    if (_sheetCtl.isAttached) _queueExtent.value = _sheetCtl.size;
+  }
+
+  @override
+  void dispose() {
+    _sheetCtl.removeListener(_onSheet);
+    _sheetCtl.dispose();
+    _queueExtent.dispose();
+    super.dispose();
+  }
 
   void _showLyrics(BuildContext context, int trackId) {
     showModalBottomSheet(
@@ -47,7 +74,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         expand: false,
         initialChildSize: 0.6,
         maxChildSize: 0.92,
-        builder: (_, controller) => _QueueSheet(scrollController: controller),
+        builder: (_, controller) => _QueueList(scrollController: controller),
       ),
     );
   }
@@ -137,9 +164,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     dragMs: _dragMs,
                     onDragChanged: (v) => setState(() => _dragMs = v),
                     onDragEnd: _onSeekEnd,
-                    onExpandQueue: () => _showQueue(context),
                   );
                   if (wide) {
+                    // Wide: art beside controls; queue stays on the app-bar icon.
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -148,10 +175,45 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       ],
                     );
                   }
-                  return Column(
+                  // Portrait: player content with the "Up next" sheet peeking at
+                  // the bottom. Swipe it up → the player fades out as the queue
+                  // rises to full screen (YouTube-Music style).
+                  final player = Column(
                     children: [
                       Expanded(flex: 5, child: Center(child: art)),
                       Expanded(flex: 6, child: controls),
+                    ],
+                  );
+                  return Stack(
+                    children: [
+                      ValueListenableBuilder<double>(
+                        valueListenable: _queueExtent,
+                        builder: (_, ext, child) {
+                          // Fully visible at the peek; faded out by ~55% drag.
+                          final t = ((ext - _kQueuePeek) / (0.55 - _kQueuePeek))
+                              .clamp(0.0, 1.0);
+                          return Opacity(
+                            opacity: 1 - t,
+                            child: IgnorePointer(
+                              ignoring: t > 0.95,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: player,
+                      ),
+                      DraggableScrollableSheet(
+                        controller: _sheetCtl,
+                        initialChildSize: _kQueuePeek,
+                        minChildSize: _kQueuePeek,
+                        maxChildSize: 1.0,
+                        snap: true,
+                        snapSizes: const [_kQueuePeek, 1.0],
+                        builder: (ctx, sc) => _QueuePanel(
+                          scrollController: sc,
+                          controller: _sheetCtl,
+                        ),
+                      ),
                     ],
                   );
                 },
@@ -222,7 +284,6 @@ class _Controls extends StatelessWidget {
     required this.dragMs,
     required this.onDragChanged,
     required this.onDragEnd,
-    required this.onExpandQueue,
   });
 
   final TrackRow track;
@@ -230,16 +291,12 @@ class _Controls extends StatelessWidget {
   final ValueChanged<double> onDragChanged;
   final ValueChanged<double> onDragEnd;
 
-  /// Open the full-screen queue sheet (tap or swipe-up on "Up next").
-  final VoidCallback onExpandQueue;
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final durMs = player.duration.inMilliseconds;
     final maxMs = durMs <= 0 ? 1 : durMs;
-    final upNext = player.upNext;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -306,44 +363,8 @@ class _Controls extends StatelessWidget {
           _transportRow(cs),
           const SizedBox(height: 8),
           _volumeRow(context, cs),
-          if (upNext.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            // Tap or swipe up to open the full-screen, reorderable queue.
-            InkWell(
-              onTap: onExpandQueue,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Text('Up next', style: text.titleSmall),
-                    const Spacer(),
-                    Icon(
-                      Icons.keyboard_arrow_up,
-                      size: 18,
-                      color: cs.onSurfaceVariant,
-                    ),
-                    Text(
-                      'Expand',
-                      style: text.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: GestureDetector(
-                onVerticalDragEnd: (d) {
-                  if ((d.primaryVelocity ?? 0) < -100) onExpandQueue();
-                },
-                child: _UpNextList(tracks: upNext),
-              ),
-            ),
-          ] else
-            const Spacer(),
+          // The queue lives in the swipe-up "Up next" sheet (peeking below).
+          const Spacer(),
         ],
       ),
     );
@@ -462,107 +483,150 @@ class _Controls extends StatelessWidget {
       s.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
 }
 
-/// Full reorderable queue: drag to reorder, tap to jump, remove with the ✕.
-class _QueueSheet extends StatelessWidget {
-  const _QueueSheet({this.scrollController});
+/// The swipe-up "Up next" panel behind Now Playing: a grab handle + header that
+/// drag the [DraggableScrollableSheet] (peek ⇄ full), over the reorderable queue.
+class _QueuePanel extends StatelessWidget {
+  const _QueuePanel({required this.scrollController, required this.controller});
+
+  final ScrollController scrollController;
+  final DraggableScrollableController controller;
+
+  void _drag(BuildContext context, double dy) {
+    if (!controller.isAttached) return;
+    final h = MediaQuery.of(context).size.height;
+    final next = (controller.size - dy / h).clamp(_kQueuePeek, 1.0);
+    controller.jumpTo(next);
+  }
+
+  void _settle() {
+    if (!controller.isAttached) return;
+    final mid = (_kQueuePeek + 1.0) / 2;
+    controller.animateTo(
+      controller.size >= mid ? 1.0 : _kQueuePeek,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: cs.surfaceContainer,
+      elevation: 12,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Grab handle + header: drag to expand/collapse, or tap to toggle.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (d) => _drag(context, d.delta.dy),
+            onVerticalDragEnd: (_) => _settle(),
+            onTap: _settle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+              child: Column(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text('Up next', style: text.titleMedium),
+                      const Spacer(),
+                      ListenableBuilder(
+                        listenable: player,
+                        builder: (_, _) => Text(
+                          '${player.upNext.length}',
+                          style: text.labelLarge?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: _QueueList(scrollController: scrollController)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The reorderable up-next list (shared body of the swipe-up panel).
+class _QueueList extends StatelessWidget {
+  const _QueueList({this.scrollController});
   final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
         final upNext = player.upNext;
         final base = player.currentIndex;
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: Row(
+        if (upNext.isEmpty) {
+          return ListView(
+            controller: scrollController,
+            children: const [
+              SizedBox(height: 40),
+              Center(child: Text('Queue is empty')),
+            ],
+          );
+        }
+        return ReorderableListView.builder(
+          scrollController: scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          itemCount: upNext.length,
+          onReorderItem: player.reorderUpNext,
+          itemBuilder: (context, i) {
+            final t = upNext[i];
+            return ListTile(
+              key: ValueKey(i),
+              leading: TrackArt(track: t, size: 40),
+              title: Text(
+                t.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: t.artist.isEmpty
+                  ? null
+                  : Text(
+                      t.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Up next', style: text.titleLarge),
-                  const Spacer(),
-                  Text('${upNext.length}', style: text.labelLarge),
+                  IconButton(
+                    tooltip: 'Remove',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => player.removeFromUpNext(i),
+                  ),
+                  ReorderableDragStartListener(
+                    index: i,
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(Icons.drag_handle),
+                    ),
+                  ),
                 ],
               ),
-            ),
-            Expanded(
-              child: upNext.isEmpty
-                  ? const Center(child: Text('Queue is empty'))
-                  : ReorderableListView.builder(
-                      scrollController: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: upNext.length,
-                      onReorderItem: player.reorderUpNext,
-                      itemBuilder: (context, i) {
-                        final t = upNext[i];
-                        return ListTile(
-                          key: ValueKey(i),
-                          leading: TrackArt(track: t, size: 40),
-                          title: Text(
-                            t.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: t.artist.isEmpty
-                              ? null
-                              : Text(
-                                  t.artist,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: 'Remove',
-                                icon: const Icon(Icons.close),
-                                onPressed: () => player.removeFromUpNext(i),
-                              ),
-                              ReorderableDragStartListener(
-                                index: i,
-                                child: const Padding(
-                                  padding: EdgeInsets.all(8),
-                                  child: Icon(Icons.drag_handle),
-                                ),
-                              ),
-                            ],
-                          ),
-                          onTap: () => player.playQueueIndex(base + 1 + i),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _UpNextList extends StatelessWidget {
-  const _UpNextList({required this.tracks});
-  final List<TrackRow> tracks;
-
-  @override
-  Widget build(BuildContext context) {
-    final base = player.currentIndex;
-    return ListView.builder(
-      padding: EdgeInsets.zero,
-      itemCount: tracks.length,
-      itemBuilder: (context, i) {
-        final t = tracks[i];
-        return ListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          leading: TrackArt(track: t, size: 36),
-          title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: t.artist.isEmpty
-              ? null
-              : Text(t.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: Text(fmtDuration(t.durationMs)),
-          onTap: () => player.playQueueIndex(base + 1 + i),
+              onTap: () => player.playQueueIndex(base + 1 + i),
+            );
+          },
         );
       },
     );
