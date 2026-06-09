@@ -71,6 +71,11 @@ Future<bool> netPartyUpdate({
 Future<bool> netPartyStop() =>
     RustLib.instance.api.crateApiNetworkNetPartyStop();
 
+/// Drain pending party track-requests, resolving each to a title from the host's
+/// library. Drained entries are removed, so the UI should accumulate them.
+Future<List<PartyRequestDto>> netPartyRequests() =>
+    RustLib.instance.api.crateApiNetworkNetPartyRequests();
+
 /// Whether a party session is currently active on this host.
 Future<bool> netPartyActive() =>
     RustLib.instance.api.crateApiNetworkNetPartyActive();
@@ -86,6 +91,35 @@ Future<int?> netHostPort() => RustLib.instance.api.crateApiNetworkNetHostPort();
 /// Browse the LAN for hosts for `timeout_ms`, returning the resolved peers.
 Future<List<HostInfo>> netDiscover({required PlatformInt64 timeoutMs}) =>
     RustLib.instance.api.crateApiNetworkNetDiscover(timeoutMs: timeoutMs);
+
+/// A peer's pending request to play a track during a party (host side).
+class PartyRequestDto {
+  final String peer;
+  final PlatformInt64 trackId;
+  final String title;
+  final PlatformInt64 atMs;
+
+  const PartyRequestDto({
+    required this.peer,
+    required this.trackId,
+    required this.title,
+    required this.atMs,
+  });
+
+  @override
+  int get hashCode =>
+      peer.hashCode ^ trackId.hashCode ^ title.hashCode ^ atMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PartyRequestDto &&
+          runtimeType == other.runtimeType &&
+          peer == other.peer &&
+          trackId == other.trackId &&
+          title == other.title &&
+          atMs == other.atMs;
+}
 
 /// A peer waiting for the host to allow/deny it (approved-peers share mode),
 /// surfaced to the host UI.

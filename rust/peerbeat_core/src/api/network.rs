@@ -254,6 +254,45 @@ pub fn net_party_stop() -> bool {
     with_host(|h| h.party.stop())
 }
 
+/// A peer's pending request to play a track during a party (host side).
+pub struct PartyRequestDto {
+    pub peer: String,
+    pub track_id: i64,
+    pub title: String,
+    pub at_ms: i64,
+}
+
+/// Drain pending party track-requests, resolving each to a title from the host's
+/// library. Drained entries are removed, so the UI should accumulate them.
+pub fn net_party_requests() -> Vec<PartyRequestDto> {
+    if let Ok(guard) = HOST.lock() {
+        if let Some(h) = guard.as_ref() {
+            let reqs = h.party.drain_requests();
+            if reqs.is_empty() {
+                return Vec::new();
+            }
+            let conn = Connection::open(&h.db_path).ok();
+            return reqs
+                .into_iter()
+                .map(|r| {
+                    let title = conn
+                        .as_ref()
+                        .and_then(|c| crate::db::tracks::track_by_id(c, r.track_id).ok().flatten())
+                        .map(|t| t.title)
+                        .unwrap_or_else(|| format!("Track {}", r.track_id));
+                    PartyRequestDto {
+                        peer: r.peer,
+                        track_id: r.track_id,
+                        title,
+                        at_ms: r.at_ms,
+                    }
+                })
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
 /// Whether a party session is currently active on this host.
 pub fn net_party_active() -> bool {
     HOST.lock()

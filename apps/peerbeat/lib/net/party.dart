@@ -146,6 +146,11 @@ class PartyController extends ChangeNotifier {
 
   void _sendPing() => _ws?.add(jsonEncode({'type': 'ping', 't0': _now()}));
 
+  /// Ask the host to play one of its tracks (party "request a track"). No-op if
+  /// not currently joined to a party.
+  void requestTrack(int hostTrackId) =>
+      _ws?.add(jsonEncode({'type': 'request', 'track_id': hostTrackId}));
+
   void _onMessage(dynamic data) {
     if (data is! String) return;
     final msg = jsonDecode(data);

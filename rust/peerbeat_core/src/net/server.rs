@@ -129,6 +129,14 @@ pub type Approvals = Arc<Mutex<Vec<PendingApproval>>>;
 /// finish its poll within this window).
 const APPROVAL_TTL_MS: i64 = 5 * 60 * 1000;
 
+/// A peer's request for the host to play a specific (host) track during a party.
+#[derive(Clone)]
+pub struct PartyRequest {
+    pub peer: String,
+    pub track_id: i64,
+    pub at_ms: i64,
+}
+
 /// Party-mode broadcast hub: fans the host's playback state out to connected
 /// WebSocket peers, keeps the latest snapshot for new joiners, and tracks active.
 #[derive(Clone)]
@@ -136,6 +144,8 @@ pub struct PartyHub {
     tx: broadcast::Sender<String>,
     latest: Arc<Mutex<Option<String>>>,
     active: Arc<AtomicBool>,
+    /// Pending peer "play this" requests, drained by the host UI.
+    requests: Arc<Mutex<Vec<PartyRequest>>>,
 }
 
 impl PartyHub {
@@ -145,7 +155,31 @@ impl PartyHub {
             tx,
             latest: Arc::new(Mutex::new(None)),
             active: Arc::new(AtomicBool::new(false)),
+            requests: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Record a peer's track request (capped so a flooding peer can't grow it
+    /// unbounded). Newest-last.
+    pub fn record_request(&self, peer: String, track_id: i64) {
+        if let Ok(mut q) = self.requests.lock() {
+            if q.len() >= 64 {
+                q.remove(0);
+            }
+            q.push(PartyRequest {
+                peer,
+                track_id,
+                at_ms: now_ms(),
+            });
+        }
+    }
+
+    /// Take and clear all pending requests (for the host UI).
+    pub fn drain_requests(&self) -> Vec<PartyRequest> {
+        self.requests
+            .lock()
+            .map(|mut q| std::mem::take(&mut *q))
+            .unwrap_or_default()
     }
     pub fn start(&self) {
         self.active.store(true, Ordering::Relaxed);
@@ -852,6 +886,13 @@ fn token_live(cfg: &ServerConfig, token: &str) -> bool {
 }
 
 async fn handle_party(mut socket: WebSocket, cfg: ServerConfig, token: String) {
+    // The peer's stable identity (IP) for any requests it makes.
+    let peer = cfg
+        .sessions
+        .lock()
+        .ok()
+        .and_then(|m| m.get(&token).map(|s| s.peer.clone()))
+        .unwrap_or_default();
     // Send the current snapshot immediately so a joiner can sync at once.
     if let Some(latest) = cfg.party.latest.lock().ok().and_then(|l| l.clone()) {
         if socket.send(Message::Text(latest.into())).await.is_err() {
@@ -880,7 +921,9 @@ async fn handle_party(mut socket: WebSocket, cfg: ServerConfig, token: String) {
             },
             incoming = socket.recv() => match incoming {
                 Some(Ok(Message::Text(t))) => {
-                    if let Some(reply) = party_reply(t.as_str()) {
+                    if let Some(track_id) = parse_request(t.as_str()) {
+                        cfg.party.record_request(peer.clone(), track_id);
+                    } else if let Some(reply) = party_reply(t.as_str()) {
                         if socket.send(Message::Text(reply.into())).await.is_err() {
                             break;
                         }
@@ -892,6 +935,16 @@ async fn handle_party(mut socket: WebSocket, cfg: ServerConfig, token: String) {
             },
         }
     }
+}
+
+/// Parse a peer's `{"type":"request","track_id":N}` message → the requested
+/// host track id, if that's what it is.
+fn parse_request(text: &str) -> Option<i64> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    if v.get("type").and_then(|t| t.as_str()) == Some("request") {
+        return v.get("track_id").and_then(|x| x.as_i64());
+    }
+    None
 }
 
 /// Answer a peer control message. Currently only clock-sync pings: echo `t0` and
@@ -1225,6 +1278,28 @@ mod tests {
             // Budget spent → throttled before the PIN is even checked.
             assert_eq!(status_of(&cfg, bad()).await, StatusCode::TOO_MANY_REQUESTS);
         });
+    }
+
+    #[test]
+    fn party_parse_record_and_drain_requests() {
+        // message parsing
+        assert_eq!(
+            parse_request(r#"{"type":"request","track_id":42}"#),
+            Some(42)
+        );
+        assert_eq!(parse_request(r#"{"type":"ping","t0":1}"#), None);
+        assert_eq!(parse_request("not json"), None);
+
+        // record + drain (drain clears)
+        let hub = PartyHub::new();
+        assert!(hub.drain_requests().is_empty());
+        hub.record_request("1.2.3.4".into(), 7);
+        hub.record_request("1.2.3.4".into(), 9);
+        let reqs = hub.drain_requests();
+        assert_eq!(reqs.len(), 2);
+        assert_eq!(reqs[0].track_id, 7);
+        assert_eq!(reqs[1].track_id, 9);
+        assert!(hub.drain_requests().is_empty());
     }
 
     #[test]

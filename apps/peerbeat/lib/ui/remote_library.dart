@@ -266,6 +266,21 @@ class _RemoteLibraryViewState extends State<RemoteLibraryView> {
                         }
                       }
                     },
+                    // In a party, long-press asks the host to play this track.
+                    onLongPress: () {
+                      if (party.joined) {
+                        party.requestTrack(t.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Requested "${t.title}"')),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Join the party to request tracks'),
+                          ),
+                        );
+                      }
+                    },
                   );
                 },
               ),

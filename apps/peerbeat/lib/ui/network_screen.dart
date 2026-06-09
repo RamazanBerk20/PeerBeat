@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../app_config.dart';
 import '../net/party.dart';
 import '../net/tofu.dart';
+import '../playback/player.dart';
 import '../src/rust/api/library.dart';
 import '../src/rust/api/network.dart';
 import '../src/rust/db/tracks.dart';
@@ -495,6 +496,7 @@ class _NetworkPanelState extends State<NetworkPanel> {
             ),
           ),
         if (_hosting) const _ApprovalsSection(),
+        if (_hosting) const _PartyRequestsSection(),
         if (_hosting) const _ConnectionsSection(),
         const Divider(),
         ListTile(
@@ -786,6 +788,108 @@ class _ApprovalsSectionState extends State<_ApprovalsSection> {
                       child: const Text('Deny'),
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Host-side list of party "play this" requests from peers. Polls + accumulates
+/// (the Rust side drains on read), and lets the host play or dismiss each.
+class _PartyRequestsSection extends StatefulWidget {
+  const _PartyRequestsSection();
+
+  @override
+  State<_PartyRequestsSection> createState() => _PartyRequestsSectionState();
+}
+
+class _PartyRequestsSectionState extends State<_PartyRequestsSection> {
+  final List<PartyRequestDto> _requests = [];
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final fresh = await netPartyRequests();
+      if (fresh.isNotEmpty && mounted) {
+        setState(() => _requests.addAll(fresh));
+      }
+    } catch (_) {
+      // best-effort poll
+    }
+  }
+
+  Future<void> _play(PartyRequestDto r) async {
+    try {
+      final t = await libraryTrackById(trackId: r.trackId);
+      if (t != null) await player.playSingle(t);
+    } catch (_) {
+      // ignore: the track may have been removed
+    }
+    if (mounted) setState(() => _requests.remove(r));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_requests.isEmpty) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          color: cs.secondaryContainer,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: Row(
+            children: [
+              Icon(Icons.playlist_add_check, color: cs.onSecondaryContainer),
+              const SizedBox(width: 8),
+              Text(
+                'Party requests',
+                style: TextStyle(
+                  color: cs.onSecondaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        for (final r in _requests)
+          ListTile(
+            dense: true,
+            leading: CircleAvatar(
+              radius: 14,
+              backgroundColor: hostColorFor(r.peer),
+              child: const Icon(Icons.person, size: 16, color: Colors.white),
+            ),
+            title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text('Requested by ${r.peer}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton.tonal(
+                  onPressed: () => _play(r),
+                  child: const Text('Play'),
+                ),
+                IconButton(
+                  tooltip: 'Dismiss',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() => _requests.remove(r)),
                 ),
               ],
             ),
