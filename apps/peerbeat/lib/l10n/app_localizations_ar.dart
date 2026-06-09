@@ -12,6 +12,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get appTagline => 'مشغّل موسيقى محلي + شبكة محلية';
 
   @override
+  String get trayShow => 'إظهار PeerBeat';
+
+  @override
+  String get trayQuit => 'خروج';
+
+  @override
   String get commonCancel => 'إلغاء';
 
   @override

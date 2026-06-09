@@ -2,6 +2,8 @@
   "@@locale": "en",
 
   "appTagline": "Local + LAN music player",
+  "trayShow": "Show PeerBeat",
+  "trayQuit": "Quit",
   "@appTagline": {},
 
   "commonCancel": "Cancel",

@@ -12,6 +12,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appTagline => '本地 + 局域网音乐播放器';
 
   @override
+  String get trayShow => '显示 PeerBeat';
+
+  @override
+  String get trayQuit => '退出';
+
+  @override
   String get commonCancel => '取消';
 
   @override

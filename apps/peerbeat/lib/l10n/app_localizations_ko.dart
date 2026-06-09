@@ -12,6 +12,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get appTagline => '로컬 + LAN 음악 플레이어';
 
   @override
+  String get trayShow => 'PeerBeat 표시';
+
+  @override
+  String get trayQuit => '종료';
+
+  @override
   String get commonCancel => '취소';
 
   @override

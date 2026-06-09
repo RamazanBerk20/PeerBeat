@@ -1,6 +1,8 @@
 {
   "@@locale": "ja",
   "appTagline": "ローカル + LAN ミュージックプレーヤー",
+  "trayShow": "PeerBeat を表示",
+  "trayQuit": "終了",
   "commonCancel": "キャンセル",
   "commonSave": "保存",
   "commonDelete": "削除",

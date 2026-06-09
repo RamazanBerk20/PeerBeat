@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show Locale, PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -7,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../l10n/app_localizations.dart';
 import '../playback/player.dart';
 
 /// Desktop (Windows/Linux) system-tray + close-to-tray shell.
@@ -48,7 +50,7 @@ class DesktopShell with TrayListener, WindowListener {
       try {
         await trayManager.setToolTip('PeerBeat');
       } catch (_) {}
-      await trayManager.setContextMenu(_menu());
+      await trayManager.setContextMenu(_menu(await _l10n()));
       _trayOk = true;
     } catch (_) {
       _trayOk = false;
@@ -84,24 +86,49 @@ class DesktopShell with TrayListener, WindowListener {
     } catch (_) {}
   }
 
-  Menu _menu() => Menu(
+  Menu _menu(AppLocalizations l10n) => Menu(
     items: [
-      MenuItem(key: 'playpause', label: player.playing ? 'Pause' : 'Play'),
+      MenuItem(
+        key: 'playpause',
+        label: player.playing ? l10n.pause : l10n.commonPlay,
+      ),
       // Mirror the in-app transport: Next/Previous are disabled when the queue
       // has nowhere to go (otherwise Next looks broken at the end of the queue).
-      MenuItem(key: 'next', label: 'Next', disabled: !player.hasNext),
-      MenuItem(key: 'prev', label: 'Previous', disabled: !player.hasPrevious),
+      MenuItem(key: 'next', label: l10n.commonNext, disabled: !player.hasNext),
+      MenuItem(
+        key: 'prev',
+        label: l10n.commonPrevious,
+        disabled: !player.hasPrevious,
+      ),
       MenuItem.separator(),
-      MenuItem(key: 'show', label: 'Show PeerBeat'),
-      MenuItem(key: 'quit', label: 'Quit'),
+      MenuItem(key: 'show', label: l10n.trayShow),
+      MenuItem(key: 'quit', label: l10n.trayQuit),
     ],
   );
+
+  /// Resolve [AppLocalizations] without a [BuildContext] (the tray runs outside
+  /// the widget tree): use the user-chosen locale, else the system locale
+  /// matched against the supported set, else English. The generated delegate
+  /// loads synchronously, so the await completes immediately.
+  Future<AppLocalizations> _l10n() {
+    final chosen = player.locale.value;
+    final locale = chosen ?? _systemLocale();
+    return AppLocalizations.delegate.load(locale);
+  }
+
+  Locale _systemLocale() {
+    final sys = PlatformDispatcher.instance.locale;
+    return AppLocalizations.supportedLocales.firstWhere(
+      (l) => l.languageCode == sys.languageCode,
+      orElse: () => const Locale('en'),
+    );
+  }
 
   void _onPlayerChanged() => unawaited(_rebuildMenu());
 
   Future<void> _rebuildMenu() async {
     try {
-      await trayManager.setContextMenu(_menu());
+      await trayManager.setContextMenu(_menu(await _l10n()));
     } catch (_) {}
   }
 

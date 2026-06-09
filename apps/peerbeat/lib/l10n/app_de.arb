@@ -1,6 +1,8 @@
 {
   "@@locale": "de",
   "appTagline": "Lokaler + LAN-Musikplayer",
+  "trayShow": "PeerBeat anzeigen",
+  "trayQuit": "Beenden",
   "commonCancel": "Abbrechen",
   "commonSave": "Speichern",
   "commonDelete": "Löschen",

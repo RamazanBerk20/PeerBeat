@@ -12,6 +12,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appTagline => 'Локальный + LAN музыкальный плеер';
 
   @override
+  String get trayShow => 'Показать PeerBeat';
+
+  @override
+  String get trayQuit => 'Выход';
+
+  @override
   String get commonCancel => 'Отмена';
 
   @override

@@ -120,6 +120,18 @@ abstract class AppLocalizations {
   /// **'Local + LAN music player'**
   String get appTagline;
 
+  /// No description provided for @trayShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show PeerBeat'**
+  String get trayShow;
+
+  /// No description provided for @trayQuit.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get trayQuit;
+
   /// No description provided for @commonCancel.
   ///
   /// In en, this message translates to:

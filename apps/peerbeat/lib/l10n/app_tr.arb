@@ -1,6 +1,8 @@
 {
   "@@locale": "tr",
   "appTagline": "Yerel + LAN müzik çalar",
+  "trayShow": "PeerBeat'i göster",
+  "trayQuit": "Çık",
   "commonCancel": "İptal",
   "commonSave": "Kaydet",
   "commonDelete": "Sil",

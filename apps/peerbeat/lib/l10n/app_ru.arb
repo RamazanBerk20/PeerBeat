@@ -1,6 +1,8 @@
 {
   "@@locale": "ru",
   "appTagline": "Локальный + LAN музыкальный плеер",
+  "trayShow": "Показать PeerBeat",
+  "trayQuit": "Выход",
   "commonCancel": "Отмена",
   "commonSave": "Сохранить",
   "commonDelete": "Удалить",

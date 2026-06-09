@@ -12,6 +12,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get appTagline => 'Yerel + LAN müzik çalar';
 
   @override
+  String get trayShow => 'PeerBeat\'i göster';
+
+  @override
+  String get trayQuit => 'Çık';
+
+  @override
   String get commonCancel => 'İptal';
 
   @override

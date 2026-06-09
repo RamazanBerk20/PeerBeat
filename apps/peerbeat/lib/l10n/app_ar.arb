@@ -1,6 +1,8 @@
 {
   "@@locale": "ar",
   "appTagline": "مشغّل موسيقى محلي + شبكة محلية",
+  "trayShow": "إظهار PeerBeat",
+  "trayQuit": "خروج",
   "commonCancel": "إلغاء",
   "commonSave": "حفظ",
   "commonDelete": "حذف",

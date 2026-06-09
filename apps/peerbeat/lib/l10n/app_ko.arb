@@ -1,6 +1,8 @@
 {
   "@@locale": "ko",
   "appTagline": "로컬 + LAN 음악 플레이어",
+  "trayShow": "PeerBeat 표시",
+  "trayQuit": "종료",
   "commonCancel": "취소",
   "commonSave": "저장",
   "commonDelete": "삭제",

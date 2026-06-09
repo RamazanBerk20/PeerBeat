@@ -12,6 +12,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get appTagline => 'Lokaler + LAN-Musikplayer';
 
   @override
+  String get trayShow => 'PeerBeat anzeigen';
+
+  @override
+  String get trayQuit => 'Beenden';
+
+  @override
   String get commonCancel => 'Abbrechen';
 
   @override

@@ -1,6 +1,8 @@
 {
   "@@locale": "fr",
   "appTagline": "Lecteur de musique local + LAN",
+  "trayShow": "Afficher PeerBeat",
+  "trayQuit": "Quitter",
   "commonCancel": "Annuler",
   "commonSave": "Enregistrer",
   "commonDelete": "Supprimer",
