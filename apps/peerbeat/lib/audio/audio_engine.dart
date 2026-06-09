@@ -361,8 +361,10 @@ class ExoPlayerEngine implements AudioEngine {
       tag: MediaItem(
         id: tag?.id ?? uri.toString(),
         title: (tag?.title.isNotEmpty ?? false) ? tag!.title : 'PeerBeat',
-        artist: (tag?.artist.isNotEmpty ?? false) ? tag!.artist : null,
-        album: (tag?.album.isNotEmpty ?? false) ? tag!.album : null,
+        // Empty (not null) when unknown — Android's media applet renders a null
+        // artist/album as the literal text "null".
+        artist: (tag?.artist.isNotEmpty ?? false) ? tag!.artist : '',
+        album: (tag?.album.isNotEmpty ?? false) ? tag!.album : '',
         artUri: tag?.artUri,
         duration: d,
       ),
