@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:typed_data' show Float32List;
 
 import 'package:flutter/material.dart' hide RepeatMode;
@@ -357,8 +358,12 @@ class _Controls extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: 8),
-          _Visualizer(color: cs.primary),
+          // The visualizer is fed by the desktop engine's FFT tap; Android/iOS
+          // have no spectrum source, so it would just sit flat — omit it there.
+          if (!Platform.isAndroid && !Platform.isIOS) ...[
+            const SizedBox(height: 8),
+            _Visualizer(color: cs.primary),
+          ],
           const SizedBox(height: 8),
           _transportRow(cs),
           const SizedBox(height: 8),
